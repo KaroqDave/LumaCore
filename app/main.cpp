@@ -1,3 +1,4 @@
+#include "app/Version.h"
 #include "core/DeviceManager.h"
 #include "ui/AppController.h"
 #include "ui/DeviceListModel.h"
@@ -28,10 +29,10 @@ QIcon createApplicationIcon()
 
 int main(int argc, char* argv[])
 {
-    QGuiApplication::setDesktopFileName(QStringLiteral("lumacore"));
-
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("LumaCore"));
+    app.setApplicationDisplayName(QStringLiteral("LumaCore"));
+    app.setApplicationVersion(lumacore::applicationVersion());
     app.setOrganizationName(QStringLiteral("LumaCore"));
     app.setWindowIcon(createApplicationIcon());
 

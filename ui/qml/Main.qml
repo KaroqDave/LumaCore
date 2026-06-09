@@ -104,6 +104,10 @@ ApplicationWindow {
         onAccepted: root.selectedColor = selectedColor
     }
 
+    AboutDialog {
+        id: aboutDialog
+    }
+
     ScrollView {
         anchors.fill: parent
         clip: true
@@ -179,8 +183,33 @@ ApplicationWindow {
                     }
                 }
 
-                PillLabel {
-                    text: qsTr("Mock backend only")
+                RowLayout {
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: 10
+
+                    PillLabel {
+                        text: qsTr("Mock backend only")
+                    }
+
+                    ToolButton {
+                        id: aboutButton
+
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        icon.name: "dialog-information"
+                        icon.width: 22
+                        icon.height: 22
+                        ToolTip.text: qsTr("About LumaCore")
+                        ToolTip.visible: hovered
+                        onClicked: aboutDialog.open()
+
+                        background: Rectangle {
+                            radius: 12
+                            color: aboutButton.down ? "#2A3540" : (aboutButton.hovered ? "#24313B" : root.elevatedColor)
+                            border.color: aboutButton.hovered ? root.accentColor : root.borderColor
+                            border.width: 1
+                        }
+                    }
                 }
             }
 

@@ -45,7 +45,6 @@ qt_add_resources(lumacore lumacore_icons
     PREFIX "/icons"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons"
     FILES
-        assets/icons/lumacore.svg
         assets/icons/lumacore.ico
         assets/icons/lumacore-16.png
         assets/icons/lumacore-32.png
@@ -59,6 +58,7 @@ qt_add_qml_module(lumacore
     URI LumaCore
     VERSION 1.0
     QML_FILES
+        ui/qml/AboutDialog.qml
         ui/qml/Main.qml
 )
 
@@ -75,6 +75,11 @@ target_link_libraries(lumacore
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
+)
+
+target_compile_definitions(lumacore
+    PRIVATE
+        LUMACORE_VERSION="${PROJECT_VERSION}"
 )
 
 qt_finalize_executable(lumacore)

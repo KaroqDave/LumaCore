@@ -13,9 +13,9 @@ MockRgbDevice::MockRgbDevice(QObject* parent)
           parent
       )
 {
-    mutableZones().append(RgbZone(QStringLiteral("Motherboard"), RgbZoneType::Motherboard, 10));
-    mutableZones().append(RgbZone(QStringLiteral("ARGB Header 1"), RgbZoneType::AddressableHeader, 30));
-    mutableZones().append(RgbZone(QStringLiteral("ARGB Header 2"), RgbZoneType::AddressableHeader, 30));
+    mutableZones().append(RgbZone(QStringLiteral("Header 1"), RgbZoneType::Motherboard, 10));
+    mutableZones().append(RgbZone(QStringLiteral("Header 2"), RgbZoneType::AddressableHeader, 30));
+    mutableZones().append(RgbZone(QStringLiteral("Header 3"), RgbZoneType::AddressableHeader, 30));
 }
 
 bool MockRgbDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)

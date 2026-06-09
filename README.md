@@ -9,9 +9,9 @@ LumaCore is a passion project focused on safe, maintainable RGB control rather t
 - Qt Quick desktop UI with device/zone selection and a color picker
 - In-memory RGB model: devices, zones, and LEDs
 - Mock backend with one simulated **ASUS TUF X870-PLUS WIFI** device:
-  - Motherboard (10 LEDs)
-  - ARGB Header 1 (30 LEDs)
-  - ARGB Header 2 (30 LEDs)
+  - Header 1 (10 LEDs)
+  - Header 2 (30 LEDs)
+  - Header 3 (30 LEDs)
 - Static color control per zone
 - JSON profile save/load under `./profiles`
 - Activity log and status bar in the UI
@@ -55,7 +55,7 @@ Profiles are stored in `./profiles` relative to the **current working directory*
 | `backends/mock/` | Safe simulated hardware backend |
 | `ui/` | QML-facing models and `AppController` |
 | `ui/qml/` | Qt Quick user interface |
-| `assets/icons/` | Application icons (embedded via Qt resources) |
+| `assets/icons/` | Application icons (`lumacore.svg` is the source; PNG/ICO sizes are embedded via Qt resources) |
 
 ### Data flow
 
@@ -84,7 +84,7 @@ Profiles are JSON files in `./profiles`. The filename is the normalized profile 
             "type": "Motherboard",
             "zones": [
                 {
-                    "name": "Motherboard",
+                    "name": "Header 1",
                     "type": "Motherboard",
                     "ledCount": 10,
                     "color": "#4080FF",
