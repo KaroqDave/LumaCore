@@ -1,18 +1,16 @@
 #include "core/RgbLed.h"
 
-#include <utility>
-
 namespace lumacore {
 
-RgbLed::RgbLed(QString name, RgbColor color)
-    : m_name(std::move(name))
+RgbLed::RgbLed(int index, RgbColor color)
+    : m_index(index)
     , m_color(color)
 {
 }
 
-const QString& RgbLed::name() const
+int RgbLed::index() const
 {
-    return m_name;
+    return m_index;
 }
 
 const RgbColor& RgbLed::color() const

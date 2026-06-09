@@ -31,11 +31,14 @@ Run:
 ./build/lumacore
 ```
 
+The app stores saved mock profiles under `./profiles` relative to the directory where you launch it. If you run `./build/lumacore` from the repository root, profiles are written to `profiles/`.
+
 ## Current Scope
 
 - Qt Quick desktop window.
 - In-memory RGB device model.
 - Mock backend only.
 - Static color setting for mock zones.
+- JSON profile save/load for mock zone colors.
 
-See `docs/roadmap.md` for planned profile, effect, daemon, and hardware safety work.
+See `docs/architecture.md`, `docs/profile-format.md`, `docs/hardware-safety.md`, and `docs/roadmap.md` for design notes and next steps.

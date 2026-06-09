@@ -18,9 +18,30 @@ QString RgbColor::toHexString() const
         .toUpper();
 }
 
+QJsonObject RgbColor::toJson() const
+{
+    return {
+        {QStringLiteral("red"), red()},
+        {QStringLiteral("green"), green()},
+        {QStringLiteral("blue"), blue()},
+        {QStringLiteral("hex"), toHexString()},
+    };
+}
+
 RgbColor RgbColor::fromQColor(const QColor& color)
 {
     return fromRgb(color.red(), color.green(), color.blue());
+}
+
+RgbColor RgbColor::fromHexString(const QString& value, bool* ok)
+{
+    const QColor color(value);
+    const bool isValid = color.isValid();
+    if (ok != nullptr) {
+        *ok = isValid;
+    }
+
+    return isValid ? fromQColor(color) : RgbColor();
 }
 
 RgbColor RgbColor::fromRgb(int red, int green, int blue)

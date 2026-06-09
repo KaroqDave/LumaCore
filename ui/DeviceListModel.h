@@ -13,12 +13,10 @@ class DeviceListModel final : public QAbstractListModel
 public:
     enum Role {
         DeviceIndexRole = Qt::UserRole + 1,
-        ZoneIndexRole,
         DeviceNameRole,
-        ZoneNameRole,
-        LedCountRole,
-        ZoneColorRole,
-        ZoneColorHexRole
+        VendorRole,
+        DeviceTypeRole,
+        ZoneCountRole
     };
 
     explicit DeviceListModel(DeviceManager* deviceManager, QObject* parent = nullptr);
@@ -27,17 +25,7 @@ public:
     [[nodiscard]] QVariant data(const QModelIndex& index, int role) const override;
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
-    Q_INVOKABLE bool setZoneColor(int row, int red, int green, int blue);
-
 private:
-    struct RowRef {
-        int deviceIndex {-1};
-        int zoneIndex {-1};
-    };
-
-    [[nodiscard]] RowRef rowReferenceForRow(int row) const;
-    [[nodiscard]] int rowForZone(int deviceIndex, int zoneIndex) const;
-
     DeviceManager* m_deviceManager {nullptr};
 };
 

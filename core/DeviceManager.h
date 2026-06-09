@@ -4,6 +4,7 @@
 #include "core/RgbDevice.h"
 
 #include <QObject>
+#include <QStringList>
 
 #include <memory>
 #include <vector>
@@ -25,13 +26,20 @@ public:
     [[nodiscard]] const std::vector<std::unique_ptr<RgbDevice>>& devices() const;
 
     [[nodiscard]] bool setZoneStaticColor(int deviceIndex, int zoneIndex, const RgbColor& color);
+    [[nodiscard]] bool saveProfile(const QString& profileName, QString* errorMessage = nullptr);
+    [[nodiscard]] bool loadProfile(const QString& profileName, QString* errorMessage = nullptr);
+    [[nodiscard]] QStringList profileNames() const;
+    [[nodiscard]] QString profilesDirectoryPath() const;
 
 signals:
     void devicesChanged();
     void zoneColorChanged(int deviceIndex, int zoneIndex);
+    void logMessage(QString message);
 
 private:
     void registerDevice(std::unique_ptr<RgbDevice> device);
+    [[nodiscard]] QString profileFilePath(const QString& profileName) const;
+    [[nodiscard]] static QString normalizeProfileName(const QString& profileName);
 
     std::vector<std::unique_ptr<RgbDevice>> m_devices;
 };

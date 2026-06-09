@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 QuickDialogs2)
 
 qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0004 NEW)
@@ -19,6 +19,10 @@ qt_policy(SET QTP0004 NEW)
 qt_add_executable(lumacore
     MANUAL_FINALIZATION
     app/main.cpp
+    backends/mock/MockBackend.cpp
+    backends/mock/MockBackend.h
+    backends/mock/MockRgbDevice.cpp
+    backends/mock/MockRgbDevice.h
     core/DeviceManager.cpp
     core/DeviceManager.h
     core/RgbColor.cpp
@@ -29,10 +33,12 @@ qt_add_executable(lumacore
     core/RgbLed.h
     core/RgbZone.cpp
     core/RgbZone.h
-    backends/mock/MockRgbDevice.cpp
-    backends/mock/MockRgbDevice.h
+    ui/AppController.cpp
+    ui/AppController.h
     ui/DeviceListModel.cpp
     ui/DeviceListModel.h
+    ui/ZoneListModel.cpp
+    ui/ZoneListModel.h
 )
 
 qt_add_qml_module(lumacore
@@ -54,6 +60,7 @@ target_link_libraries(lumacore
         Qt6::Qml
         Qt6::Quick
         Qt6::QuickControls2
+        Qt6::QuickDialogs2
 )
 
 qt_finalize_executable(lumacore)

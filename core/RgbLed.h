@@ -2,23 +2,21 @@
 
 #include "core/RgbColor.h"
 
-#include <QString>
-
 namespace lumacore {
 
 class RgbLed
 {
 public:
     RgbLed() = default;
-    explicit RgbLed(QString name, RgbColor color = {});
+    explicit RgbLed(int index, RgbColor color = {});
 
-    [[nodiscard]] const QString& name() const;
+    [[nodiscard]] int index() const;
     [[nodiscard]] const RgbColor& color() const;
 
     void setColor(const RgbColor& color);
 
 private:
-    QString m_name;
+    int m_index {0};
     RgbColor m_color;
 };
 

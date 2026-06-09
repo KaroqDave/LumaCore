@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QJsonObject>
 #include <QString>
 #include <QtGlobal>
 
@@ -23,8 +24,10 @@ public:
 
     [[nodiscard]] QColor toQColor() const;
     [[nodiscard]] QString toHexString() const;
+    [[nodiscard]] QJsonObject toJson() const;
 
     [[nodiscard]] static RgbColor fromQColor(const QColor& color);
+    [[nodiscard]] static RgbColor fromHexString(const QString& value, bool* ok = nullptr);
     [[nodiscard]] static RgbColor fromRgb(int red, int green, int blue);
 
     [[nodiscard]] friend constexpr bool operator==(const RgbColor&, const RgbColor&) = default;

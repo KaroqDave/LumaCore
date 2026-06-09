@@ -1,19 +1,31 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 ApplicationWindow {
     id: root
 
-    width: 960
-    height: 640
+    width: 1120
+    height: 760
     visible: true
     title: qsTr("LumaCore")
 
-    property int redValue: Math.round(redSlider.value)
-    property int greenValue: Math.round(greenSlider.value)
-    property int blueValue: Math.round(blueSlider.value)
-    readonly property color previewColor: Qt.rgba(redValue / 255, greenValue / 255, blueValue / 255, 1)
+    property color selectedColor: "#4080FF"
+
+    function colorToHex(value) {
+        const red = Math.round(value.r * 255).toString(16).padStart(2, "0")
+        const green = Math.round(value.g * 255).toString(16).padStart(2, "0")
+        const blue = Math.round(value.b * 255).toString(16).padStart(2, "0")
+        return ("#" + red + green + blue).toUpperCase()
+    }
+
+    ColorDialog {
+        id: colorDialog
+        title: qsTr("Choose Static Color")
+        selectedColor: root.selectedColor
+        onAccepted: root.selectedColor = selectedColor
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -39,39 +51,43 @@ ApplicationWindow {
             spacing: 24
 
             GroupBox {
-                Layout.fillWidth: true
+                Layout.preferredWidth: 320
                 Layout.fillHeight: true
-                title: qsTr("Devices and Zones")
+                title: qsTr("Devices")
 
                 ListView {
-                    id: zoneList
+                    id: deviceList
 
                     anchors.fill: parent
                     clip: true
                     model: deviceModel
                     currentIndex: count > 0 ? 0 : -1
+                    onCurrentIndexChanged: {
+                        zoneModel.deviceIndex = currentIndex
+                        zoneList.currentIndex = zoneList.count > 0 ? 0 : -1
+                    }
 
                     delegate: ItemDelegate {
                         required property int index
                         required property string deviceName
-                        required property string zoneName
-                        required property int ledCount
-                        required property string zoneColorHex
+                        required property string vendor
+                        required property string deviceType
+                        required property int zoneCount
 
                         width: ListView.view.width
                         highlighted: ListView.isCurrentItem
-                        onClicked: zoneList.currentIndex = index
+                        onClicked: deviceList.currentIndex = index
 
                         contentItem: Column {
                             spacing: 4
 
                             Label {
-                                text: zoneName
+                                text: deviceName
                                 font.bold: true
                             }
 
                             Label {
-                                text: qsTr("%1 · %2 LEDs · %3").arg(deviceName).arg(ledCount).arg(zoneColorHex)
+                                text: qsTr("%1 · %2 · %3 zone(s)").arg(vendor).arg(deviceType).arg(zoneCount)
                                 color: palette.mid
                                 elide: Text.ElideRight
                             }
@@ -81,84 +97,188 @@ ApplicationWindow {
             }
 
             GroupBox {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                title: qsTr("Zones")
+
+                ListView {
+                    id: zoneList
+
+                    anchors.fill: parent
+                    clip: true
+                    model: zoneModel
+                    currentIndex: count > 0 ? 0 : -1
+
+                    delegate: ItemDelegate {
+                        required property int index
+                        required property string zoneName
+                        required property string zoneType
+                        required property int ledCount
+                        required property string zoneColorHex
+
+                        width: ListView.view.width
+                        highlighted: ListView.isCurrentItem
+                        onClicked: zoneList.currentIndex = index
+
+                        contentItem: RowLayout {
+                            spacing: 12
+
+                            Rectangle {
+                                Layout.preferredWidth: 28
+                                Layout.preferredHeight: 28
+                                radius: 6
+                                color: zoneColorHex
+                                border.color: palette.mid
+                            }
+
+                            Column {
+                                Layout.fillWidth: true
+                                spacing: 4
+
+                                Label {
+                                    text: zoneName
+                                    font.bold: true
+                                }
+
+                                Label {
+                                    text: qsTr("%1 · %2 LEDs · %3").arg(zoneType).arg(ledCount).arg(zoneColorHex)
+                                    color: palette.mid
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            ColumnLayout {
                 Layout.preferredWidth: 360
                 Layout.fillHeight: true
-                title: qsTr("Static Color")
+                spacing: 18
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 18
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: qsTr("Static Color")
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 120
-                        radius: 10
-                        color: root.previewColor
-                        border.color: palette.mid
-                    }
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 14
 
-                    Label {
-                        text: qsTr("#%1%2%3")
-                            .arg(root.redValue.toString(16).padStart(2, "0"))
-                            .arg(root.greenValue.toString(16).padStart(2, "0"))
-                            .arg(root.blueValue.toString(16).padStart(2, "0"))
-                            .toUpperCase()
-                        font.family: "monospace"
-                        font.pixelSize: 20
-                    }
-
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: 3
-                        rowSpacing: 12
-                        columnSpacing: 12
-
-                        Label { text: qsTr("Red") }
-                        Slider {
-                            id: redSlider
+                        Rectangle {
                             Layout.fillWidth: true
-                            from: 0
-                            to: 255
-                            stepSize: 1
-                            value: 64
+                            Layout.preferredHeight: 96
+                            radius: 10
+                            color: root.selectedColor
+                            border.color: palette.mid
                         }
-                        Label { text: root.redValue }
 
-                        Label { text: qsTr("Green") }
-                        Slider {
-                            id: greenSlider
+                        Label {
+                            text: root.colorToHex(root.selectedColor)
+                            font.family: "monospace"
+                            font.pixelSize: 20
+                        }
+
+                        Button {
                             Layout.fillWidth: true
-                            from: 0
-                            to: 255
-                            stepSize: 1
-                            value: 128
+                            text: qsTr("Choose Color")
+                            onClicked: colorDialog.open()
                         }
-                        Label { text: root.greenValue }
 
-                        Label { text: qsTr("Blue") }
-                        Slider {
-                            id: blueSlider
+                        Button {
                             Layout.fillWidth: true
-                            from: 0
-                            to: 255
-                            stepSize: 1
-                            value: 255
+                            text: qsTr("Apply to Selected Zone")
+                            enabled: deviceList.currentIndex >= 0 && zoneList.currentIndex >= 0
+                            onClicked: appController.applyStaticColor(deviceList.currentIndex, zoneList.currentIndex, root.selectedColor)
                         }
-                        Label { text: root.blueValue }
                     }
+                }
 
-                    Button {
-                        Layout.fillWidth: true
-                        text: qsTr("Apply Static Color")
-                        enabled: zoneList.currentIndex >= 0
-                        onClicked: deviceModel.setZoneColor(zoneList.currentIndex, root.redValue, root.greenValue, root.blueValue)
+                GroupBox {
+                    Layout.fillWidth: true
+                    title: qsTr("Profiles")
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 10
+
+                        TextField {
+                            id: profileNameField
+                            Layout.fillWidth: true
+                            text: "default"
+                            placeholderText: qsTr("Profile name")
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+
+                            Button {
+                                Layout.fillWidth: true
+                                text: qsTr("Save")
+                                onClicked: {
+                                    if (appController.saveProfile(profileNameField.text)) {
+                                        profileBox.model = appController.profileNames()
+                                    }
+                                }
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                text: qsTr("Refresh")
+                                onClicked: profileBox.model = appController.profileNames()
+                            }
+                        }
+
+                        ComboBox {
+                            id: profileBox
+                            Layout.fillWidth: true
+                            model: appController.profileNames()
+                        }
+
+                        Button {
+                            Layout.fillWidth: true
+                            text: qsTr("Load Selected Profile")
+                            enabled: profileBox.currentText.length > 0
+                            onClicked: appController.loadProfile(profileBox.currentText)
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Stored in: %1").arg(appController.profilesDirectory)
+                            color: palette.mid
+                            wrapMode: Text.WordWrap
+                        }
                     }
+                }
 
-                    Item {
-                        Layout.fillHeight: true
+                GroupBox {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    title: qsTr("Status / Log")
+
+                    ColumnLayout {
+                        anchors.fill: parent
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: appController.statusMessage
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                        }
+
+                        TextArea {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: appController.logText
+                            readOnly: true
+                            wrapMode: TextArea.Wrap
+                        }
                     }
                 }
             }
         }
+    }
+
+    Component.onCompleted: {
+        zoneModel.deviceIndex = deviceList.currentIndex
     }
 }

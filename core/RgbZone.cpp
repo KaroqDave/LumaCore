@@ -4,20 +4,59 @@
 
 namespace lumacore {
 
-RgbZone::RgbZone(QString name, int ledCount, RgbColor initialColor)
+QString rgbZoneTypeToString(RgbZoneType type)
+{
+    switch (type) {
+    case RgbZoneType::Motherboard:
+        return QStringLiteral("Motherboard");
+    case RgbZoneType::AddressableHeader:
+        return QStringLiteral("Addressable Header");
+    case RgbZoneType::Unknown:
+        return QStringLiteral("Unknown");
+    }
+
+    return QStringLiteral("Unknown");
+}
+
+RgbZoneType rgbZoneTypeFromString(const QString& value)
+{
+    if (value.compare(QStringLiteral("Motherboard"), Qt::CaseInsensitive) == 0) {
+        return RgbZoneType::Motherboard;
+    }
+
+    if (value.compare(QStringLiteral("Addressable Header"), Qt::CaseInsensitive) == 0
+        || value.compare(QStringLiteral("AddressableHeader"), Qt::CaseInsensitive) == 0) {
+        return RgbZoneType::AddressableHeader;
+    }
+
+    return RgbZoneType::Unknown;
+}
+
+RgbZone::RgbZone(QString name, RgbZoneType type, int ledCount, RgbColor initialColor)
     : m_name(std::move(name))
+    , m_type(type)
     , m_currentColor(initialColor)
 {
     m_leds.reserve(qMax(0, ledCount));
 
     for (int index = 0; index < ledCount; ++index) {
-        m_leds.append(RgbLed(QStringLiteral("LED %1").arg(index + 1), initialColor));
+        m_leds.append(RgbLed(index, initialColor));
     }
 }
 
 const QString& RgbZone::name() const
 {
     return m_name;
+}
+
+RgbZoneType RgbZone::type() const
+{
+    return m_type;
+}
+
+QString RgbZone::typeName() const
+{
+    return rgbZoneTypeToString(m_type);
 }
 
 int RgbZone::ledCount() const

@@ -1,13 +1,21 @@
 #include "backends/mock/MockRgbDevice.h"
 
+#include <QDebug>
+
 namespace lumacore {
 
 MockRgbDevice::MockRgbDevice(QObject* parent)
-    : RgbDevice(QStringLiteral("mock-asus-tuf-x870-plus-wifi"), QStringLiteral("Mock ASUS TUF X870-PLUS WIFI"), parent)
+    : RgbDevice(
+          QStringLiteral("mock-asus-tuf-x870-plus-wifi"),
+          QStringLiteral("Mock ASUS TUF X870-PLUS WIFI"),
+          QStringLiteral("ASUS"),
+          RgbDeviceType::Motherboard,
+          parent
+      )
 {
-    mutableZones().append(RgbZone(QStringLiteral("Motherboard"), 8));
-    mutableZones().append(RgbZone(QStringLiteral("ARGB Header 1"), 12));
-    mutableZones().append(RgbZone(QStringLiteral("ARGB Header 2"), 12));
+    mutableZones().append(RgbZone(QStringLiteral("Motherboard"), RgbZoneType::Motherboard, 10));
+    mutableZones().append(RgbZone(QStringLiteral("ARGB Header 1"), RgbZoneType::AddressableHeader, 30));
+    mutableZones().append(RgbZone(QStringLiteral("ARGB Header 2"), RgbZoneType::AddressableHeader, 30));
 }
 
 bool MockRgbDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)
@@ -17,6 +25,8 @@ bool MockRgbDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)
     }
 
     mutableZones()[zoneIndex].setColor(color);
+    qInfo().noquote() << QStringLiteral("[MockBackend] %1 / %2 set to %3")
+                             .arg(name(), zones().at(zoneIndex).name(), color.toHexString());
     emit zoneChanged(zoneIndex);
     return true;
 }

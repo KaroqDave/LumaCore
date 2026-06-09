@@ -8,13 +8,24 @@
 
 namespace lumacore {
 
+enum class RgbZoneType {
+    Motherboard,
+    AddressableHeader,
+    Unknown
+};
+
+[[nodiscard]] QString rgbZoneTypeToString(RgbZoneType type);
+[[nodiscard]] RgbZoneType rgbZoneTypeFromString(const QString& value);
+
 class RgbZone
 {
 public:
     RgbZone() = default;
-    RgbZone(QString name, int ledCount, RgbColor initialColor = {});
+    RgbZone(QString name, RgbZoneType type, int ledCount, RgbColor initialColor = {});
 
     [[nodiscard]] const QString& name() const;
+    [[nodiscard]] RgbZoneType type() const;
+    [[nodiscard]] QString typeName() const;
     [[nodiscard]] int ledCount() const;
     [[nodiscard]] const QVector<RgbLed>& leds() const;
     [[nodiscard]] const RgbColor& currentColor() const;
@@ -23,6 +34,7 @@ public:
 
 private:
     QString m_name;
+    RgbZoneType m_type {RgbZoneType::Unknown};
     QVector<RgbLed> m_leds;
     RgbColor m_currentColor;
 };
