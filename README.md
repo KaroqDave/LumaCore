@@ -15,7 +15,7 @@ LumaCore is a passion project focused on safe, maintainable RGB control rather t
 - Static color control per zone
 - JSON profile save/load under `./profiles`
 - Activity log and status bar in the UI
-- Desktop entry and multi-resolution icons for launcher/taskbar testing
+- Embedded multi-resolution application icons
 
 Not yet implemented: breathing/rainbow effects, automated tests, and any real hardware discovery or writes.
 
@@ -46,24 +46,6 @@ cmake --build build
 
 Profiles are stored in `./profiles` relative to the **current working directory** when you launch the app. Running `./build/lumacore` from the repo root writes profiles to `profiles/` in the repository (that directory is gitignored).
 
-### Desktop entry (Wayland / launcher testing)
-
-CMake generates a desktop file in the build tree so you can test icons and launcher integration without installing:
-
-```sh
-kioclient6 exec ./build/lumacore.desktop
-```
-
-You can also open `build/lumacore.desktop` from your file manager.
-
-### Install (optional)
-
-```sh
-cmake --install build --prefix ~/.local
-```
-
-This installs the binary to `~/.local/bin`, the desktop file to `~/.local/share/applications`, and the icon to `~/.local/share/pixmaps`. Adjust `--prefix` as needed.
-
 ## Project layout
 
 | Path | Role |
@@ -73,8 +55,7 @@ This installs the binary to `~/.local/bin`, the desktop file to `~/.local/share/
 | `backends/mock/` | Safe simulated hardware backend |
 | `ui/` | QML-facing models and `AppController` |
 | `ui/qml/` | Qt Quick user interface |
-| `assets/icons/` | Application icons |
-| `packaging/linux/` | Desktop entry templates |
+| `assets/icons/` | Application icons (embedded via Qt resources) |
 
 ### Data flow
 

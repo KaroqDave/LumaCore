@@ -77,32 +77,4 @@ target_link_libraries(lumacore
         Qt6::QuickDialogs2
 )
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/icons")
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/lumacore-256.png"
-    "${CMAKE_BINARY_DIR}/icons/lumacore.png"
-    COPYONLY
-)
-
-set(LUMACORE_BUILD_EXECUTABLE "${CMAKE_BINARY_DIR}/lumacore")
-set(LUMACORE_BUILD_ICON "${CMAKE_BINARY_DIR}/icons/lumacore.png")
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/lumacore.desktop.in"
-    "${CMAKE_BINARY_DIR}/lumacore.desktop"
-    @ONLY
-)
-
-install(TARGETS lumacore
-    RUNTIME DESTINATION bin
-)
-
-install(FILES packaging/linux/lumacore.desktop
-    DESTINATION share/applications
-)
-
-install(FILES assets/icons/lumacore-256.png
-    DESTINATION share/pixmaps
-    RENAME lumacore.png
-)
-
 qt_finalize_executable(lumacore)
