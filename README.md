@@ -1,4 +1,4 @@
-# LumaCore
+# ![LumaCore icon](assets/icons/lumacore-32.png) LumaCore
 
 LumaCore is an open-source RGB control application being built Linux first with C++23, Qt 6, and CMake. It is a passion project focused on safe, maintainable RGB control rather than quick hardware hacks.
 
