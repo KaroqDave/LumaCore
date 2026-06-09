@@ -4,14 +4,36 @@
 #include "ui/ZoneListModel.h"
 
 #include <QGuiApplication>
+#include <QIcon>
+#include <QSize>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QWindow>
+
+namespace {
+
+QIcon createApplicationIcon()
+{
+    QIcon icon(QStringLiteral(":/icons/lumacore.ico"));
+    icon.addFile(QStringLiteral(":/icons/lumacore-16.png"), QSize(16, 16));
+    icon.addFile(QStringLiteral(":/icons/lumacore-32.png"), QSize(32, 32));
+    icon.addFile(QStringLiteral(":/icons/lumacore-48.png"), QSize(48, 48));
+    icon.addFile(QStringLiteral(":/icons/lumacore-64.png"), QSize(64, 64));
+    icon.addFile(QStringLiteral(":/icons/lumacore-128.png"), QSize(128, 128));
+    icon.addFile(QStringLiteral(":/icons/lumacore-256.png"), QSize(256, 256));
+    return icon;
+}
+
+} // namespace
 
 int main(int argc, char* argv[])
 {
+    QGuiApplication::setDesktopFileName(QStringLiteral("lumacore"));
+
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("LumaCore"));
     app.setOrganizationName(QStringLiteral("LumaCore"));
+    app.setWindowIcon(createApplicationIcon());
 
     lumacore::DeviceManager deviceManager;
     lumacore::DeviceListModel deviceListModel(&deviceManager);
@@ -28,6 +50,10 @@ int main(int argc, char* argv[])
 
     if (engine.rootObjects().isEmpty()) {
         return 1;
+    }
+
+    if (auto* window = qobject_cast<QWindow*>(engine.rootObjects().constFirst())) {
+        window->setIcon(createApplicationIcon());
     }
 
     return QGuiApplication::exec();

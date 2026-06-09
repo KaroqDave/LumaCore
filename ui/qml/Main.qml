@@ -126,6 +126,38 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 18
 
+                Rectangle {
+                    Layout.preferredWidth: 56
+                    Layout.preferredHeight: 56
+                    radius: 16
+                    color: root.elevatedColor
+                    border.color: root.accentColor
+                    border.width: 1
+
+                    Image {
+                        id: headerIconImage
+
+                        anchors.centerIn: parent
+                        width: 46
+                        height: 46
+                        source: "qrc:///icons/lumacore-256.png"
+                        sourceSize.width: 92
+                        sourceSize.height: 92
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        visible: status === Image.Ready
+                    }
+
+                    Label {
+                        anchors.centerIn: parent
+                        visible: headerIconImage.status !== Image.Ready
+                        text: qsTr("LC")
+                        color: root.primaryTextColor
+                        font.pixelSize: 20
+                        font.bold: true
+                    }
+                }
+
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6

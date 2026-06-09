@@ -31,6 +31,14 @@ Run:
 ./build/lumacore
 ```
 
+For launcher/taskbar icon testing on Wayland, CMake also generates a desktop file in the build folder:
+
+```sh
+kioclient6 exec ./build/lumacore.desktop
+```
+
+You can also open `build/lumacore.desktop` from your file manager. This keeps development artifacts in the build tree instead of requiring a user-local install.
+
 The app stores saved mock profiles under `./profiles` relative to the directory where you launch it. If you run `./build/lumacore` from the repository root, profiles are written to `profiles/`.
 
 ## Current Scope

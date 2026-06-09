@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=LumaCore
+Comment=Linux-first RGB control application
+Exec=lumacore
+Icon=lumacore
+Terminal=false
+Categories=Utility;Settings;
+StartupNotify=true
+StartupWMClass=lumacore

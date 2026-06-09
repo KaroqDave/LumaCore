@@ -41,6 +41,20 @@ qt_add_executable(lumacore
     ui/ZoneListModel.h
 )
 
+qt_add_resources(lumacore lumacore_icons
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons"
+    FILES
+        assets/icons/lumacore.svg
+        assets/icons/lumacore.ico
+        assets/icons/lumacore-16.png
+        assets/icons/lumacore-32.png
+        assets/icons/lumacore-48.png
+        assets/icons/lumacore-64.png
+        assets/icons/lumacore-128.png
+        assets/icons/lumacore-256.png
+)
+
 qt_add_qml_module(lumacore
     URI LumaCore
     VERSION 1.0
@@ -61,6 +75,34 @@ target_link_libraries(lumacore
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
+)
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/icons")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/lumacore-256.png"
+    "${CMAKE_BINARY_DIR}/icons/lumacore.png"
+    COPYONLY
+)
+
+set(LUMACORE_BUILD_EXECUTABLE "${CMAKE_BINARY_DIR}/lumacore")
+set(LUMACORE_BUILD_ICON "${CMAKE_BINARY_DIR}/icons/lumacore.png")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/lumacore.desktop.in"
+    "${CMAKE_BINARY_DIR}/lumacore.desktop"
+    @ONLY
+)
+
+install(TARGETS lumacore
+    RUNTIME DESTINATION bin
+)
+
+install(FILES packaging/linux/lumacore.desktop
+    DESTINATION share/applications
+)
+
+install(FILES assets/icons/lumacore-256.png
+    DESTINATION share/pixmaps
+    RENAME lumacore.png
 )
 
 qt_finalize_executable(lumacore)
