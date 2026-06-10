@@ -1,10 +1,12 @@
 # ![LumaCore icon](assets/icons/lumacore-32.png) LumaCore
 
-**v0.0.3** — Linux-first, open-source RGB control built with C++23, Qt 6, and CMake.
+**v0.0.7** — Linux-first, open-source RGB control built with C++23, Qt 6, and CMake.
 
 LumaCore is a passion project focused on safe, maintainable RGB control rather than quick hardware hacks. This version is **mock-only** by design: it ships with a Qt Quick desktop app, a core RGB device model, and a simulated ASUS motherboard-style device with three zones. No real hardware access, root permissions, SMBus/I2C writes, USB writes, or hidraw access are used.
 
-## Features (v0.0.3)
+![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
+
+## Features (v0.0.7)
 
 - Qt Quick desktop UI with device/zone selection and a color picker
 - In-memory RGB model: devices, zones, and LEDs
@@ -126,7 +128,7 @@ Phase 1 does not touch real hardware. There is no hidapi, libusb, i2c-dev, SMBus
 
 ## Roadmap
 
-1. **Safe foundation** — mock backend, device model, profiles, basic effects (static, breathing, rainbow), safety documentation *(in progress; v0.0.3 covers mock UI, static colors, and profiles)*
+1. **Safe foundation** — mock backend, device model, profiles, basic effects (static, breathing, rainbow), safety documentation *(in progress; v0.0.7 covers mock UI, static colors, and profiles)*
 2. **Linux integration** — read-only hardware discovery behind feature flags, structured logging, udev/i2c/hidraw/USB permission handling, unprivileged GUI with a daemon boundary
 3. **First hardware backends** — read-only ASUS Aura-style motherboard discovery; hidapi/libusb where appropriate; SMBus/i2c only after safety flows exist; mock coverage required before any real write path
 4. **Extensibility** — stable backend interface, plugin-style backend loading, profile import/export, device mapping, Windows support without weakening Linux safety boundaries

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 0.0.3
+    VERSION 0.0.7
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
