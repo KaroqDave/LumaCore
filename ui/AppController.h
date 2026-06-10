@@ -23,6 +23,11 @@ public:
     [[nodiscard]] QString profilesDirectory() const;
 
     Q_INVOKABLE bool applyStaticColor(int deviceIndex, int zoneIndex, const QColor& color);
+    Q_INVOKABLE bool applyEffect(int deviceIndex, int zoneIndex, int effectType, const QColor& color, double speed, int brightness);
+    Q_INVOKABLE int zoneEffectType(int deviceIndex, int zoneIndex) const;
+    Q_INVOKABLE QColor zoneEffectColor(int deviceIndex, int zoneIndex) const;
+    Q_INVOKABLE double zoneEffectSpeed(int deviceIndex, int zoneIndex) const;
+    Q_INVOKABLE int zoneEffectBrightness(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE bool updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount);
     Q_INVOKABLE int zoneCount(int deviceIndex) const;
     Q_INVOKABLE QString deviceName(int deviceIndex) const;

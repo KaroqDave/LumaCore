@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 0.0.7
+    VERSION 0.0.8
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
@@ -25,10 +25,14 @@ qt_add_executable(lumacore
     backends/mock/MockRgbDevice.h
     core/DeviceManager.cpp
     core/DeviceManager.h
+    core/EffectsEngine.cpp
+    core/EffectsEngine.h
     core/RgbColor.cpp
     core/RgbColor.h
     core/RgbDevice.cpp
     core/RgbDevice.h
+    core/RgbEffect.cpp
+    core/RgbEffect.h
     core/RgbLed.cpp
     core/RgbLed.h
     core/RgbZone.cpp
@@ -64,6 +68,7 @@ qt_add_qml_module(lumacore
     QML_FILES
         ui/qml/AboutDialog.qml
         ui/qml/components/DeviceTreePanel.qml
+        ui/qml/components/EffectSelector.qml
         ui/qml/components/NavIcon.qml
         ui/qml/components/NavItem.qml
         ui/qml/components/NavRail.qml

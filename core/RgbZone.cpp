@@ -74,6 +74,11 @@ const RgbColor& RgbZone::currentColor() const
     return m_currentColor;
 }
 
+const RgbEffect& RgbZone::effect() const
+{
+    return m_effect;
+}
+
 void RgbZone::setName(QString name)
 {
     m_name = std::move(name);
@@ -105,6 +110,25 @@ void RgbZone::setColor(const RgbColor& color)
     for (RgbLed& led : m_leds) {
         led.setColor(color);
     }
+}
+
+void RgbZone::setLedColors(const QVector<RgbColor>& colors)
+{
+    if (colors.isEmpty()) {
+        return;
+    }
+
+    const int count = m_leds.size();
+    for (int index = 0; index < count; ++index) {
+        m_leds[index].setColor(colors.at(index % colors.size()));
+    }
+
+    m_currentColor = colors.at(colors.size() / 2);
+}
+
+void RgbZone::setEffect(const RgbEffect& effect)
+{
+    m_effect = effect;
 }
 
 } // namespace lumacore

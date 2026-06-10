@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/RgbColor.h"
+#include "core/RgbEffect.h"
 #include "core/RgbZone.h"
 
 #include <QObject>
@@ -36,6 +37,10 @@ public:
     [[nodiscard]] bool setZoneName(int zoneIndex, const QString& name);
     [[nodiscard]] bool setZoneLedCount(int zoneIndex, int ledCount);
     [[nodiscard]] virtual bool setZoneStaticColor(int zoneIndex, const RgbColor& color) = 0;
+
+    void setZoneEffect(int zoneIndex, const RgbEffect& effect);
+    [[nodiscard]] RgbEffect zoneEffect(int zoneIndex) const;
+    bool setZoneEffectColors(int zoneIndex, const QVector<RgbColor>& colors);
 
 signals:
     void zoneChanged(int zoneIndex);

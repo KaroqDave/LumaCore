@@ -20,7 +20,7 @@ DeviceTreeModel::DeviceTreeModel(DeviceManager* deviceManager, QObject* parent)
         endResetModel();
     });
 
-    connect(m_deviceManager, &DeviceManager::zoneChanged, this, [this](int deviceIndex, int zoneIndex) {
+    const auto notifyZoneChanged = [this](int deviceIndex, int zoneIndex) {
         const QModelIndex changedZone = indexForZone(deviceIndex, zoneIndex);
         if (changedZone.isValid()) {
             emit dataChanged(changedZone, changedZone);
@@ -30,7 +30,10 @@ DeviceTreeModel::DeviceTreeModel(DeviceManager* deviceManager, QObject* parent)
         if (changedDevice.isValid()) {
             emit dataChanged(changedDevice, changedDevice);
         }
-    });
+    };
+
+    connect(m_deviceManager, &DeviceManager::zoneChanged, this, notifyZoneChanged);
+    connect(m_deviceManager, &DeviceManager::zoneFrameUpdated, this, notifyZoneChanged);
 }
 
 QModelIndex DeviceTreeModel::index(int row, int column, const QModelIndex& parentIndex) const

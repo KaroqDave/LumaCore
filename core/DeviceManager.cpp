@@ -15,11 +15,13 @@ namespace lumacore {
 
 DeviceManager::DeviceManager(QObject* parent)
     : QObject(parent)
+    , m_effectsEngine(std::make_unique<EffectsEngine>(this))
 {
 }
 
 void DeviceManager::initializeMockDevices()
 {
+    m_effectsEngine->stopAll();
     m_devices.clear();
 
     const MockBackend mockBackend;
@@ -112,18 +114,48 @@ bool DeviceManager::updateZone(int deviceIndex, int zoneIndex, const QString& na
 
 bool DeviceManager::setZoneStaticColor(int deviceIndex, int zoneIndex, const RgbColor& color)
 {
+    return applyZoneEffect(deviceIndex, zoneIndex, RgbEffect(RgbEffectType::Static, color));
+}
+
+bool DeviceManager::applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEffect& effect)
+{
     RgbDevice* device = deviceAt(deviceIndex);
-    if (device == nullptr) {
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
         return false;
     }
 
-    const bool changed = device->setZoneStaticColor(zoneIndex, color);
-    if (changed) {
-        const RgbZone& zone = device->zones().at(zoneIndex);
-        emit logMessage(QStringLiteral("%1 / %2 set to %3").arg(device->name(), zone.name(), color.toHexString()));
+    device->setZoneEffect(zoneIndex, effect);
+    const RgbZone& zone = device->zones().at(zoneIndex);
+
+    if (effect.isAnimated()) {
+        m_effectsEngine->startZone(deviceIndex, zoneIndex);
+        emit logMessage(QStringLiteral("%1 / %2 set to %3 effect")
+                            .arg(device->name(), zone.name(), rgbEffectTypeToString(effect.type())));
+    } else {
+        m_effectsEngine->stopZone(deviceIndex, zoneIndex);
+        const QVector<RgbColor> frame = EffectsEngine::computeFrame(effect, zone.ledCount(), 0.0);
+        if (!frame.isEmpty()) {
+            device->setZoneEffectColors(zoneIndex, frame);
+        }
+        emit logMessage(QStringLiteral("%1 / %2 set to %3")
+                            .arg(device->name(), zone.name(), effect.color().toHexString()));
     }
 
-    return changed;
+    emit zoneChanged(deviceIndex, zoneIndex);
+    emit zoneColorChanged(deviceIndex, zoneIndex);
+    return true;
+}
+
+void DeviceManager::paintZoneFrame(int deviceIndex, int zoneIndex, const QVector<RgbColor>& colors)
+{
+    RgbDevice* device = deviceAt(deviceIndex);
+    if (device == nullptr) {
+        return;
+    }
+
+    if (device->setZoneEffectColors(zoneIndex, colors)) {
+        emit zoneFrameUpdated(deviceIndex, zoneIndex);
+    }
 }
 
 bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessage)
@@ -147,8 +179,9 @@ bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessag
                 {QStringLiteral("name"), zone.name()},
                 {QStringLiteral("type"), zone.typeName()},
                 {QStringLiteral("ledCount"), zone.ledCount()},
-                {QStringLiteral("color"), zone.currentColor().toHexString()},
-                {QStringLiteral("rgb"), zone.currentColor().toJson()},
+                {QStringLiteral("color"), zone.effect().color().toHexString()},
+                {QStringLiteral("rgb"), zone.effect().color().toJson()},
+                {QStringLiteral("effect"), zone.effect().toJson()},
             });
             ++zoneIndex;
         }
@@ -225,12 +258,18 @@ bool DeviceManager::loadProfile(const QString& profileName, QString* errorMessag
             for (const QJsonValue& zoneValue : zonesJson) {
                 const QJsonObject zoneObject = zoneValue.toObject();
                 const QString zoneName = zoneObject.value(QStringLiteral("name")).toString();
+
+                const bool hasEffect = zoneObject.contains(QStringLiteral("effect"));
                 bool colorOk = false;
                 const RgbColor color = RgbColor::fromHexString(zoneObject.value(QStringLiteral("color")).toString(), &colorOk);
-                if (!colorOk) {
+                if (!hasEffect && !colorOk) {
                     emit logMessage(QStringLiteral("Skipped zone '%1' with invalid color.").arg(zoneName));
                     continue;
                 }
+
+                const RgbEffect effect = hasEffect
+                    ? RgbEffect::fromJson(zoneObject.value(QStringLiteral("effect")).toObject())
+                    : RgbEffect(RgbEffectType::Static, color);
 
                 int matchedZoneIndex = -1;
                 for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
@@ -259,7 +298,7 @@ bool DeviceManager::loadProfile(const QString& profileName, QString* errorMessag
                 Q_UNUSED(renamed)
                 Q_UNUSED(resized)
 
-                if (setZoneStaticColor(deviceIndex, matchedZoneIndex, color)) {
+                if (applyZoneEffect(deviceIndex, matchedZoneIndex, effect)) {
                     ++appliedZones;
                 }
             }

@@ -97,6 +97,34 @@ bool RgbDevice::setZoneLedCount(int zoneIndex, int ledCount)
     return true;
 }
 
+void RgbDevice::setZoneEffect(int zoneIndex, const RgbEffect& effect)
+{
+    if (zoneIndex < 0 || zoneIndex >= m_zones.size()) {
+        return;
+    }
+
+    m_zones[zoneIndex].setEffect(effect);
+}
+
+RgbEffect RgbDevice::zoneEffect(int zoneIndex) const
+{
+    if (zoneIndex < 0 || zoneIndex >= m_zones.size()) {
+        return {};
+    }
+
+    return m_zones.at(zoneIndex).effect();
+}
+
+bool RgbDevice::setZoneEffectColors(int zoneIndex, const QVector<RgbColor>& colors)
+{
+    if (zoneIndex < 0 || zoneIndex >= m_zones.size() || colors.isEmpty()) {
+        return false;
+    }
+
+    m_zones[zoneIndex].setLedColors(colors);
+    return true;
+}
+
 QVector<RgbZone>& RgbDevice::mutableZones()
 {
     return m_zones;

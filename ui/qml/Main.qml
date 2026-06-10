@@ -33,7 +33,7 @@ ApplicationWindow {
     readonly property color secondaryTextColor: "#AEB8C2"
 
     readonly property var pageTitles: [
-        { "title": qsTr("Devices"), "subtitle": qsTr("Pick a device or zone, then tune its color and LED count.") },
+        { "title": qsTr("Devices"), "subtitle": qsTr("Pick a device or zone, then choose a lighting effect.") },
         { "title": qsTr("Profiles"), "subtitle": qsTr("Save and restore device state while the backend is mock-only.") },
         { "title": qsTr("Settings"), "subtitle": qsTr("Visual preferences and startup behavior for the app shell.") }
     ]
@@ -54,7 +54,7 @@ ApplicationWindow {
         zoneModel.deviceIndex = deviceIndex
         selectedZoneIndex = controller.zoneCount(deviceIndex) > 0 ? 0 : -1
         if (selectedZoneIndex >= 0) {
-            selectedColor = controller.zoneColor(selectedDeviceIndex, selectedZoneIndex)
+            selectedColor = controller.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex)
         }
     }
 
@@ -66,7 +66,7 @@ ApplicationWindow {
         selectedDeviceIndex = deviceIndex
         selectedZoneIndex = zoneIndex
         zoneModel.deviceIndex = deviceIndex
-        selectedColor = controller.zoneColor(deviceIndex, zoneIndex)
+        selectedColor = controller.zoneEffectColor(deviceIndex, zoneIndex)
     }
 
     Behavior on sidebarWidth {
@@ -79,7 +79,7 @@ ApplicationWindow {
     ColorDialog {
         id: colorDialog
 
-        title: qsTr("Choose Static Color")
+        title: qsTr("Choose Color")
         selectedColor: root.selectedColor
         onAccepted: root.selectedColor = selectedColor
     }
@@ -252,7 +252,7 @@ ApplicationWindow {
                             Layout.minimumWidth: 320
                             Layout.fillHeight: true
                             title: qsTr("Zone Editor")
-                            subtitle: qsTr("Rename zones, tune LED counts, and apply static color.")
+                            subtitle: qsTr("Rename zones, tune LED counts, and apply lighting effects.")
                             surfaceColor: root.surfaceColor
                             borderColor: root.borderColor
                             primaryTextColor: root.primaryTextColor
@@ -360,7 +360,11 @@ ApplicationWindow {
 
         function onZoneDataChanged(deviceIndex, zoneIndex) {
             if (deviceIndex === root.selectedDeviceIndex && zoneIndex === root.selectedZoneIndex) {
-                root.selectedColor = root.controller.zoneColor(deviceIndex, zoneIndex)
+                // Only follow the zone's color for static effects; animated effects
+                // manage their own base color and would otherwise fight the picker.
+                if (root.controller.zoneEffectType(deviceIndex, zoneIndex) === 0) {
+                    root.selectedColor = root.controller.zoneEffectColor(deviceIndex, zoneIndex)
+                }
             }
         }
     }

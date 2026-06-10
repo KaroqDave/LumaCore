@@ -1,6 +1,7 @@
 #include "ui/AppController.h"
 
 #include "core/RgbColor.h"
+#include "core/RgbEffect.h"
 
 #include <QDateTime>
 
@@ -44,17 +45,69 @@ QString AppController::profilesDirectory() const
 
 bool AppController::applyStaticColor(int deviceIndex, int zoneIndex, const QColor& color)
 {
+    return applyEffect(deviceIndex, zoneIndex, static_cast<int>(RgbEffectType::Static), color, 1.0, 100);
+}
+
+bool AppController::applyEffect(int deviceIndex, int zoneIndex, int effectType, const QColor& color, double speed, int brightness)
+{
     if (m_deviceManager == nullptr || !color.isValid()) {
-        setStatusMessage(QStringLiteral("Could not apply color."));
+        setStatusMessage(QStringLiteral("Could not apply effect."));
         return false;
     }
 
-    const bool changed = m_deviceManager->setZoneStaticColor(deviceIndex, zoneIndex, RgbColor::fromQColor(color));
+    const RgbEffect effect(
+        static_cast<RgbEffectType>(effectType),
+        RgbColor::fromQColor(color),
+        speed,
+        brightness
+    );
+
+    const bool changed = m_deviceManager->applyZoneEffect(deviceIndex, zoneIndex, effect);
     if (!changed) {
-        setStatusMessage(QStringLiteral("Could not apply color to selected zone."));
+        setStatusMessage(QStringLiteral("Could not apply effect to selected zone."));
     }
 
     return changed;
+}
+
+int AppController::zoneEffectType(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return static_cast<int>(RgbEffectType::Static);
+    }
+
+    return static_cast<int>(device->zones().at(zoneIndex).effect().type());
+}
+
+QColor AppController::zoneEffectColor(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return {};
+    }
+
+    return device->zones().at(zoneIndex).effect().color().toQColor();
+}
+
+double AppController::zoneEffectSpeed(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return 1.0;
+    }
+
+    return device->zones().at(zoneIndex).effect().speed();
+}
+
+int AppController::zoneEffectBrightness(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return 100;
+    }
+
+    return device->zones().at(zoneIndex).effect().brightness();
 }
 
 bool AppController::updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount)
