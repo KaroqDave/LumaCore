@@ -12,7 +12,7 @@ Rectangle {
     property color primaryTextColor: "#F2F5F8"
     property color secondaryTextColor: "#AEB8C2"
     property bool animationsEnabled: true
-    property int cardPadding: 14
+    property int cardPadding: 16
     default property alias content: body.data
 
     color: surfaceColor
@@ -32,12 +32,12 @@ Rectangle {
 
         anchors.fill: parent
         anchors.margins: card.cardPadding
-        spacing: 10
+        spacing: 12
 
         ColumnLayout {
             Layout.fillWidth: true
             visible: card.title.length > 0 || card.subtitle.length > 0
-            spacing: 3
+            spacing: 4
 
             Label {
                 Layout.fillWidth: true

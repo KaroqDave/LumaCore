@@ -64,11 +64,13 @@ qt_add_qml_module(lumacore
     QML_FILES
         ui/qml/AboutDialog.qml
         ui/qml/components/DeviceTreePanel.qml
+        ui/qml/components/NavIcon.qml
+        ui/qml/components/NavItem.qml
+        ui/qml/components/NavRail.qml
         ui/qml/components/PillLabel.qml
         ui/qml/components/ProfileManager.qml
         ui/qml/components/SectionCard.qml
         ui/qml/components/SettingsPage.qml
-        ui/qml/components/Sidebar.qml
         ui/qml/components/ZoneEditor.qml
         ui/qml/Main.qml
 )

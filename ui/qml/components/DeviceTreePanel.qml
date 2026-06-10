@@ -43,7 +43,7 @@ Item {
                                              : panel.selectedDeviceIndex === sourceDeviceIndex && panel.selectedZoneIndex < 0
 
             implicitWidth: tree.width
-            implicitHeight: deviceNode ? 46 : 40
+            implicitHeight: deviceNode ? 48 : 42
             text: model.displayName || ""
             onClicked: {
                 if (deviceNode) {
@@ -71,10 +71,10 @@ Item {
             }
 
             contentItem: RowLayout {
-                spacing: 8
+                spacing: 10
 
                 Item {
-                    Layout.preferredWidth: Math.max(0, treeDelegate.depth * 14)
+                    Layout.preferredWidth: Math.max(4, treeDelegate.depth * 16)
                     Layout.fillHeight: true
                 }
 

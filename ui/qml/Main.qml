@@ -17,9 +17,10 @@ ApplicationWindow {
 
     property color selectedColor: "#4080FF"
     property bool sidebarCollapsed: false
+    property int currentPage: 0
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
-    property real sidebarWidth: sidebarCollapsed ? 74 : 300
+    property real sidebarWidth: sidebarCollapsed ? 74 : 248
     readonly property var controller: appController
     readonly property var settings: settingsController
     readonly property bool animationsEnabled: settings.animationsEnabled
@@ -30,6 +31,12 @@ ApplicationWindow {
     readonly property color borderColor: "#343C44"
     readonly property color primaryTextColor: "#F2F5F8"
     readonly property color secondaryTextColor: "#AEB8C2"
+
+    readonly property var pageTitles: [
+        { "title": qsTr("Devices"), "subtitle": qsTr("Pick a device or zone, then tune its color and LED count.") },
+        { "title": qsTr("Profiles"), "subtitle": qsTr("Save and restore device state while the backend is mock-only.") },
+        { "title": qsTr("Settings"), "subtitle": qsTr("Visual preferences and startup behavior for the app shell.") }
+    ]
 
     function colorToHex(value) {
         const red = Math.round(value.r * 255).toString(16).padStart(2, "0")
@@ -81,325 +88,266 @@ ApplicationWindow {
         id: aboutDialog
     }
 
-    ColumnLayout {
+    RowLayout {
         anchors.fill: parent
         anchors.margins: 16
-        spacing: 12
+        spacing: 14
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 62
-            radius: 18
-            color: root.surfaceColor
-            border.color: root.borderColor
-            border.width: 1
+        NavRail {
+            id: navRail
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 12
-
-                Rectangle {
-                    Layout.preferredWidth: 42
-                    Layout.preferredHeight: 42
-                    radius: 13
-                    color: root.elevatedColor
-                    border.color: root.accentColor
-                    border.width: 1
-
-                    Image {
-                        id: headerIconImage
-
-                        anchors.centerIn: parent
-                        width: 34
-                        height: 34
-                        source: "qrc:///icons/lumacore-256.png"
-                        sourceSize.width: 68
-                        sourceSize.height: 68
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                        visible: status === Image.Ready
-                    }
-
-                    Label {
-                        anchors.centerIn: parent
-                        visible: headerIconImage.status !== Image.Ready
-                        text: qsTr("LC")
-                        color: root.primaryTextColor
-                        font.pixelSize: 16
-                        font.bold: true
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 1
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: qsTr("LumaCore")
-                        color: root.primaryTextColor
-                        font.pixelSize: 23
-                        font.bold: true
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: qsTr("Mock-safe RGB control with compact device, zone, profile, and settings tools.")
-                        color: root.secondaryTextColor
-                        font.pixelSize: 12
-                        elide: Text.ElideRight
-                    }
-                }
-
-                PillLabel {
-                    text: qsTr("Mock backend")
-                    animationsEnabled: root.animationsEnabled
-                }
-
-                ToolButton {
-                    id: aboutButton
-
-                    Layout.preferredWidth: 38
-                    Layout.preferredHeight: 38
-                    icon.name: "dialog-information"
-                    icon.width: 20
-                    icon.height: 20
-                    ToolTip.text: qsTr("About LumaCore")
-                    ToolTip.visible: hovered
-                    onClicked: aboutDialog.open()
-
-                    background: Rectangle {
-                        radius: 12
-                        color: aboutButton.down ? "#2A3540" : (aboutButton.hovered ? "#24313B" : root.elevatedColor)
-                        border.color: aboutButton.hovered ? root.accentColor : root.borderColor
-                        border.width: 1
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: root.animationDuration
-                            }
-                        }
-                    }
-                }
-            }
+            Layout.preferredWidth: root.sidebarWidth
+            Layout.fillHeight: true
+            collapsed: root.sidebarCollapsed
+            currentIndex: root.currentPage
+            surfaceColor: root.surfaceColor
+            elevatedColor: root.elevatedColor
+            accentColor: root.accentColor
+            borderColor: root.borderColor
+            primaryTextColor: root.primaryTextColor
+            secondaryTextColor: root.secondaryTextColor
+            animationsEnabled: root.animationsEnabled
+            onToggleRequested: root.sidebarCollapsed = !root.sidebarCollapsed
+            onNavSelected: function(index) { root.currentPage = index }
+            onAboutRequested: aboutDialog.open()
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 42
-            color: root.elevatedColor
-            radius: 14
-            border.color: root.borderColor
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 10
-
-                Rectangle {
-                    Layout.preferredWidth: 9
-                    Layout.preferredHeight: 9
-                    radius: 5
-                    color: "#4CAF50"
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    text: root.controller.statusMessage
-                    color: root.primaryTextColor
-                    font.pixelSize: 13
-                    font.bold: true
-                    elide: Text.ElideRight
-                    ToolTip.visible: statusMouse.containsMouse && truncated
-                    ToolTip.text: text
-
-                    MouseArea {
-                        id: statusMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
-                    }
-                }
-            }
-        }
-
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 12
+            spacing: 14
 
-            Sidebar {
-                id: sidebar
-
-                Layout.preferredWidth: root.sidebarWidth
-                Layout.minimumWidth: root.sidebarCollapsed ? 74 : 260
-                Layout.maximumWidth: root.sidebarCollapsed ? 74 : 340
-                Layout.fillHeight: true
-                collapsed: root.sidebarCollapsed
-                treeModel: deviceTreeModel
-                selectedDeviceIndex: root.selectedDeviceIndex
-                selectedZoneIndex: root.selectedZoneIndex
-                surfaceColor: root.surfaceColor
-                elevatedColor: root.elevatedColor
-                accentColor: root.accentColor
-                borderColor: root.borderColor
-                primaryTextColor: root.primaryTextColor
-                secondaryTextColor: root.secondaryTextColor
-                animationsEnabled: root.animationsEnabled
-                onToggleRequested: root.sidebarCollapsed = !root.sidebarCollapsed
-                onDeviceSelected: function(deviceIndex) { root.selectDevice(deviceIndex) }
-                onZoneSelected: function(deviceIndex, zoneIndex) { root.selectZone(deviceIndex, zoneIndex) }
-            }
-
-            SectionCard {
+            Rectangle {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                surfaceColor: root.surfaceColor
-                borderColor: root.borderColor
-                primaryTextColor: root.primaryTextColor
-                secondaryTextColor: root.secondaryTextColor
-                animationsEnabled: root.animationsEnabled
+                Layout.preferredHeight: 72
+                radius: 18
+                color: root.surfaceColor
+                border.color: root.borderColor
+                border.width: 1
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 12
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 16
+                    anchors.topMargin: 12
+                    anchors.bottomMargin: 12
+                    spacing: 14
 
-                    TabBar {
-                        id: mainTabs
-
+                    ColumnLayout {
                         Layout.fillWidth: true
+                        spacing: 2
 
-                        TabButton {
-                            text: qsTr("Control")
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.pageTitles[root.currentPage].title
+                            color: root.primaryTextColor
+                            font.pixelSize: 22
+                            font.bold: true
+                            elide: Text.ElideRight
                         }
 
-                        TabButton {
-                            text: qsTr("Profiles")
-                        }
-
-                        TabButton {
-                            text: qsTr("Settings")
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.pageTitles[root.currentPage].subtitle
+                            color: root.secondaryTextColor
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
                         }
                     }
 
-                    StackLayout {
-                        id: pages
+                    Rectangle {
+                        Layout.alignment: Qt.AlignVCenter
+                        implicitWidth: statusRow.implicitWidth + 24
+                        implicitHeight: 34
+                        radius: 999
+                        color: root.elevatedColor
+                        border.color: root.borderColor
+                        border.width: 1
 
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        currentIndex: mainTabs.currentIndex
+                        RowLayout {
+                            id: statusRow
 
-                        Item {
-                            RowLayout {
-                                anchors.fill: parent
-                                spacing: 12
+                            anchors.centerIn: parent
+                            spacing: 8
 
-                                SectionCard {
-                                    Layout.preferredWidth: 390
-                                    Layout.minimumWidth: 330
-                                    Layout.fillHeight: true
-                                    title: qsTr("Zone Editor")
-                                    subtitle: qsTr("Rename zones, tune LED counts, and apply static color.")
-                                    surfaceColor: root.elevatedColor
-                                    borderColor: root.borderColor
-                                    primaryTextColor: root.primaryTextColor
-                                    secondaryTextColor: root.secondaryTextColor
-                                    animationsEnabled: root.animationsEnabled
+                            Rectangle {
+                                Layout.preferredWidth: 9
+                                Layout.preferredHeight: 9
+                                radius: 5
+                                color: "#4CAF50"
+                            }
 
-                                    ZoneEditor {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        appController: root.controller
-                                        selectedDeviceIndex: root.selectedDeviceIndex
-                                        selectedZoneIndex: root.selectedZoneIndex
-                                        selectedColor: root.selectedColor
-                                        elevatedColor: root.surfaceColor
-                                        accentColor: root.accentColor
-                                        borderColor: root.borderColor
-                                        primaryTextColor: root.primaryTextColor
-                                        secondaryTextColor: root.secondaryTextColor
-                                        animationsEnabled: root.animationsEnabled
-                                        onChooseColorRequested: colorDialog.open()
-                                    }
-                                }
+                            Label {
+                                Layout.maximumWidth: 320
+                                text: root.controller.statusMessage
+                                color: root.primaryTextColor
+                                font.pixelSize: 12
+                                font.bold: true
+                                elide: Text.ElideRight
+                                ToolTip.visible: statusMouse.containsMouse && truncated
+                                ToolTip.text: text
 
-                                SectionCard {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    title: qsTr("Activity")
-                                    subtitle: qsTr("Recent mock backend and profile activity")
-                                    surfaceColor: root.elevatedColor
-                                    borderColor: root.borderColor
-                                    primaryTextColor: root.primaryTextColor
-                                    secondaryTextColor: root.secondaryTextColor
-                                    animationsEnabled: root.animationsEnabled
+                                MouseArea {
+                                    id: statusMouse
 
-                                    TextArea {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        text: root.controller.logText
-                                        readOnly: true
-                                        wrapMode: TextArea.Wrap
-                                        color: root.primaryTextColor
-                                        selectedTextColor: root.primaryTextColor
-                                        selectionColor: root.accentColor
-                                        font.family: "monospace"
-                                        font.pixelSize: 12
-
-                                        background: Rectangle {
-                                            color: "#171C21"
-                                            radius: 12
-                                            border.color: root.borderColor
-                                        }
-                                    }
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.NoButton
                                 }
                             }
                         }
+                    }
 
-                        Item {
-                            SectionCard {
-                                anchors.fill: parent
-                                title: qsTr("Profile Manager")
-                                subtitle: qsTr("Save and restore device state while the backend is still mock-only.")
-                                surfaceColor: root.elevatedColor
+                    PillLabel {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: qsTr("Mock backend")
+                        animationsEnabled: root.animationsEnabled
+                    }
+                }
+            }
+
+            StackLayout {
+                id: pages
+
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentIndex: root.currentPage
+
+                Item {
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 14
+
+                        SectionCard {
+                            Layout.preferredWidth: 280
+                            Layout.minimumWidth: 240
+                            Layout.fillHeight: true
+                            title: qsTr("Device Tree")
+                            subtitle: qsTr("Pick a device or zone")
+                            surfaceColor: root.surfaceColor
+                            borderColor: root.borderColor
+                            primaryTextColor: root.primaryTextColor
+                            secondaryTextColor: root.secondaryTextColor
+                            animationsEnabled: root.animationsEnabled
+
+                            DeviceTreePanel {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                treeModel: deviceTreeModel
+                                selectedDeviceIndex: root.selectedDeviceIndex
+                                selectedZoneIndex: root.selectedZoneIndex
+                                elevatedColor: root.elevatedColor
+                                accentColor: root.accentColor
                                 borderColor: root.borderColor
                                 primaryTextColor: root.primaryTextColor
                                 secondaryTextColor: root.secondaryTextColor
                                 animationsEnabled: root.animationsEnabled
-
-                                ProfileManager {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    appController: root.controller
-                                    borderColor: root.borderColor
-                                    primaryTextColor: root.primaryTextColor
-                                    secondaryTextColor: root.secondaryTextColor
-                                }
+                                onDeviceSelected: function(deviceIndex) { root.selectDevice(deviceIndex) }
+                                onZoneSelected: function(deviceIndex, zoneIndex) { root.selectZone(deviceIndex, zoneIndex) }
                             }
                         }
 
-                        Item {
-                            ScrollView {
-                                id: settingsScroll
+                        SectionCard {
+                            Layout.preferredWidth: 380
+                            Layout.minimumWidth: 320
+                            Layout.fillHeight: true
+                            title: qsTr("Zone Editor")
+                            subtitle: qsTr("Rename zones, tune LED counts, and apply static color.")
+                            surfaceColor: root.surfaceColor
+                            borderColor: root.borderColor
+                            primaryTextColor: root.primaryTextColor
+                            secondaryTextColor: root.secondaryTextColor
+                            animationsEnabled: root.animationsEnabled
 
-                                anchors.fill: parent
-                                clip: true
-                                contentWidth: availableWidth
+                            ZoneEditor {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                appController: root.controller
+                                selectedDeviceIndex: root.selectedDeviceIndex
+                                selectedZoneIndex: root.selectedZoneIndex
+                                selectedColor: root.selectedColor
+                                elevatedColor: root.elevatedColor
+                                accentColor: root.accentColor
+                                borderColor: root.borderColor
+                                primaryTextColor: root.primaryTextColor
+                                secondaryTextColor: root.secondaryTextColor
+                                animationsEnabled: root.animationsEnabled
+                                onChooseColorRequested: colorDialog.open()
+                            }
+                        }
 
-                                SettingsPage {
-                                    width: settingsScroll.availableWidth
-                                    height: Math.max(implicitHeight, settingsScroll.availableHeight)
-                                    settingsController: root.settings
-                                    elevatedColor: root.elevatedColor
-                                    borderColor: root.borderColor
-                                    primaryTextColor: root.primaryTextColor
-                                    secondaryTextColor: root.secondaryTextColor
-                                    animationsEnabled: root.animationsEnabled
+                        SectionCard {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            title: qsTr("Activity")
+                            subtitle: qsTr("Recent mock backend and profile activity")
+                            surfaceColor: root.surfaceColor
+                            borderColor: root.borderColor
+                            primaryTextColor: root.primaryTextColor
+                            secondaryTextColor: root.secondaryTextColor
+                            animationsEnabled: root.animationsEnabled
+
+                            TextArea {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                text: root.controller.logText
+                                readOnly: true
+                                wrapMode: TextArea.Wrap
+                                color: root.primaryTextColor
+                                selectedTextColor: root.primaryTextColor
+                                selectionColor: root.accentColor
+                                font.family: "monospace"
+                                font.pixelSize: 12
+
+                                background: Rectangle {
+                                    color: "#171C21"
+                                    radius: 12
+                                    border.color: root.borderColor
                                 }
                             }
+                        }
+                    }
+                }
+
+                Item {
+                    SectionCard {
+                        anchors.fill: parent
+                        title: qsTr("Profile Manager")
+                        subtitle: qsTr("Save and restore device state while the backend is still mock-only.")
+                        surfaceColor: root.surfaceColor
+                        borderColor: root.borderColor
+                        primaryTextColor: root.primaryTextColor
+                        secondaryTextColor: root.secondaryTextColor
+                        animationsEnabled: root.animationsEnabled
+
+                        ProfileManager {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            appController: root.controller
+                            borderColor: root.borderColor
+                            primaryTextColor: root.primaryTextColor
+                            secondaryTextColor: root.secondaryTextColor
+                        }
+                    }
+                }
+
+                Item {
+                    ScrollView {
+                        id: settingsScroll
+
+                        anchors.fill: parent
+                        clip: true
+                        contentWidth: availableWidth
+
+                        SettingsPage {
+                            width: settingsScroll.availableWidth
+                            height: Math.max(implicitHeight, settingsScroll.availableHeight)
+                            settingsController: root.settings
+                            elevatedColor: root.surfaceColor
+                            borderColor: root.borderColor
+                            primaryTextColor: root.primaryTextColor
+                            secondaryTextColor: root.secondaryTextColor
+                            animationsEnabled: root.animationsEnabled
                         }
                     }
                 }
