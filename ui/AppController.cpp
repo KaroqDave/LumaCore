@@ -21,6 +21,10 @@ AppController::AppController(DeviceManager* deviceManager, QObject* parent)
         appendLog(message);
         setStatusMessage(message);
     });
+
+    connect(m_deviceManager, &DeviceManager::zoneChanged, this, [this](int deviceIndex, int zoneIndex) {
+        emit zoneDataChanged(deviceIndex, zoneIndex);
+    });
 }
 
 QString AppController::statusMessage() const
@@ -53,6 +57,84 @@ bool AppController::applyStaticColor(int deviceIndex, int zoneIndex, const QColo
     return changed;
 }
 
+bool AppController::updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount)
+{
+    if (m_deviceManager == nullptr) {
+        return false;
+    }
+
+    QString errorMessage;
+    const bool updated = m_deviceManager->updateZone(deviceIndex, zoneIndex, name, ledCount, &errorMessage);
+    if (!updated) {
+        appendLog(errorMessage);
+        setStatusMessage(errorMessage);
+    }
+
+    return updated;
+}
+
+int AppController::zoneCount(int deviceIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    return device == nullptr ? 0 : static_cast<int>(device->zones().size());
+}
+
+QString AppController::deviceName(int deviceIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    return device == nullptr ? QString() : device->name();
+}
+
+QString AppController::zoneName(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return {};
+    }
+
+    return device->zones().at(zoneIndex).name();
+}
+
+QString AppController::zoneTypeName(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return {};
+    }
+
+    return device->zones().at(zoneIndex).typeName();
+}
+
+int AppController::zoneLedCount(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return 0;
+    }
+
+    return device->zones().at(zoneIndex).ledCount();
+}
+
+QColor AppController::zoneColor(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return {};
+    }
+
+    return device->zones().at(zoneIndex).currentColor().toQColor();
+}
+
+QString AppController::zoneColorHex(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return {};
+    }
+
+    return device->zones().at(zoneIndex).currentColor().toHexString();
+}
+
 bool AppController::saveProfile(const QString& profileName)
 {
     if (m_deviceManager == nullptr) {
@@ -64,6 +146,8 @@ bool AppController::saveProfile(const QString& profileName)
     if (!saved) {
         appendLog(errorMessage);
         setStatusMessage(errorMessage);
+    } else {
+        emit profilesChanged();
     }
 
     return saved;
@@ -83,6 +167,42 @@ bool AppController::loadProfile(const QString& profileName)
     }
 
     return loaded;
+}
+
+bool AppController::deleteProfile(const QString& profileName)
+{
+    if (m_deviceManager == nullptr) {
+        return false;
+    }
+
+    QString errorMessage;
+    const bool deleted = m_deviceManager->deleteProfile(profileName, &errorMessage);
+    if (!deleted) {
+        appendLog(errorMessage);
+        setStatusMessage(errorMessage);
+    } else {
+        emit profilesChanged();
+    }
+
+    return deleted;
+}
+
+bool AppController::renameProfile(const QString& oldProfileName, const QString& newProfileName)
+{
+    if (m_deviceManager == nullptr) {
+        return false;
+    }
+
+    QString errorMessage;
+    const bool renamed = m_deviceManager->renameProfile(oldProfileName, newProfileName, &errorMessage);
+    if (!renamed) {
+        appendLog(errorMessage);
+        setStatusMessage(errorMessage);
+    } else {
+        emit profilesChanged();
+    }
+
+    return renamed;
 }
 
 QStringList AppController::profileNames() const

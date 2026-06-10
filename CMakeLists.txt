@@ -37,6 +37,10 @@ qt_add_executable(lumacore
     ui/AppController.h
     ui/DeviceListModel.cpp
     ui/DeviceListModel.h
+    ui/DeviceTreeModel.cpp
+    ui/DeviceTreeModel.h
+    ui/SettingsController.cpp
+    ui/SettingsController.h
     ui/ZoneListModel.cpp
     ui/ZoneListModel.h
 )
@@ -59,6 +63,13 @@ qt_add_qml_module(lumacore
     VERSION 1.0
     QML_FILES
         ui/qml/AboutDialog.qml
+        ui/qml/components/DeviceTreePanel.qml
+        ui/qml/components/PillLabel.qml
+        ui/qml/components/ProfileManager.qml
+        ui/qml/components/SectionCard.qml
+        ui/qml/components/SettingsPage.qml
+        ui/qml/components/Sidebar.qml
+        ui/qml/components/ZoneEditor.qml
         ui/qml/Main.qml
 )
 

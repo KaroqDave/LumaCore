@@ -15,7 +15,7 @@ DeviceListModel::DeviceListModel(DeviceManager* deviceManager, QObject* parent)
         endResetModel();
     });
 
-    connect(m_deviceManager, &DeviceManager::zoneColorChanged, this, [this](int deviceIndex, int) {
+    connect(m_deviceManager, &DeviceManager::zoneChanged, this, [this](int deviceIndex, int) {
         const QModelIndex changedIndex = index(deviceIndex, 0);
         emit dataChanged(changedIndex, changedIndex, {ZoneCountRole});
     });

@@ -59,6 +59,57 @@ const std::vector<std::unique_ptr<RgbDevice>>& DeviceManager::devices() const
     return m_devices;
 }
 
+bool DeviceManager::updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount, QString* errorMessage)
+{
+    RgbDevice* device = deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Could not update selected zone.");
+        }
+        return false;
+    }
+
+    const QString sanitizedName = name.trimmed();
+    if (sanitizedName.isEmpty()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Zone name cannot be empty.");
+        }
+        return false;
+    }
+
+    if (ledCount < 1) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("LED count must be at least 1.");
+        }
+        return false;
+    }
+
+    const QString previousName = device->zones().at(zoneIndex).name();
+    const int previousLedCount = device->zones().at(zoneIndex).ledCount();
+    const bool nameChanged = device->setZoneName(zoneIndex, sanitizedName);
+    const bool ledCountChanged = device->setZoneLedCount(zoneIndex, ledCount);
+
+    if (!nameChanged && !ledCountChanged) {
+        emit logMessage(QStringLiteral("%1 / %2 is already up to date.").arg(device->name(), sanitizedName));
+        return true;
+    }
+
+    emit logMessage(QStringLiteral("%1 / %2 updated (%3 LEDs).")
+                        .arg(device->name(), sanitizedName)
+                        .arg(ledCount));
+    if (nameChanged && previousName != sanitizedName) {
+        emit logMessage(QStringLiteral("Renamed zone '%1' to '%2'.").arg(previousName, sanitizedName));
+    }
+    if (ledCountChanged && previousLedCount != ledCount) {
+        emit logMessage(QStringLiteral("Changed '%1' from %2 to %3 LED(s).")
+                            .arg(sanitizedName)
+                            .arg(previousLedCount)
+                            .arg(ledCount));
+    }
+
+    return true;
+}
+
 bool DeviceManager::setZoneStaticColor(int deviceIndex, int zoneIndex, const RgbColor& color)
 {
     RgbDevice* device = deviceAt(deviceIndex);
@@ -89,14 +140,17 @@ bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessag
     QJsonArray devicesJson;
     for (const std::unique_ptr<RgbDevice>& device : m_devices) {
         QJsonArray zonesJson;
+        int zoneIndex = 0;
         for (const RgbZone& zone : device->zones()) {
             zonesJson.append(QJsonObject {
+                {QStringLiteral("index"), zoneIndex},
                 {QStringLiteral("name"), zone.name()},
                 {QStringLiteral("type"), zone.typeName()},
                 {QStringLiteral("ledCount"), zone.ledCount()},
                 {QStringLiteral("color"), zone.currentColor().toHexString()},
                 {QStringLiteral("rgb"), zone.currentColor().toJson()},
             });
+            ++zoneIndex;
         }
 
         devicesJson.append(QJsonObject {
@@ -178,15 +232,35 @@ bool DeviceManager::loadProfile(const QString& profileName, QString* errorMessag
                     continue;
                 }
 
+                int matchedZoneIndex = -1;
                 for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
                     if (device->zones().at(zoneIndex).name() != zoneName) {
                         continue;
                     }
 
-                    if (setZoneStaticColor(deviceIndex, zoneIndex, color)) {
-                        ++appliedZones;
-                    }
+                    matchedZoneIndex = zoneIndex;
                     break;
+                }
+
+                if (matchedZoneIndex < 0) {
+                    const int storedZoneIndex = zoneObject.value(QStringLiteral("index")).toInt(-1);
+                    if (storedZoneIndex >= 0 && storedZoneIndex < device->zones().size()) {
+                        matchedZoneIndex = storedZoneIndex;
+                    }
+                }
+
+                if (matchedZoneIndex < 0) {
+                    continue;
+                }
+
+                const int ledCount = zoneObject.value(QStringLiteral("ledCount")).toInt(device->zones().at(matchedZoneIndex).ledCount());
+                const bool renamed = device->setZoneName(matchedZoneIndex, zoneName);
+                const bool resized = device->setZoneLedCount(matchedZoneIndex, qMax(1, ledCount));
+                Q_UNUSED(renamed)
+                Q_UNUSED(resized)
+
+                if (setZoneStaticColor(deviceIndex, matchedZoneIndex, color)) {
+                    ++appliedZones;
                 }
             }
         }
@@ -200,6 +274,67 @@ bool DeviceManager::loadProfile(const QString& profileName, QString* errorMessag
     }
 
     emit logMessage(QStringLiteral("Loaded profile '%1' and applied %2 zone(s).").arg(normalizedName).arg(appliedZones));
+    return true;
+}
+
+bool DeviceManager::deleteProfile(const QString& profileName, QString* errorMessage)
+{
+    const QString normalizedName = normalizeProfileName(profileName);
+    QFile file(profileFilePath(normalizedName));
+    if (!file.exists()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Profile '%1' does not exist.").arg(normalizedName);
+        }
+        return false;
+    }
+
+    if (!file.remove()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Could not delete profile '%1': %2").arg(normalizedName, file.errorString());
+        }
+        return false;
+    }
+
+    emit logMessage(QStringLiteral("Deleted profile '%1'.").arg(normalizedName));
+    return true;
+}
+
+bool DeviceManager::renameProfile(const QString& oldProfileName, const QString& newProfileName, QString* errorMessage)
+{
+    const QString normalizedOldName = normalizeProfileName(oldProfileName);
+    const QString normalizedNewName = normalizeProfileName(newProfileName);
+
+    if (normalizedOldName == normalizedNewName) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Profile already uses that name.");
+        }
+        return false;
+    }
+
+    QFile oldFile(profileFilePath(normalizedOldName));
+    if (!oldFile.exists()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Profile '%1' does not exist.").arg(normalizedOldName);
+        }
+        return false;
+    }
+
+    QFile newFile(profileFilePath(normalizedNewName));
+    if (newFile.exists()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Profile '%1' already exists.").arg(normalizedNewName);
+        }
+        return false;
+    }
+
+    if (!oldFile.rename(profileFilePath(normalizedNewName))) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Could not rename profile: %1").arg(oldFile.errorString());
+        }
+        return false;
+    }
+
+    emit logMessage(QStringLiteral("Renamed profile '%1' to '%2'.").arg(normalizedOldName, normalizedNewName));
     return true;
 }
 
@@ -228,6 +363,7 @@ void DeviceManager::registerDevice(std::unique_ptr<RgbDevice> device)
 
     const int deviceIndex = deviceCount();
     connect(device.get(), &RgbDevice::zoneChanged, this, [this, deviceIndex](int zoneIndex) {
+        emit zoneChanged(deviceIndex, zoneIndex);
         emit zoneColorChanged(deviceIndex, zoneIndex);
     });
 

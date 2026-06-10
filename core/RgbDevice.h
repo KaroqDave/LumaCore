@@ -33,6 +33,8 @@ public:
     [[nodiscard]] QString typeName() const;
     [[nodiscard]] const QVector<RgbZone>& zones() const;
 
+    [[nodiscard]] bool setZoneName(int zoneIndex, const QString& name);
+    [[nodiscard]] bool setZoneLedCount(int zoneIndex, int ledCount);
     [[nodiscard]] virtual bool setZoneStaticColor(int zoneIndex, const RgbColor& color) = 0;
 
 signals:

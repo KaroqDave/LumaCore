@@ -25,14 +25,18 @@ public:
     [[nodiscard]] const RgbDevice* deviceAt(int index) const;
     [[nodiscard]] const std::vector<std::unique_ptr<RgbDevice>>& devices() const;
 
+    [[nodiscard]] bool updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount, QString* errorMessage = nullptr);
     [[nodiscard]] bool setZoneStaticColor(int deviceIndex, int zoneIndex, const RgbColor& color);
     [[nodiscard]] bool saveProfile(const QString& profileName, QString* errorMessage = nullptr);
     [[nodiscard]] bool loadProfile(const QString& profileName, QString* errorMessage = nullptr);
+    [[nodiscard]] bool deleteProfile(const QString& profileName, QString* errorMessage = nullptr);
+    [[nodiscard]] bool renameProfile(const QString& oldProfileName, const QString& newProfileName, QString* errorMessage = nullptr);
     [[nodiscard]] QStringList profileNames() const;
     [[nodiscard]] QString profilesDirectoryPath() const;
 
 signals:
     void devicesChanged();
+    void zoneChanged(int deviceIndex, int zoneIndex);
     void zoneColorChanged(int deviceIndex, int zoneIndex);
     void logMessage(QString message);
 

@@ -74,6 +74,30 @@ const RgbColor& RgbZone::currentColor() const
     return m_currentColor;
 }
 
+void RgbZone::setName(QString name)
+{
+    m_name = std::move(name);
+}
+
+void RgbZone::setLedCount(int ledCount)
+{
+    const int sanitizedCount = qMax(0, ledCount);
+    const int currentCount = m_leds.size();
+    if (sanitizedCount == currentCount) {
+        return;
+    }
+
+    if (sanitizedCount < currentCount) {
+        m_leds.resize(sanitizedCount);
+        return;
+    }
+
+    m_leds.reserve(sanitizedCount);
+    for (int index = currentCount; index < sanitizedCount; ++index) {
+        m_leds.append(RgbLed(index, m_currentColor));
+    }
+}
+
 void RgbZone::setColor(const RgbColor& color)
 {
     m_currentColor = color;

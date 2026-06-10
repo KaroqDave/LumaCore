@@ -70,6 +70,33 @@ const QVector<RgbZone>& RgbDevice::zones() const
     return m_zones;
 }
 
+bool RgbDevice::setZoneName(int zoneIndex, const QString& name)
+{
+    if (zoneIndex < 0 || zoneIndex >= m_zones.size()) {
+        return false;
+    }
+
+    const QString sanitizedName = name.trimmed();
+    if (sanitizedName.isEmpty() || m_zones.at(zoneIndex).name() == sanitizedName) {
+        return false;
+    }
+
+    m_zones[zoneIndex].setName(sanitizedName);
+    emit zoneChanged(zoneIndex);
+    return true;
+}
+
+bool RgbDevice::setZoneLedCount(int zoneIndex, int ledCount)
+{
+    if (zoneIndex < 0 || zoneIndex >= m_zones.size() || ledCount < 0 || m_zones.at(zoneIndex).ledCount() == ledCount) {
+        return false;
+    }
+
+    m_zones[zoneIndex].setLedCount(ledCount);
+    emit zoneChanged(zoneIndex);
+    return true;
+}
+
 QVector<RgbZone>& RgbDevice::mutableZones()
 {
     return m_zones;

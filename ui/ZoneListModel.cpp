@@ -15,13 +15,13 @@ ZoneListModel::ZoneListModel(DeviceManager* deviceManager, QObject* parent)
         endResetModel();
     });
 
-    connect(m_deviceManager, &DeviceManager::zoneColorChanged, this, [this](int deviceIndex, int zoneIndex) {
+    connect(m_deviceManager, &DeviceManager::zoneChanged, this, [this](int deviceIndex, int zoneIndex) {
         if (deviceIndex != m_deviceIndex || zoneIndex < 0 || zoneIndex >= rowCount()) {
             return;
         }
 
         const QModelIndex changedIndex = index(zoneIndex, 0);
-        emit dataChanged(changedIndex, changedIndex, {ZoneColorRole, ZoneColorHexRole});
+        emit dataChanged(changedIndex, changedIndex, {ZoneNameRole, ZoneTypeRole, LedCountRole, ZoneColorRole, ZoneColorHexRole});
     });
 }
 

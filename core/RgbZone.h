@@ -30,6 +30,8 @@ public:
     [[nodiscard]] const QVector<RgbLed>& leds() const;
     [[nodiscard]] const RgbColor& currentColor() const;
 
+    void setName(QString name);
+    void setLedCount(int ledCount);
     void setColor(const RgbColor& color);
 
 private:
