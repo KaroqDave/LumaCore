@@ -1,25 +1,37 @@
 # ![LumaCore icon](assets/icons/lumacore-32.png) LumaCore
 
-**v0.0.9** — Linux-first, open-source RGB control built with C++23, Qt 6, and CMake.
+**v0.1.0** — Linux-first, open-source RGB control built with C++23, Qt 6, and CMake.
 
 LumaCore is a passion project focused on safe, maintainable RGB control rather than quick hardware hacks. This version is **mock-only** by design: it ships with a Qt Quick desktop app, a core RGB device model, and a simulated ASUS motherboard-style device with three zones. No real hardware access, root permissions, SMBus/I2C writes, USB writes, or hidraw access are used.
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
-## Features (v0.0.9)
+![LumaCore collapsed sidebar](assets/screenshots/lumacore-devices-collapsed.png)
 
-- Qt Quick desktop UI with device/zone selection and a color picker
+## What's new in v0.1.0
+
+- **UI theming** — centralized `Theme.qml` with a deeper accent blue; reusable `AppButton`, `AppSwitch`, and `AppSlider` components
+- **Dialogs** — custom `ColorPickerDialog` and styled About dialog (replacing native Qt dialog buttons)
+- **Device tree** — modern pill rows, tree connector lines, per-zone color swatches with hex labels, and a motherboard icon
+- **Zone editor** — removed redundant applied-color header bar; live effect preview with speed aligned to the backend
+- **Effects** — static, rainbow, and breathing modes with speed/brightness sliders and real-time preview
+- **Settings** — UI animations toggle and theme picker (Auto / Light / Dark)
+
+## Features (v0.1.0)
+
+- Qt Quick desktop UI with collapsible nav rail, device tree, zone editor, and activity log
 - In-memory RGB model: devices, zones, and LEDs
 - Mock backend with one simulated **ASUS TUF X870-PLUS WIFI** device:
   - Header 1 (10 LEDs)
   - Header 2 (30 LEDs)
   - Header 3 (30 LEDs)
-- Static color control per zone
-- JSON profile save/load under `./profiles`
+- Static, rainbow, and breathing effects per zone with speed and brightness controls
+- Custom in-app color picker and JSON profile save/load under `./profiles`
+- Settings page for theme and animation preferences
 - Activity log and status bar in the UI
 - Embedded multi-resolution application icons
 
-Not yet implemented: breathing/rainbow effects, automated tests, and any real hardware discovery or writes.
+Not yet implemented: automated tests and any real hardware discovery or writes.
 
 ## Requirements
 
@@ -53,21 +65,23 @@ Profiles are stored in `./profiles` relative to the **current working directory*
 | Path | Role |
 |------|------|
 | `app/` | Application startup and Qt/QML wiring |
-| `core/` | RGB data model, device ownership, profile save/load |
+| `core/` | RGB data model, device ownership, effects engine, profile save/load |
 | `backends/mock/` | Safe simulated hardware backend |
 | `ui/` | QML-facing models and `AppController` |
 | `ui/qml/` | Qt Quick user interface |
+| `ui/qml/components/` | Reusable QML components (`AppButton`, `ColorPickerDialog`, `DeviceTreePanel`, etc.) |
 | `assets/icons/` | Application icons (`lumacore.svg` is the source; PNG/ICO sizes are embedded via Qt resources) |
+| `assets/screenshots/` | README and documentation screenshots |
 
 ### Data flow
 
 1. `main.cpp` creates `DeviceManager`, UI models, and `AppController`.
 2. `DeviceManager` asks `MockBackend` for devices.
-3. QML displays devices via `DeviceListModel` and zones via `ZoneListModel`.
-4. Color changes go from QML → `AppController` → `DeviceManager` → the mock device.
+3. QML displays devices via `DeviceTreeModel` and zones via `ZoneListModel`.
+4. Color and effect changes go from QML → `AppController` → `DeviceManager` → the mock device.
 5. Profile save/load reads and writes JSON under `./profiles`.
 
-`DeviceManager` owns devices with `std::unique_ptr<RgbDevice>`. Devices own zones by value; zones own LEDs by value. QML never owns or directly mutates hardware-shaped objects. `RgbDevice::setZoneStaticColor()` is the only write-like operation today; future hardware backends must keep this boundary and add permission checks, logging, and confirmation before real writes.
+`DeviceManager` owns devices with `std::unique_ptr<RgbDevice>`. Devices own zones by value; zones own LEDs by value. QML never owns or directly mutates hardware-shaped objects. `RgbDevice::setZoneStaticColor()` and effect application are the write-like operations today; future hardware backends must keep this boundary and add permission checks, logging, and confirmation before real writes.
 
 ## Profile format
 
@@ -91,9 +105,9 @@ Profiles are JSON files in `./profiles`. The filename is the normalized profile 
                     "ledCount": 10,
                     "color": "#1E54D6",
                     "rgb": {
-                        "red": 64,
-                        "green": 128,
-                        "blue": 255,
+                        "red": 30,
+                        "green": 84,
+                        "blue": 214,
                         "hex": "#1E54D6"
                     }
                 }
@@ -113,7 +127,7 @@ Phase 1 does not touch real hardware. There is no hidapi, libusb, i2c-dev, SMBus
 
 - The GUI talks only to QML models and `AppController`.
 - `DeviceManager` owns mock devices only.
-- Static color changes update in-memory mock zones and are logged to the console and UI.
+- Static color and effect changes update in-memory mock zones and are logged to the console and UI.
 - Profiles load through the same mock backend path as the UI.
 
 **Before any real hardware writes:**
@@ -128,7 +142,7 @@ Phase 1 does not touch real hardware. There is no hidapi, libusb, i2c-dev, SMBus
 
 ## Roadmap
 
-1. **Safe foundation** — mock backend, device model, profiles, basic effects (static, breathing, rainbow), safety documentation *(in progress; v0.0.9 covers mock UI, effects, theming, and profiles)*
+1. **Safe foundation** — mock backend, device model, profiles, basic effects (static, breathing, rainbow), safety documentation *(v0.1.0 delivers mock UI polish, effects, theming, profiles, and device tree UX; automated tests still pending)*
 2. **Linux integration** — read-only hardware discovery behind feature flags, structured logging, udev/i2c/hidraw/USB permission handling, unprivileged GUI with a daemon boundary
 3. **First hardware backends** — read-only ASUS Aura-style motherboard discovery; hidapi/libusb where appropriate; SMBus/i2c only after safety flows exist; mock coverage required before any real write path
 4. **Extensibility** — stable backend interface, plugin-style backend loading, profile import/export, device mapping, Windows support without weakening Linux safety boundaries
