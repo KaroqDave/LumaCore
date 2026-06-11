@@ -1,4 +1,4 @@
-# ![LumaCore icon](assets/icons/lumacore-32.png) LumaCore
+# <img src="assets/icons/lumacore-128.png" alt="LumaCore icon" width="48" height="48" style="vertical-align: middle;"> LumaCore
 
 **v0.1.0** — Linux-first, open-source RGB control built with C++23, Qt 6, and CMake.
 
