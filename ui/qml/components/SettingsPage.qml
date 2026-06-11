@@ -1,16 +1,22 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Item {
     id: page
 
     property var settingsController
-    property color elevatedColor: "#252B32"
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
     property bool animationsEnabled: true
+
+    readonly property var themeOptions: ["Auto", "Light", "Dark"]
+
+    function normalizedTheme(value) {
+        if (value === "System") {
+            return "Auto"
+        }
+        return themeOptions.indexOf(value) >= 0 ? value : "Dark"
+    }
 
     implicitHeight: content.implicitHeight
 
@@ -24,10 +30,7 @@ Item {
             Layout.fillWidth: true
             title: qsTr("Interface")
             subtitle: qsTr("Visual preferences for the app shell")
-            surfaceColor: page.elevatedColor
-            borderColor: page.borderColor
-            primaryTextColor: page.primaryTextColor
-            secondaryTextColor: page.secondaryTextColor
+            surfaceColor: Theme.surface
             animationsEnabled: page.animationsEnabled
 
             RowLayout {
@@ -41,7 +44,7 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: qsTr("UI animations")
-                        color: page.primaryTextColor
+                        color: Theme.primaryText
                         font.pixelSize: 13
                         font.bold: true
                     }
@@ -49,7 +52,7 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: qsTr("Controls sidebar motion, hover transitions, and color fades.")
-                        color: page.secondaryTextColor
+                        color: Theme.secondaryText
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
                     }
@@ -69,18 +72,32 @@ Item {
                 Layout.fillWidth: true
                 spacing: 12
 
-                Label {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    text: qsTr("Theme")
-                    color: page.primaryTextColor
-                    font.pixelSize: 13
-                    font.bold: true
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Theme")
+                        color: Theme.primaryText
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Auto follows your system light/dark preference.")
+                        color: Theme.secondaryText
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
                 }
 
                 ComboBox {
                     Layout.preferredWidth: 180
-                    model: ["Dark", "System", "Light"]
-                    currentIndex: Math.max(0, find(page.settingsController ? page.settingsController.theme : "Dark"))
+                    model: page.themeOptions
+                    currentIndex: Math.max(0, page.themeOptions.indexOf(
+                        page.normalizedTheme(page.settingsController ? page.settingsController.theme : "Dark")))
                     onActivated: {
                         if (page.settingsController) {
                             page.settingsController.theme = currentText
@@ -94,10 +111,7 @@ Item {
             Layout.fillWidth: true
             title: qsTr("Startup")
             subtitle: qsTr("Stored now for later launch behavior")
-            surfaceColor: page.elevatedColor
-            borderColor: page.borderColor
-            primaryTextColor: page.primaryTextColor
-            secondaryTextColor: page.secondaryTextColor
+            surfaceColor: Theme.surface
             animationsEnabled: page.animationsEnabled
 
             RowLayout {
@@ -107,7 +121,7 @@ Item {
                 Label {
                     Layout.fillWidth: true
                     text: qsTr("Start minimized")
-                    color: page.primaryTextColor
+                    color: Theme.primaryText
                     font.pixelSize: 13
                     font.bold: true
                 }
@@ -133,7 +147,7 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: qsTr("Apply profile on launch")
-                        color: page.primaryTextColor
+                        color: Theme.primaryText
                         font.pixelSize: 13
                         font.bold: true
                     }
@@ -141,7 +155,7 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: qsTr("Placeholder setting; profile selection will be connected later.")
-                        color: page.secondaryTextColor
+                        color: Theme.secondaryText
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
                     }

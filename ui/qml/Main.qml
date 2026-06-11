@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import LumaCore
 import "components"
 
 ApplicationWindow {
@@ -13,7 +14,7 @@ ApplicationWindow {
     minimumHeight: 620
     visible: true
     title: qsTr("LumaCore")
-    color: "#15191D"
+    color: Theme.window
 
     property color selectedColor: "#4080FF"
     property bool sidebarCollapsed: false
@@ -25,18 +26,31 @@ ApplicationWindow {
     readonly property var settings: settingsController
     readonly property bool animationsEnabled: settings.animationsEnabled
     readonly property int animationDuration: animationsEnabled ? 180 : 0
-    readonly property color surfaceColor: "#1E242A"
-    readonly property color elevatedColor: "#252B32"
-    readonly property color accentColor: "#42A5F5"
-    readonly property color borderColor: "#343C44"
-    readonly property color primaryTextColor: "#F2F5F8"
-    readonly property color secondaryTextColor: "#AEB8C2"
+
+    palette.window: Theme.surface
+    palette.windowText: Theme.primaryText
+    palette.base: Theme.inputBg
+    palette.alternateBase: Theme.elevated
+    palette.text: Theme.primaryText
+    palette.button: Theme.elevated
+    palette.buttonText: Theme.primaryText
+    palette.highlight: Theme.accent
+    palette.highlightedText: "#FFFFFF"
+    palette.placeholderText: Theme.secondaryText
+    palette.mid: Theme.border
+    palette.dark: Theme.border
 
     readonly property var pageTitles: [
         { "title": qsTr("Devices"), "subtitle": qsTr("Pick a device or zone, then choose a lighting effect.") },
         { "title": qsTr("Profiles"), "subtitle": qsTr("Save and restore device state while the backend is mock-only.") },
         { "title": qsTr("Settings"), "subtitle": qsTr("Visual preferences and startup behavior for the app shell.") }
     ]
+
+    Binding {
+        target: Theme
+        property: "mode"
+        value: root.settings.theme
+    }
 
     function colorToHex(value) {
         const red = Math.round(value.r * 255).toString(16).padStart(2, "0")
@@ -100,12 +114,6 @@ ApplicationWindow {
             Layout.fillHeight: true
             collapsed: root.sidebarCollapsed
             currentIndex: root.currentPage
-            surfaceColor: root.surfaceColor
-            elevatedColor: root.elevatedColor
-            accentColor: root.accentColor
-            borderColor: root.borderColor
-            primaryTextColor: root.primaryTextColor
-            secondaryTextColor: root.secondaryTextColor
             animationsEnabled: root.animationsEnabled
             onToggleRequested: root.sidebarCollapsed = !root.sidebarCollapsed
             onNavSelected: function(index) { root.currentPage = index }
@@ -121,8 +129,8 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 72
                 radius: 18
-                color: root.surfaceColor
-                border.color: root.borderColor
+                color: Theme.surface
+                border.color: Theme.border
                 border.width: 1
 
                 RowLayout {
@@ -140,7 +148,7 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             text: root.pageTitles[root.currentPage].title
-                            color: root.primaryTextColor
+                            color: Theme.primaryText
                             font.pixelSize: 22
                             font.bold: true
                             elide: Text.ElideRight
@@ -149,7 +157,7 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             text: root.pageTitles[root.currentPage].subtitle
-                            color: root.secondaryTextColor
+                            color: Theme.secondaryText
                             font.pixelSize: 12
                             elide: Text.ElideRight
                         }
@@ -160,8 +168,8 @@ ApplicationWindow {
                         implicitWidth: statusRow.implicitWidth + 24
                         implicitHeight: 34
                         radius: 999
-                        color: root.elevatedColor
-                        border.color: root.borderColor
+                        color: Theme.elevated
+                        border.color: Theme.border
                         border.width: 1
 
                         RowLayout {
@@ -174,13 +182,13 @@ ApplicationWindow {
                                 Layout.preferredWidth: 9
                                 Layout.preferredHeight: 9
                                 radius: 5
-                                color: "#4CAF50"
+                                color: Theme.success
                             }
 
                             Label {
                                 Layout.maximumWidth: 320
                                 text: root.controller.statusMessage
-                                color: root.primaryTextColor
+                                color: Theme.primaryText
                                 font.pixelSize: 12
                                 font.bold: true
                                 elide: Text.ElideRight
@@ -224,10 +232,6 @@ ApplicationWindow {
                             Layout.fillHeight: true
                             title: qsTr("Device Tree")
                             subtitle: qsTr("Pick a device or zone")
-                            surfaceColor: root.surfaceColor
-                            borderColor: root.borderColor
-                            primaryTextColor: root.primaryTextColor
-                            secondaryTextColor: root.secondaryTextColor
                             animationsEnabled: root.animationsEnabled
 
                             DeviceTreePanel {
@@ -236,11 +240,6 @@ ApplicationWindow {
                                 treeModel: deviceTreeModel
                                 selectedDeviceIndex: root.selectedDeviceIndex
                                 selectedZoneIndex: root.selectedZoneIndex
-                                elevatedColor: root.elevatedColor
-                                accentColor: root.accentColor
-                                borderColor: root.borderColor
-                                primaryTextColor: root.primaryTextColor
-                                secondaryTextColor: root.secondaryTextColor
                                 animationsEnabled: root.animationsEnabled
                                 onDeviceSelected: function(deviceIndex) { root.selectDevice(deviceIndex) }
                                 onZoneSelected: function(deviceIndex, zoneIndex) { root.selectZone(deviceIndex, zoneIndex) }
@@ -253,26 +252,26 @@ ApplicationWindow {
                             Layout.fillHeight: true
                             title: qsTr("Zone Editor")
                             subtitle: qsTr("Rename zones, tune LED counts, and apply lighting effects.")
-                            surfaceColor: root.surfaceColor
-                            borderColor: root.borderColor
-                            primaryTextColor: root.primaryTextColor
-                            secondaryTextColor: root.secondaryTextColor
                             animationsEnabled: root.animationsEnabled
 
-                            ZoneEditor {
+                            ScrollView {
+                                id: zoneScroll
+
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                appController: root.controller
-                                selectedDeviceIndex: root.selectedDeviceIndex
-                                selectedZoneIndex: root.selectedZoneIndex
-                                selectedColor: root.selectedColor
-                                elevatedColor: root.elevatedColor
-                                accentColor: root.accentColor
-                                borderColor: root.borderColor
-                                primaryTextColor: root.primaryTextColor
-                                secondaryTextColor: root.secondaryTextColor
-                                animationsEnabled: root.animationsEnabled
-                                onChooseColorRequested: colorDialog.open()
+                                clip: true
+                                contentWidth: availableWidth
+
+                                ZoneEditor {
+                                    width: zoneScroll.availableWidth
+                                    height: Math.max(implicitHeight, zoneScroll.availableHeight)
+                                    appController: root.controller
+                                    selectedDeviceIndex: root.selectedDeviceIndex
+                                    selectedZoneIndex: root.selectedZoneIndex
+                                    selectedColor: root.selectedColor
+                                    animationsEnabled: root.animationsEnabled
+                                    onChooseColorRequested: colorDialog.open()
+                                }
                             }
                         }
 
@@ -281,10 +280,6 @@ ApplicationWindow {
                             Layout.fillHeight: true
                             title: qsTr("Activity")
                             subtitle: qsTr("Recent mock backend and profile activity")
-                            surfaceColor: root.surfaceColor
-                            borderColor: root.borderColor
-                            primaryTextColor: root.primaryTextColor
-                            secondaryTextColor: root.secondaryTextColor
                             animationsEnabled: root.animationsEnabled
 
                             TextArea {
@@ -293,16 +288,16 @@ ApplicationWindow {
                                 text: root.controller.logText
                                 readOnly: true
                                 wrapMode: TextArea.Wrap
-                                color: root.primaryTextColor
-                                selectedTextColor: root.primaryTextColor
-                                selectionColor: root.accentColor
+                                color: Theme.primaryText
+                                selectedTextColor: Theme.primaryText
+                                selectionColor: Theme.accent
                                 font.family: "monospace"
                                 font.pixelSize: 12
 
                                 background: Rectangle {
-                                    color: "#171C21"
+                                    color: Theme.inputBg
                                     radius: 12
-                                    border.color: root.borderColor
+                                    border.color: Theme.border
                                 }
                             }
                         }
@@ -314,19 +309,13 @@ ApplicationWindow {
                         anchors.fill: parent
                         title: qsTr("Profile Manager")
                         subtitle: qsTr("Save and restore device state while the backend is still mock-only.")
-                        surfaceColor: root.surfaceColor
-                        borderColor: root.borderColor
-                        primaryTextColor: root.primaryTextColor
-                        secondaryTextColor: root.secondaryTextColor
                         animationsEnabled: root.animationsEnabled
 
                         ProfileManager {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             appController: root.controller
-                            borderColor: root.borderColor
-                            primaryTextColor: root.primaryTextColor
-                            secondaryTextColor: root.secondaryTextColor
+                            animationsEnabled: root.animationsEnabled
                         }
                     }
                 }
@@ -343,10 +332,6 @@ ApplicationWindow {
                             width: settingsScroll.availableWidth
                             height: Math.max(implicitHeight, settingsScroll.availableHeight)
                             settingsController: root.settings
-                            elevatedColor: root.surfaceColor
-                            borderColor: root.borderColor
-                            primaryTextColor: root.primaryTextColor
-                            secondaryTextColor: root.secondaryTextColor
                             animationsEnabled: root.animationsEnabled
                         }
                     }

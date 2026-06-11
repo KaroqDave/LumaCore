@@ -1,14 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Item {
     id: manager
 
     property var appController
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
+    property bool animationsEnabled: true
 
     function refreshProfiles() {
         if (!appController) {
@@ -35,7 +34,7 @@ Item {
         Label {
             Layout.fillWidth: true
             text: qsTr("Save, restore, and organize mock RGB profiles.")
-            color: manager.secondaryTextColor
+            color: Theme.secondaryText
             font.pixelSize: 12
             wrapMode: Text.WordWrap
         }
@@ -53,8 +52,10 @@ Item {
                 selectByMouse: true
             }
 
-            Button {
+            AppButton {
+                variant: "primary"
                 text: qsTr("Save")
+                animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     if (manager.appController.saveProfile(profileNameField.text)) {
                         manager.refreshProfiles()
@@ -76,23 +77,29 @@ Item {
             columnSpacing: 10
             rowSpacing: 10
 
-            Button {
+            AppButton {
                 Layout.fillWidth: true
+                variant: "primary"
                 enabled: profileBox.currentText.length > 0
                 text: qsTr("Load")
+                animationsEnabled: manager.animationsEnabled
                 onClicked: manager.appController.loadProfile(profileBox.currentText)
             }
 
-            Button {
+            AppButton {
                 Layout.fillWidth: true
+                variant: "secondary"
                 text: qsTr("Refresh")
+                animationsEnabled: manager.animationsEnabled
                 onClicked: manager.refreshProfiles()
             }
 
-            Button {
+            AppButton {
                 Layout.fillWidth: true
+                variant: "secondary"
                 enabled: profileBox.currentText.length > 0 && profileNameField.text.length > 0
                 text: qsTr("Rename")
+                animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     if (manager.appController.renameProfile(profileBox.currentText, profileNameField.text)) {
                         manager.refreshProfiles()
@@ -100,10 +107,12 @@ Item {
                 }
             }
 
-            Button {
+            AppButton {
                 Layout.fillWidth: true
+                variant: "secondary"
                 enabled: profileBox.currentText.length > 0
                 text: qsTr("Delete")
+                animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     if (manager.appController.deleteProfile(profileBox.currentText)) {
                         profileNameField.text = "default"
@@ -116,13 +125,13 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: manager.borderColor
+            color: Theme.divider
         }
 
         Label {
             Layout.fillWidth: true
             text: qsTr("Profiles directory: %1").arg(manager.appController ? manager.appController.profilesDirectory : "")
-            color: manager.secondaryTextColor
+            color: Theme.secondaryText
             font.pixelSize: 11
             wrapMode: Text.WordWrap
         }

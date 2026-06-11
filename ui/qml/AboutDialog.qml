@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Dialog {
     id: dialog
@@ -9,25 +10,27 @@ Dialog {
     modal: true
     anchors.centerIn: parent
     padding: 24
-    standardButtons: Dialog.Close
 
-    readonly property color surfaceColor: "#1E242A"
-    readonly property color elevatedColor: "#252B32"
-    readonly property color accentColor: "#42A5F5"
-    readonly property color borderColor: "#343C44"
-    readonly property color primaryTextColor: "#F2F5F8"
-    readonly property color secondaryTextColor: "#AEB8C2"
+    footer: DialogButtonBox {
+        alignment: Qt.AlignHCenter
+        standardButtons: DialogButtonBox.Close
+        onRejected: dialog.close()
+
+        background: Rectangle {
+            color: "transparent"
+        }
+    }
 
     background: Rectangle {
-        color: dialog.surfaceColor
+        color: Theme.surface
         radius: 18
-        border.color: dialog.borderColor
+        border.color: Theme.border
         border.width: 1
     }
 
     header: Label {
         text: dialog.title
-        color: dialog.primaryTextColor
+        color: Theme.primaryText
         font.pixelSize: 17
         font.bold: true
         padding: 18
@@ -49,8 +52,8 @@ Dialog {
                 Layout.preferredWidth: 72
                 Layout.preferredHeight: 72
                 radius: 18
-                color: dialog.elevatedColor
-                border.color: dialog.accentColor
+                color: Theme.elevated
+                border.color: Theme.accent
                 border.width: 1
 
                 Image {
@@ -71,7 +74,7 @@ Dialog {
                     anchors.centerIn: parent
                     visible: aboutIconImage.status !== Image.Ready
                     text: qsTr("LC")
-                    color: dialog.primaryTextColor
+                    color: Theme.primaryText
                     font.pixelSize: 24
                     font.bold: true
                 }
@@ -84,7 +87,7 @@ Dialog {
                 Label {
                     Layout.fillWidth: true
                     text: Qt.application.name.length > 0 ? Qt.application.name : qsTr("LumaCore")
-                    color: dialog.primaryTextColor
+                    color: Theme.primaryText
                     font.pixelSize: 26
                     font.bold: true
                     wrapMode: Text.WordWrap
@@ -95,7 +98,7 @@ Dialog {
                     text: Qt.application.version.length > 0
                           ? qsTr("Version %1").arg(Qt.application.version)
                           : qsTr("Version unknown")
-                    color: dialog.secondaryTextColor
+                    color: Theme.secondaryText
                     font.pixelSize: 14
                 }
             }
@@ -104,7 +107,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: qsTr("Linux-first, open-source RGB control built with C++23 and Qt 6. This release is mock-only: it simulates devices and profiles safely before any real hardware support.")
-            color: dialog.primaryTextColor
+            color: Theme.primaryText
             font.pixelSize: 13
             wrapMode: Text.WordWrap
             lineHeight: 1.35
@@ -114,15 +117,15 @@ Dialog {
             Layout.fillWidth: true
             implicitHeight: infoPill.implicitHeight + 16
             radius: 999
-            color: "#24313B"
-            border.color: "#344B5D"
+            color: Theme.pillFill
+            border.color: Theme.pillBorder
 
             Label {
                 id: infoPill
 
                 anchors.centerIn: parent
                 text: qsTr("Mock backend only — no hardware access")
-                color: "#BFE3FF"
+                color: Theme.pillText
                 font.pixelSize: 12
                 font.bold: true
             }
@@ -131,7 +134,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: qsTr("Profiles are stored in %1").arg(appController.profilesDirectory)
-            color: dialog.secondaryTextColor
+            color: Theme.secondaryText
             font.pixelSize: 12
             wrapMode: Text.WordWrap
         }

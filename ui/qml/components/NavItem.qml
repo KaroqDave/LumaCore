@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Item {
     id: navItem
@@ -10,11 +11,6 @@ Item {
     property string badgeText: ""
     property bool selected: false
     property bool collapsed: false
-    property color elevatedColor: "#252B32"
-    property color accentColor: "#42A5F5"
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
     property bool animationsEnabled: true
     readonly property int animationDuration: animationsEnabled ? 160 : 0
 
@@ -29,9 +25,9 @@ Item {
         anchors.fill: parent
         radius: 13
         color: navItem.selected
-               ? "#2D79B8"
-               : (hoverArea.containsMouse ? "#26323C" : "transparent")
-        border.color: navItem.selected ? "#67C1FF" : "transparent"
+               ? Theme.selectionBg
+               : (hoverArea.containsMouse ? Theme.hover : "transparent")
+        border.color: navItem.selected ? Theme.selectionBorder : "transparent"
         border.width: 1
 
         Behavior on color {
@@ -56,7 +52,7 @@ Item {
                     width: 22
                     height: 22
                     name: navItem.iconName
-                    color: navItem.selected ? "#FFFFFF" : navItem.primaryTextColor
+                    color: navItem.selected ? Theme.selectionText : Theme.primaryText
                     strokeWidth: navItem.selected ? 2.2 : 1.8
                 }
             }
@@ -66,7 +62,7 @@ Item {
                 visible: !navItem.collapsed
                 opacity: navItem.collapsed ? 0 : 1
                 text: navItem.label
-                color: navItem.selected ? "#FFFFFF" : navItem.primaryTextColor
+                color: navItem.selected ? Theme.selectionText : Theme.primaryText
                 font.pixelSize: 14
                 font.bold: navItem.selected
                 elide: Text.ElideRight
@@ -83,7 +79,7 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 visible: !navItem.collapsed && navItem.badgeText.length > 0
                 radius: 8
-                color: navItem.selected ? "#FFFFFF" : navItem.accentColor
+                color: navItem.selected ? "#FFFFFF" : Theme.accent
                 implicitWidth: Math.max(22, badgeLabel.implicitWidth + 12)
                 implicitHeight: 22
 
@@ -92,7 +88,7 @@ Item {
 
                     anchors.centerIn: parent
                     text: navItem.badgeText
-                    color: navItem.selected ? "#2D79B8" : "#15191D"
+                    color: navItem.selected ? Theme.selectionBg : "#FFFFFF"
                     font.pixelSize: 11
                     font.bold: true
                 }
@@ -121,15 +117,15 @@ Item {
 
         contentItem: Label {
             text: flyout.text
-            color: navItem.primaryTextColor
+            color: Theme.primaryText
             font.pixelSize: 13
             font.bold: true
         }
 
         background: Rectangle {
-            color: navItem.elevatedColor
+            color: Theme.elevated
             radius: 10
-            border.color: navItem.borderColor
+            border.color: Theme.border
             border.width: 1
         }
     }

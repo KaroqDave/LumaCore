@@ -1,18 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Rectangle {
     id: rail
 
     property bool collapsed: false
     property int currentIndex: 0
-    property color surfaceColor: "#1E242A"
-    property color elevatedColor: "#252B32"
-    property color accentColor: "#42A5F5"
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
     property bool animationsEnabled: true
     readonly property int animationDuration: animationsEnabled ? 200 : 0
 
@@ -26,9 +21,9 @@ Rectangle {
     signal navSelected(int index)
     signal aboutRequested()
 
-    color: surfaceColor
+    color: Theme.surface
     radius: 18
-    border.color: borderColor
+    border.color: Theme.border
     border.width: 1
 
     ColumnLayout {
@@ -53,8 +48,8 @@ Rectangle {
                 width: 46
                 height: 46
                 radius: 14
-                color: rail.elevatedColor
-                border.color: rail.accentColor
+                color: Theme.elevated
+                border.color: Theme.accent
                 border.width: 1
                 y: 0
                 x: rail.collapsed ? (parent.width - width) / 2 : 0
@@ -84,7 +79,7 @@ Rectangle {
                     anchors.centerIn: parent
                     visible: logoImage.status !== Image.Ready
                     text: qsTr("LC")
-                    color: rail.primaryTextColor
+                    color: Theme.primaryText
                     font.pixelSize: 17
                     font.bold: true
                 }
@@ -96,8 +91,8 @@ Rectangle {
                 width: 34
                 height: 34
                 radius: 17
-                color: toggleArea.containsMouse ? "#2A3540" : rail.elevatedColor
-                border.color: toggleArea.containsMouse ? rail.accentColor : rail.borderColor
+                color: toggleArea.containsMouse ? Theme.hover : Theme.elevated
+                border.color: toggleArea.containsMouse ? Theme.accent : Theme.border
                 border.width: 1
                 x: rail.collapsed ? (parent.width - width) / 2 : (parent.width - width)
                 y: rail.collapsed ? (logo.height + 12) : (logo.height - height) / 2
@@ -127,7 +122,7 @@ Rectangle {
                     width: 18
                     height: 18
                     name: "chevron"
-                    color: rail.primaryTextColor
+                    color: Theme.primaryText
                     strokeWidth: 2
                     rotation: rail.collapsed ? 180 : 0
 
@@ -157,7 +152,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             Layout.topMargin: 2
-            color: rail.borderColor
+            color: Theme.divider
             opacity: 0.7
         }
 
@@ -175,11 +170,6 @@ Rectangle {
                     badgeText: modelData.badge
                     selected: rail.currentIndex === index
                     collapsed: rail.collapsed
-                    elevatedColor: rail.elevatedColor
-                    accentColor: rail.accentColor
-                    borderColor: rail.borderColor
-                    primaryTextColor: rail.primaryTextColor
-                    secondaryTextColor: rail.secondaryTextColor
                     animationsEnabled: rail.animationsEnabled
                     onClicked: rail.navSelected(index)
                 }
@@ -195,11 +185,6 @@ Rectangle {
             iconName: "info"
             label: qsTr("About")
             collapsed: rail.collapsed
-            elevatedColor: rail.elevatedColor
-            accentColor: rail.accentColor
-            borderColor: rail.borderColor
-            primaryTextColor: rail.primaryTextColor
-            secondaryTextColor: rail.secondaryTextColor
             animationsEnabled: rail.animationsEnabled
             onClicked: rail.aboutRequested()
         }

@@ -1,18 +1,16 @@
 import QtQuick
 import QtQuick.Controls
+import LumaCore
 
 Rectangle {
     id: pill
 
     property string text: ""
-    property color fillColor: "#24313B"
-    property color borderColor: "#344B5D"
-    property color textColor: "#BFE3FF"
     property bool animationsEnabled: true
 
     radius: 999
-    color: fillColor
-    border.color: borderColor
+    color: Theme.pillFill
+    border.color: Theme.pillBorder
     implicitWidth: label.implicitWidth + 18
     implicitHeight: 26
 
@@ -27,7 +25,7 @@ Rectangle {
 
         anchors.centerIn: parent
         text: pill.text
-        color: pill.textColor
+        color: Theme.pillText
         font.pixelSize: 11
         font.bold: true
     }

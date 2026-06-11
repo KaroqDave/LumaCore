@@ -61,9 +61,32 @@ QString SettingsController::theme() const
     return m_theme;
 }
 
+namespace {
+
+QString normalizeTheme(const QString& value)
+{
+    const QString trimmed = value.trimmed();
+    if (trimmed.isEmpty()) {
+        return QStringLiteral("Dark");
+    }
+    // Legacy value migration.
+    if (trimmed.compare(QStringLiteral("System"), Qt::CaseInsensitive) == 0) {
+        return QStringLiteral("Auto");
+    }
+    if (trimmed.compare(QStringLiteral("Auto"), Qt::CaseInsensitive) == 0) {
+        return QStringLiteral("Auto");
+    }
+    if (trimmed.compare(QStringLiteral("Light"), Qt::CaseInsensitive) == 0) {
+        return QStringLiteral("Light");
+    }
+    return QStringLiteral("Dark");
+}
+
+} // namespace
+
 void SettingsController::setTheme(const QString& theme)
 {
-    const QString sanitizedTheme = theme.trimmed().isEmpty() ? QStringLiteral("Dark") : theme.trimmed();
+    const QString sanitizedTheme = normalizeTheme(theme);
     if (m_theme == sanitizedTheme) {
         return;
     }
@@ -78,7 +101,7 @@ void SettingsController::load()
     m_animationsEnabled = m_settings.value(QStringLiteral("ui/animationsEnabled"), true).toBool();
     m_startMinimized = m_settings.value(QStringLiteral("startup/startMinimized"), false).toBool();
     m_applyOnLaunch = m_settings.value(QStringLiteral("startup/applyOnLaunch"), false).toBool();
-    m_theme = m_settings.value(QStringLiteral("ui/theme"), QStringLiteral("Dark")).toString();
+    m_theme = normalizeTheme(m_settings.value(QStringLiteral("ui/theme"), QStringLiteral("Dark")).toString());
 }
 
 } // namespace lumacore

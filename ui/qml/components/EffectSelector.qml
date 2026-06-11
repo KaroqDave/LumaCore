@@ -1,16 +1,12 @@
 import QtQuick
 import QtQuick.Controls
+import LumaCore
 
 Item {
     id: control
 
     property var segments: []
     property int currentIndex: 0
-    property color accentColor: "#42A5F5"
-    property color trackColor: "#171C21"
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
     property bool animationsEnabled: true
     property real gap: 4
 
@@ -24,8 +20,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 12
-        color: control.trackColor
-        border.color: control.borderColor
+        color: Theme.inputBg
+        border.color: Theme.border
         border.width: 1
     }
 
@@ -37,7 +33,7 @@ Item {
         y: control.gap
         x: control.gap + control.currentIndex * control.segmentWidth
         radius: 9
-        color: control.accentColor
+        color: Theme.accent
 
         Behavior on x {
             NumberAnimation {
@@ -68,7 +64,7 @@ Item {
                     text: segment.modelData
                     font.pixelSize: 12
                     font.bold: true
-                    color: control.currentIndex === segment.index ? "#0E1216" : control.secondaryTextColor
+                    color: control.currentIndex === segment.index ? "#FFFFFF" : Theme.secondaryText
 
                     Behavior on color {
                         ColorAnimation {

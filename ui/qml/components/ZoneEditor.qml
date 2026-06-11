@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Item {
     id: editor
@@ -9,11 +10,6 @@ Item {
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
     property color selectedColor: "#4080FF"
-    property color elevatedColor: "#252B32"
-    property color accentColor: "#42A5F5"
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
     property bool animationsEnabled: true
     readonly property bool hasSelection: selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
 
@@ -25,16 +21,32 @@ Item {
     readonly property bool usesBaseColor: effectType !== 1
     readonly property bool usesSpeed: effectType !== 0
 
+    // Currently applied zone color (for the top preview bar)
+    property color currentColor: "#00000000"
+    property string currentHex: "--"
+
     signal chooseColorRequested()
+
+    function contrastOn(c) {
+        const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+        return lum > 0.6 ? "#10151A" : "#FFFFFF"
+    }
+
+    function hexOf(c) {
+        const r = Math.round(c.r * 255).toString(16).padStart(2, "0")
+        const g = Math.round(c.g * 255).toString(16).padStart(2, "0")
+        const b = Math.round(c.b * 255).toString(16).padStart(2, "0")
+        return ("#" + r + g + b).toUpperCase()
+    }
 
     function refresh() {
         if (!appController || !hasSelection) {
             deviceLabel.text = qsTr("No zone selected")
-            nameField.text = ""
             typeLabel.text = qsTr("Select a zone from the device tree.")
+            nameField.text = ""
             ledSpin.value = 1
-            currentColorChip.color = "#00000000"
-            currentColorLabel.text = qsTr("--")
+            editor.currentColor = "#00000000"
+            editor.currentHex = qsTr("--")
             return
         }
 
@@ -42,8 +54,8 @@ Item {
         nameField.text = appController.zoneName(selectedDeviceIndex, selectedZoneIndex)
         typeLabel.text = appController.zoneTypeName(selectedDeviceIndex, selectedZoneIndex)
         ledSpin.value = Math.max(1, appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex))
-        currentColorChip.color = appController.zoneColor(selectedDeviceIndex, selectedZoneIndex)
-        currentColorLabel.text = appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex)
+        editor.currentColor = appController.zoneColor(selectedDeviceIndex, selectedZoneIndex)
+        editor.currentHex = appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex)
 
         editor.effectType = appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex)
         editor.effectSpeed = appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex)
@@ -58,59 +70,61 @@ Item {
         anchors.fill: parent
         spacing: 12
 
-        RowLayout {
+        // Current applied color: full-width bar with info overlaid
+        Rectangle {
             Layout.fillWidth: true
-            spacing: 10
+            Layout.preferredHeight: 64
+            radius: 14
+            color: editor.hasSelection ? editor.currentColor : Theme.inputBg
+            border.color: Theme.border
+            border.width: 1
+            clip: true
 
-            Rectangle {
-                id: currentColorChip
+            Behavior on color {
+                ColorAnimation {
+                    duration: editor.animationsEnabled ? 160 : 0
+                }
+            }
 
-                Layout.preferredWidth: 48
-                Layout.preferredHeight: 48
-                radius: 14
-                color: "#00000000"
-                border.color: "#FFFFFF"
-                border.width: editor.hasSelection ? 1 : 0
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 10
 
-                Behavior on color {
-                    ColorAnimation {
-                        duration: editor.animationsEnabled ? 160 : 0
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Label {
+                        id: deviceLabel
+
+                        Layout.fillWidth: true
+                        color: editor.hasSelection ? editor.contrastOn(editor.currentColor) : Theme.primaryText
+                        font.pixelSize: 15
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Label {
+                        id: typeLabel
+
+                        Layout.fillWidth: true
+                        color: editor.hasSelection ? editor.contrastOn(editor.currentColor) : Theme.secondaryText
+                        opacity: editor.hasSelection ? 0.85 : 1.0
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
                     }
                 }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 2
 
                 Label {
-                    id: deviceLabel
-
-                    Layout.fillWidth: true
-                    color: editor.primaryTextColor
-                    font.pixelSize: 15
+                    text: editor.currentHex
+                    color: editor.hasSelection ? editor.contrastOn(editor.currentColor) : Theme.primaryText
+                    font.family: "monospace"
+                    font.pixelSize: 12
                     font.bold: true
-                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignRight
                 }
-
-                Label {
-                    id: typeLabel
-
-                    Layout.fillWidth: true
-                    color: editor.secondaryTextColor
-                    font.pixelSize: 11
-                    elide: Text.ElideRight
-                }
-            }
-
-            Label {
-                id: currentColorLabel
-
-                Layout.preferredWidth: 84
-                color: editor.primaryTextColor
-                font.family: "monospace"
-                font.pixelSize: 12
-                horizontalAlignment: Text.AlignRight
             }
         }
 
@@ -122,7 +136,7 @@ Item {
 
             Label {
                 text: qsTr("Zone name")
-                color: editor.secondaryTextColor
+                color: Theme.secondaryText
                 font.pixelSize: 11
             }
 
@@ -137,7 +151,7 @@ Item {
 
             Label {
                 text: qsTr("LED count")
-                color: editor.secondaryTextColor
+                color: Theme.secondaryText
                 font.pixelSize: 11
             }
 
@@ -157,10 +171,12 @@ Item {
             Layout.fillWidth: true
             spacing: 10
 
-            Button {
+            AppButton {
                 Layout.fillWidth: true
+                variant: "primary"
                 enabled: editor.hasSelection
                 text: qsTr("Save Zone")
+                animationsEnabled: editor.animationsEnabled
                 onClicked: {
                     if (editor.appController.updateZone(editor.selectedDeviceIndex, editor.selectedZoneIndex, nameField.text, ledSpin.value)) {
                         editor.refresh()
@@ -168,10 +184,12 @@ Item {
                 }
             }
 
-            Button {
+            AppButton {
                 Layout.fillWidth: true
+                variant: "secondary"
                 enabled: editor.hasSelection
                 text: qsTr("Reload")
+                animationsEnabled: editor.animationsEnabled
                 onClicked: editor.refresh()
             }
         }
@@ -179,12 +197,12 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: editor.borderColor
+            color: Theme.divider
         }
 
         Label {
             text: qsTr("Effect")
-            color: editor.primaryTextColor
+            color: Theme.primaryText
             font.pixelSize: 13
             font.bold: true
         }
@@ -197,144 +215,147 @@ Item {
             enabled: editor.hasSelection
             segments: [qsTr("Static"), qsTr("Rainbow"), qsTr("Breathing")]
             currentIndex: editor.effectType
-            accentColor: editor.accentColor
-            borderColor: editor.borderColor
-            primaryTextColor: editor.primaryTextColor
-            secondaryTextColor: editor.secondaryTextColor
             animationsEnabled: editor.animationsEnabled
             onSelected: function(index) { editor.effectType = index }
         }
 
-        // Live animated preview of the selected effect
+        // Full-width live preview; the whole bar is the color and is clickable
+        // to open the picker (for effects that use a base color).
         Rectangle {
+            id: previewBar
+
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
+            Layout.preferredHeight: 72
             radius: 14
-            color: "#171C21"
-            border.color: editor.borderColor
+            border.color: Theme.border
             border.width: 1
             clip: true
 
-            // Rainbow gradient backdrop (only meaningful for Rainbow)
-            Rectangle {
+            property real breath: 1
+            readonly property color staticColor: Qt.rgba(
+                editor.selectedColor.r * editor.brightnessFactor,
+                editor.selectedColor.g * editor.brightnessFactor,
+                editor.selectedColor.b * editor.brightnessFactor, 1.0)
+            readonly property color breathingColor: Qt.rgba(
+                editor.selectedColor.r * breath * editor.brightnessFactor,
+                editor.selectedColor.g * breath * editor.brightnessFactor,
+                editor.selectedColor.b * breath * editor.brightnessFactor, 1.0)
+
+            color: editor.effectType === 2 ? breathingColor
+                 : editor.effectType === 0 ? staticColor
+                 : Theme.inputBg
+
+            // Animated rainbow backdrop (only meaningful for Rainbow). Two
+            // seamless gradient tiles scroll horizontally to create the wave.
+            Item {
+                id: rainbowClip
+
                 anchors.fill: parent
                 anchors.margins: 1
-                radius: 13
                 visible: editor.effectType === 1
                 opacity: editor.brightnessFactor
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: "#FF0000" }
-                    GradientStop { position: 0.17; color: "#FFFF00" }
-                    GradientStop { position: 0.34; color: "#00FF00" }
-                    GradientStop { position: 0.5; color: "#00FFFF" }
-                    GradientStop { position: 0.67; color: "#0000FF" }
-                    GradientStop { position: 0.84; color: "#FF00FF" }
-                    GradientStop { position: 1.0; color: "#FF0000" }
+                clip: true
+
+                Row {
+                    id: rainbowRow
+
+                    height: parent.height
+                    x: 0
+
+                    Repeater {
+                        model: 2
+
+                        Rectangle {
+                            width: Math.max(1, previewBar.width)
+                            height: rainbowRow.height
+
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: "#FF0000" }
+                                GradientStop { position: 0.17; color: "#FFFF00" }
+                                GradientStop { position: 0.34; color: "#00FF00" }
+                                GradientStop { position: 0.5; color: "#00FFFF" }
+                                GradientStop { position: 0.67; color: "#0000FF" }
+                                GradientStop { position: 0.84; color: "#FF00FF" }
+                                GradientStop { position: 1.0; color: "#FF0000" }
+                            }
+                        }
+                    }
+
+                    NumberAnimation on x {
+                        running: editor.effectType === 1 && editor.animationsEnabled && rainbowClip.visible
+                        from: 0
+                        to: -Math.max(1, previewBar.width)
+                        loops: Animation.Infinite
+                        duration: Math.max(800, 8000 / editor.effectSpeed)
+                    }
                 }
             }
 
-            Rectangle {
-                id: previewSwatch
+            SequentialAnimation on breath {
+                running: editor.effectType === 2 && editor.animationsEnabled
+                loops: Animation.Infinite
 
-                property real hue: 0
-                property real breath: 1
-
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
-                anchors.leftMargin: 12
-                width: 40
-                height: 40
-                radius: 12
-                border.color: "#FFFFFF"
-                border.width: 1
-
-                color: {
-                    if (editor.effectType === 1) {
-                        return Qt.hsva(hue, 1.0, editor.brightnessFactor, 1.0)
-                    }
-                    if (editor.effectType === 2) {
-                        var f = breath * editor.brightnessFactor
-                        return Qt.rgba(editor.selectedColor.r * f, editor.selectedColor.g * f, editor.selectedColor.b * f, 1.0)
-                    }
-                    var b = editor.brightnessFactor
-                    return Qt.rgba(editor.selectedColor.r * b, editor.selectedColor.g * b, editor.selectedColor.b * b, 1.0)
-                }
-
-                NumberAnimation on hue {
-                    running: editor.effectType === 1 && editor.animationsEnabled
-                    from: 0.0
+                NumberAnimation {
+                    from: 0.12
                     to: 1.0
-                    loops: Animation.Infinite
-                    duration: Math.max(600, 6000 / editor.effectSpeed)
+                    duration: Math.max(300, 2000 / editor.effectSpeed)
+                    easing.type: Easing.InOutSine
                 }
-
-                SequentialAnimation on breath {
-                    running: editor.effectType === 2 && editor.animationsEnabled
-                    loops: Animation.Infinite
-
-                    NumberAnimation {
-                        from: 0.12
-                        to: 1.0
-                        duration: Math.max(300, 2000 / editor.effectSpeed)
-                        easing.type: Easing.InOutSine
-                    }
-                    NumberAnimation {
-                        from: 1.0
-                        to: 0.12
-                        duration: Math.max(300, 2000 / editor.effectSpeed)
-                        easing.type: Easing.InOutSine
-                    }
+                NumberAnimation {
+                    from: 1.0
+                    to: 0.12
+                    duration: Math.max(300, 2000 / editor.effectSpeed)
+                    easing.type: Easing.InOutSine
                 }
             }
 
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: previewSwatch.right
-                anchors.leftMargin: 12
-                anchors.right: parent.right
-                anchors.rightMargin: 12
-                text: editor.effectType === 1 ? qsTr("Rainbow wave preview")
-                    : editor.effectType === 2 ? qsTr("Breathing preview")
-                    : qsTr("Static color preview")
-                color: editor.effectType === 1 ? "#FFFFFF" : editor.primaryTextColor
-                font.pixelSize: 12
-                font.bold: true
-                elide: Text.ElideRight
-            }
-        }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 10
 
-        // Base color picker (hidden for Rainbow, which ignores a base color)
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
-            visible: editor.usesBaseColor
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
 
-            Rectangle {
-                Layout.preferredWidth: 42
-                Layout.preferredHeight: 42
-                radius: 12
-                color: editor.selectedColor
-                border.color: "#FFFFFF"
-                border.width: 1
-
-                Behavior on color {
-                    ColorAnimation {
-                        duration: editor.animationsEnabled ? 160 : 0
+                    Label {
+                        Layout.fillWidth: true
+                        text: editor.effectType === 1 ? qsTr("Rainbow wave")
+                            : editor.effectType === 2 ? qsTr("Breathing")
+                            : qsTr("Static color")
+                        color: editor.effectType === 1 ? "#FFFFFF" : editor.contrastOn(previewBar.staticColor)
+                        font.pixelSize: 13
+                        font.bold: true
+                        elide: Text.ElideRight
                     }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: editor.usesBaseColor
+                        text: editor.hasSelection ? qsTr("Tap to change color") : ""
+                        color: editor.contrastOn(previewBar.staticColor)
+                        opacity: 0.8
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                    }
+                }
+
+                Label {
+                    visible: editor.usesBaseColor
+                    text: editor.hexOf(editor.selectedColor)
+                    color: editor.contrastOn(previewBar.staticColor)
+                    font.family: "monospace"
+                    font.pixelSize: 12
+                    font.bold: true
                 }
             }
 
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("Base color")
-                color: editor.primaryTextColor
-                font.pixelSize: 13
-                font.bold: true
-            }
-
-            Button {
-                text: qsTr("Choose")
+            MouseArea {
+                anchors.fill: parent
+                enabled: editor.hasSelection && editor.usesBaseColor
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: editor.chooseColorRequested()
             }
         }
@@ -351,13 +372,13 @@ Item {
                 Label {
                     Layout.fillWidth: true
                     text: qsTr("Speed")
-                    color: editor.secondaryTextColor
+                    color: Theme.secondaryText
                     font.pixelSize: 11
                 }
 
                 Label {
                     text: editor.effectSpeed.toFixed(1) + qsTr("x")
-                    color: editor.primaryTextColor
+                    color: Theme.primaryText
                     font.family: "monospace"
                     font.pixelSize: 11
                 }
@@ -384,13 +405,13 @@ Item {
                 Label {
                     Layout.fillWidth: true
                     text: qsTr("Brightness")
-                    color: editor.secondaryTextColor
+                    color: Theme.secondaryText
                     font.pixelSize: 11
                 }
 
                 Label {
                     text: editor.effectBrightness + qsTr("%")
-                    color: editor.primaryTextColor
+                    color: Theme.primaryText
                     font.family: "monospace"
                     font.pixelSize: 11
                 }
@@ -406,11 +427,13 @@ Item {
             }
         }
 
-        Button {
+        AppButton {
             Layout.fillWidth: true
-            Layout.preferredHeight: 40
+            Layout.preferredHeight: 42
+            variant: "primary"
             enabled: editor.hasSelection
             text: qsTr("Apply Effect to Zone")
+            animationsEnabled: editor.animationsEnabled
             onClicked: editor.appController.applyEffect(
                 editor.selectedDeviceIndex,
                 editor.selectedZoneIndex,

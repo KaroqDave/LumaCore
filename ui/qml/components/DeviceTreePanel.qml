@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Item {
     id: panel
@@ -8,11 +9,6 @@ Item {
     property var treeModel
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
-    property color elevatedColor: "#252B32"
-    property color accentColor: "#42A5F5"
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
     property bool animationsEnabled: true
 
     signal deviceSelected(int deviceIndex)
@@ -59,8 +55,8 @@ Item {
 
             background: Rectangle {
                 radius: 12
-                color: treeDelegate.selectedNode ? "#2D79B8" : (treeDelegate.hovered ? "#26323C" : "transparent")
-                border.color: treeDelegate.selectedNode ? "#67C1FF" : "transparent"
+                color: treeDelegate.selectedNode ? Theme.selectionBg : (treeDelegate.hovered ? Theme.hover : "transparent")
+                border.color: treeDelegate.selectedNode ? Theme.selectionBorder : "transparent"
                 border.width: 1
 
                 Behavior on color {
@@ -82,8 +78,8 @@ Item {
                     Layout.preferredWidth: treeDelegate.zoneNode ? 18 : 20
                     Layout.preferredHeight: treeDelegate.zoneNode ? 18 : 20
                     radius: treeDelegate.zoneNode ? 6 : 8
-                    color: treeDelegate.zoneNode ? (model.zoneColorHex || panel.accentColor) : panel.elevatedColor
-                    border.color: treeDelegate.selectedNode ? "#FFFFFF" : panel.borderColor
+                    color: treeDelegate.zoneNode ? (model.zoneColorHex || Theme.accent) : Theme.elevated
+                    border.color: treeDelegate.selectedNode ? "#FFFFFF" : Theme.border
                     border.width: 1
                 }
 
@@ -94,7 +90,7 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: model.displayName || ""
-                        color: panel.primaryTextColor
+                        color: treeDelegate.selectedNode ? Theme.selectionText : Theme.primaryText
                         font.pixelSize: treeDelegate.deviceNode ? 13 : 12
                         font.bold: treeDelegate.deviceNode
                         elide: Text.ElideRight
@@ -103,7 +99,7 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: model.description || ""
-                        color: treeDelegate.selectedNode ? "#D7EEFF" : panel.secondaryTextColor
+                        color: treeDelegate.selectedNode ? Theme.selectionSubText : Theme.secondaryText
                         font.pixelSize: 10
                         elide: Text.ElideRight
                     }

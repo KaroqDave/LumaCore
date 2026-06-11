@@ -1,23 +1,21 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import LumaCore
 
 Rectangle {
     id: card
 
     property string title: ""
     property string subtitle: ""
-    property color surfaceColor: "#1E242A"
-    property color borderColor: "#343C44"
-    property color primaryTextColor: "#F2F5F8"
-    property color secondaryTextColor: "#AEB8C2"
+    property color surfaceColor: Theme.surface
     property bool animationsEnabled: true
     property int cardPadding: 16
     default property alias content: body.data
 
     color: surfaceColor
     radius: 16
-    border.color: borderColor
+    border.color: Theme.border
     border.width: 1
     implicitHeight: body.implicitHeight + cardPadding * 2
 
@@ -43,7 +41,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: card.title
                 visible: card.title.length > 0
-                color: card.primaryTextColor
+                color: Theme.primaryText
                 font.pixelSize: 15
                 font.bold: true
                 elide: Text.ElideRight
@@ -53,7 +51,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: card.subtitle
                 visible: card.subtitle.length > 0
-                color: card.secondaryTextColor
+                color: Theme.secondaryText
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
             }

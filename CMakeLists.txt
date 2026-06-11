@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 0.0.8
+    VERSION 0.0.9
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
@@ -62,11 +62,15 @@ qt_add_resources(lumacore lumacore_icons
         assets/icons/lumacore-256.png
 )
 
+set_source_files_properties(ui/qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(lumacore
     URI LumaCore
     VERSION 1.0
     QML_FILES
         ui/qml/AboutDialog.qml
+        ui/qml/Theme.qml
+        ui/qml/components/AppButton.qml
         ui/qml/components/DeviceTreePanel.qml
         ui/qml/components/EffectSelector.qml
         ui/qml/components/NavIcon.qml
