@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Dialogs
 import QtQuick.Layouts
 import LumaCore
 import "components"
@@ -16,7 +15,7 @@ ApplicationWindow {
     title: qsTr("LumaCore")
     color: Theme.window
 
-    property color selectedColor: "#4080FF"
+    property color selectedColor: Theme.defaultColor
     property bool sidebarCollapsed: false
     property int currentPage: 0
     property int selectedDeviceIndex: -1
@@ -90,16 +89,20 @@ ApplicationWindow {
         }
     }
 
-    ColorDialog {
+    ColorPickerDialog {
         id: colorDialog
 
-        title: qsTr("Choose Color")
+        parent: Overlay.overlay
+        animationsEnabled: root.animationsEnabled
         selectedColor: root.selectedColor
         onAccepted: root.selectedColor = selectedColor
     }
 
     AboutDialog {
         id: aboutDialog
+
+        parent: Overlay.overlay
+        animationsEnabled: root.animationsEnabled
     }
 
     RowLayout {

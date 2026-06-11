@@ -37,10 +37,16 @@ Item {
             readonly property bool selectedNode: zoneNode
                                              ? panel.selectedDeviceIndex === sourceDeviceIndex && panel.selectedZoneIndex === sourceZoneIndex
                                              : panel.selectedDeviceIndex === sourceDeviceIndex && panel.selectedZoneIndex < 0
+            readonly property color zoneSwatchColor: model.zoneColorHex || Theme.accent
 
             implicitWidth: tree.width
-            implicitHeight: deviceNode ? 48 : 42
+            implicitHeight: deviceNode ? 48 : 40
+            leftPadding: 10
+            rightPadding: 12
+            topPadding: 6
+            bottomPadding: 6
             text: model.displayName || ""
+
             onClicked: {
                 if (deviceNode) {
                     tree.toggleExpanded(row)
@@ -53,10 +59,20 @@ Item {
             ToolTip.text: model.description || ""
             ToolTip.visible: hovered && ToolTip.text.length > 0
 
+            // Chevron lives in contentItem so it aligns with the icon + text block.
+            indicator: Item {
+                implicitWidth: 0
+                implicitHeight: 0
+            }
+
             background: Rectangle {
-                radius: 12
-                color: treeDelegate.selectedNode ? Theme.selectionBg : (treeDelegate.hovered ? Theme.hover : "transparent")
-                border.color: treeDelegate.selectedNode ? Theme.selectionBorder : "transparent"
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                radius: 10
+                color: treeDelegate.selectedNode
+                       ? Theme.elevated
+                       : (treeDelegate.hovered ? Theme.hover : "transparent")
+                border.color: treeDelegate.selectedNode ? Theme.border : "transparent"
                 border.width: 1
 
                 Behavior on color {
@@ -70,39 +86,119 @@ Item {
                 spacing: 10
 
                 Item {
-                    Layout.preferredWidth: Math.max(4, treeDelegate.depth * 16)
+                    visible: treeDelegate.deviceNode && treeDelegate.hasChildren
+                    Layout.preferredWidth: visible ? 16 : 0
+                    Layout.preferredHeight: 16
+                    Layout.alignment: Qt.AlignVCenter
+
+                    Item {
+                        anchors.centerIn: parent
+                        width: 12
+                        height: 12
+                        rotation: treeDelegate.expanded ? 90 : 0
+
+                        Behavior on rotation {
+                            NumberAnimation {
+                                duration: panel.animationsEnabled ? 160 : 0
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+
+                        NavIcon {
+                            anchors.fill: parent
+                            name: "chevron"
+                            color: treeDelegate.selectedNode ? Theme.primaryText : Theme.secondaryText
+                            strokeWidth: 2
+                        }
+                    }
+                }
+
+                Item {
+                    visible: treeDelegate.zoneNode
+                    Layout.preferredWidth: 28
                     Layout.fillHeight: true
+                    Layout.alignment: Qt.AlignVCenter
+
+                    Rectangle {
+                        x: 12
+                        y: 0
+                        width: 1
+                        height: parent.height
+                        color: Theme.treeLine
+                    }
+
+                    Rectangle {
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 12
+                        height: 1
+                        color: Theme.treeLine
+                    }
+                }
+
+                Item {
+                    visible: treeDelegate.deviceNode
+                    Layout.preferredWidth: 22
+                    Layout.preferredHeight: 22
+                    Layout.alignment: Qt.AlignVCenter
+
+                    NavIcon {
+                        anchors.centerIn: parent
+                        width: 20
+                        height: 20
+                        name: "motherboard"
+                        color: treeDelegate.selectedNode ? Theme.primaryText : Theme.secondaryText
+                        strokeWidth: 1.8
+                    }
                 }
 
                 Rectangle {
-                    Layout.preferredWidth: treeDelegate.zoneNode ? 18 : 20
-                    Layout.preferredHeight: treeDelegate.zoneNode ? 18 : 20
-                    radius: treeDelegate.zoneNode ? 6 : 8
-                    color: treeDelegate.zoneNode ? (model.zoneColorHex || Theme.accent) : Theme.elevated
-                    border.color: treeDelegate.selectedNode ? "#FFFFFF" : Theme.border
-                    border.width: 1
+                    visible: treeDelegate.zoneNode
+                    Layout.preferredWidth: 26
+                    Layout.preferredHeight: 26
+                    Layout.alignment: Qt.AlignVCenter
+                    radius: 8
+                    color: treeDelegate.zoneSwatchColor
+                    border.color: treeDelegate.selectedNode
+                                  ? Theme.selectionBorder
+                                  : Qt.darker(treeDelegate.zoneSwatchColor, 1.15)
+                    border.width: treeDelegate.selectedNode ? 2 : 1
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 1
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: 2
 
                     Label {
                         Layout.fillWidth: true
                         text: model.displayName || ""
-                        color: treeDelegate.selectedNode ? Theme.selectionText : Theme.primaryText
+                        color: Theme.primaryText
                         font.pixelSize: treeDelegate.deviceNode ? 13 : 12
-                        font.bold: treeDelegate.deviceNode
+                        font.bold: treeDelegate.deviceNode || treeDelegate.selectedNode
                         elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
                     }
 
                     Label {
                         Layout.fillWidth: true
+                        visible: (model.description || "").length > 0
                         text: model.description || ""
-                        color: treeDelegate.selectedNode ? Theme.selectionSubText : Theme.secondaryText
+                        color: Theme.secondaryText
                         font.pixelSize: 10
                         elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
                     }
+                }
+
+                Label {
+                    visible: treeDelegate.zoneNode
+                    text: model.zoneColorHex || ""
+                    color: Theme.secondaryText
+                    font.family: "monospace"
+                    font.pixelSize: 10
+                    font.bold: true
+                    Layout.alignment: Qt.AlignVCenter
                 }
             }
         }

@@ -11,15 +11,9 @@ Dialog {
     anchors.centerIn: parent
     padding: 24
 
-    footer: DialogButtonBox {
-        alignment: Qt.AlignHCenter
-        standardButtons: DialogButtonBox.Close
-        onRejected: dialog.close()
+    property bool animationsEnabled: true
 
-        background: Rectangle {
-            color: "transparent"
-        }
-    }
+    standardButtons: Dialog.NoButton
 
     background: Rectangle {
         color: Theme.surface
@@ -38,6 +32,22 @@ Dialog {
         rightPadding: 24
         topPadding: 20
         bottomPadding: 0
+    }
+
+    footer: Item {
+        implicitWidth: closeButton.implicitWidth
+        implicitHeight: closeButton.implicitHeight + 8
+
+        AppButton {
+            id: closeButton
+
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 160
+            variant: "primary"
+            text: qsTr("Close")
+            animationsEnabled: dialog.animationsEnabled
+            onClicked: dialog.close()
+        }
     }
 
     contentItem: ColumnLayout {

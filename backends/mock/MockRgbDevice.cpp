@@ -14,7 +14,7 @@ MockRgbDevice::MockRgbDevice(QObject* parent)
       )
 {
     // Modern blue-ish defaults so previews and zone swatches are inviting out of the box.
-    const RgbColor header1Color(77, 141, 255);   // #4D8DFF
+    const RgbColor header1Color(30, 84, 214);   // #1E54D6
     const RgbColor header2Color(34, 211, 238);   // #22D3EE
     const RgbColor header3Color(124, 92, 255);   // #7C5CFF
 

@@ -71,6 +71,9 @@ qt_add_qml_module(lumacore
         ui/qml/AboutDialog.qml
         ui/qml/Theme.qml
         ui/qml/components/AppButton.qml
+        ui/qml/components/AppSlider.qml
+        ui/qml/components/AppSwitch.qml
+        ui/qml/components/ColorPickerDialog.qml
         ui/qml/components/DeviceTreePanel.qml
         ui/qml/components/EffectSelector.qml
         ui/qml/components/NavIcon.qml

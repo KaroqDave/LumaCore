@@ -89,12 +89,12 @@ Profiles are JSON files in `./profiles`. The filename is the normalized profile 
                     "name": "Header 1",
                     "type": "Motherboard",
                     "ledCount": 10,
-                    "color": "#4080FF",
+                    "color": "#1E54D6",
                     "rgb": {
                         "red": 64,
                         "green": 128,
                         "blue": 255,
-                        "hex": "#4080FF"
+                        "hex": "#1E54D6"
                     }
                 }
             ]

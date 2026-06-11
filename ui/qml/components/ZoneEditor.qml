@@ -9,7 +9,7 @@ Item {
     property var appController
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
-    property color selectedColor: "#4080FF"
+    property color selectedColor: Theme.defaultColor
     property bool animationsEnabled: true
     readonly property bool hasSelection: selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
 
@@ -21,11 +21,23 @@ Item {
     readonly property bool usesBaseColor: effectType !== 1
     readonly property bool usesSpeed: effectType !== 0
 
-    // Currently applied zone color (for the top preview bar)
-    property color currentColor: "#00000000"
-    property string currentHex: "--"
-
     signal chooseColorRequested()
+
+    readonly property int rainbowPeriodMs: Math.max(600, 6000 / editor.effectSpeed)
+    readonly property int breathingHalfPeriodMs: Math.max(150, 2000 / editor.effectSpeed)
+
+    function restartPreviewAnimations() {
+        if (!editor.animationsEnabled) {
+            return
+        }
+        if (editor.effectType === 1 && rainbowClip.visible) {
+            rainbowScrollAnim.stop()
+            rainbowScrollAnim.start()
+        } else if (editor.effectType === 2) {
+            breathingAnim.stop()
+            breathingAnim.start()
+        }
+    }
 
     function contrastOn(c) {
         const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
@@ -41,21 +53,13 @@ Item {
 
     function refresh() {
         if (!appController || !hasSelection) {
-            deviceLabel.text = qsTr("No zone selected")
-            typeLabel.text = qsTr("Select a zone from the device tree.")
             nameField.text = ""
             ledSpin.value = 1
-            editor.currentColor = "#00000000"
-            editor.currentHex = qsTr("--")
             return
         }
 
-        deviceLabel.text = appController.deviceName(selectedDeviceIndex)
         nameField.text = appController.zoneName(selectedDeviceIndex, selectedZoneIndex)
-        typeLabel.text = appController.zoneTypeName(selectedDeviceIndex, selectedZoneIndex)
         ledSpin.value = Math.max(1, appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex))
-        editor.currentColor = appController.zoneColor(selectedDeviceIndex, selectedZoneIndex)
-        editor.currentHex = appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex)
 
         editor.effectType = appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex)
         editor.effectSpeed = appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex)
@@ -69,64 +73,6 @@ Item {
 
         anchors.fill: parent
         spacing: 12
-
-        // Current applied color: full-width bar with info overlaid
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 64
-            radius: 14
-            color: editor.hasSelection ? editor.currentColor : Theme.inputBg
-            border.color: Theme.border
-            border.width: 1
-            clip: true
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: editor.animationsEnabled ? 160 : 0
-                }
-            }
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                spacing: 10
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-
-                    Label {
-                        id: deviceLabel
-
-                        Layout.fillWidth: true
-                        color: editor.hasSelection ? editor.contrastOn(editor.currentColor) : Theme.primaryText
-                        font.pixelSize: 15
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        id: typeLabel
-
-                        Layout.fillWidth: true
-                        color: editor.hasSelection ? editor.contrastOn(editor.currentColor) : Theme.secondaryText
-                        opacity: editor.hasSelection ? 0.85 : 1.0
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
-                    }
-                }
-
-                Label {
-                    text: editor.currentHex
-                    color: editor.hasSelection ? editor.contrastOn(editor.currentColor) : Theme.primaryText
-                    font.family: "monospace"
-                    font.pixelSize: 12
-                    font.bold: true
-                    horizontalAlignment: Text.AlignRight
-                }
-            }
-        }
 
         GridLayout {
             Layout.fillWidth: true
@@ -283,29 +229,33 @@ Item {
                     }
 
                     NumberAnimation on x {
+                        id: rainbowScrollAnim
+
                         running: editor.effectType === 1 && editor.animationsEnabled && rainbowClip.visible
                         from: 0
                         to: -Math.max(1, previewBar.width)
                         loops: Animation.Infinite
-                        duration: Math.max(800, 8000 / editor.effectSpeed)
+                        duration: editor.rainbowPeriodMs
                     }
                 }
             }
 
             SequentialAnimation on breath {
+                id: breathingAnim
+
                 running: editor.effectType === 2 && editor.animationsEnabled
                 loops: Animation.Infinite
 
                 NumberAnimation {
                     from: 0.12
                     to: 1.0
-                    duration: Math.max(300, 2000 / editor.effectSpeed)
+                    duration: editor.breathingHalfPeriodMs
                     easing.type: Easing.InOutSine
                 }
                 NumberAnimation {
                     from: 1.0
                     to: 0.12
-                    duration: Math.max(300, 2000 / editor.effectSpeed)
+                    duration: editor.breathingHalfPeriodMs
                     easing.type: Easing.InOutSine
                 }
             }
@@ -384,13 +334,17 @@ Item {
                 }
             }
 
-            Slider {
+            AppSlider {
                 Layout.fillWidth: true
                 from: 0.1
                 to: 5.0
                 stepSize: 0.1
                 value: editor.effectSpeed
-                onMoved: editor.effectSpeed = value
+                animationsEnabled: editor.animationsEnabled
+                onValueChanged: {
+                    editor.effectSpeed = value
+                    editor.restartPreviewAnimations()
+                }
             }
         }
 
@@ -417,13 +371,14 @@ Item {
                 }
             }
 
-            Slider {
+            AppSlider {
                 Layout.fillWidth: true
                 from: 0
                 to: 100
                 stepSize: 1
                 value: editor.effectBrightness
-                onMoved: editor.effectBrightness = Math.round(value)
+                animationsEnabled: editor.animationsEnabled
+                onValueChanged: editor.effectBrightness = Math.round(value)
             }
         }
 
@@ -447,6 +402,8 @@ Item {
             Layout.fillHeight: true
         }
     }
+
+    onEffectTypeChanged: Qt.callLater(restartPreviewAnimations)
 
     onSelectedDeviceIndexChanged: Qt.callLater(refresh)
     onSelectedZoneIndexChanged: Qt.callLater(refresh)

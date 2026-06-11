@@ -58,7 +58,8 @@ Item {
                     }
                 }
 
-                Switch {
+                AppSwitch {
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                     checked: page.settingsController ? page.settingsController.animationsEnabled : true
                     onClicked: {
                         if (page.settingsController) {
@@ -126,7 +127,8 @@ Item {
                     font.bold: true
                 }
 
-                Switch {
+                AppSwitch {
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                     checked: page.settingsController ? page.settingsController.startMinimized : false
                     onClicked: {
                         if (page.settingsController) {
@@ -161,7 +163,8 @@ Item {
                     }
                 }
 
-                Switch {
+                AppSwitch {
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                     checked: page.settingsController ? page.settingsController.applyOnLaunch : false
                     onClicked: {
                         if (page.settingsController) {

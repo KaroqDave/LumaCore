@@ -36,6 +36,9 @@ Item {
             case "devices":
                 drawDevices(ctx, w, h)
                 break
+            case "motherboard":
+                drawMotherboard(ctx, w, h)
+                break
             case "profiles":
                 drawProfiles(ctx, w, h)
                 break
@@ -50,6 +53,56 @@ Item {
                 break
             default:
                 break
+            }
+        }
+
+        function drawMotherboard(ctx, w, h) {
+            const m = w * 0.12
+            const bw = w - m * 2
+            const bh = h - m * 2
+            const r = w * 0.12
+
+            roundedRect(ctx, m, m, bw, bh, r)
+            ctx.stroke()
+
+            const cx = m + bw / 2
+            const cy = m + bh / 2
+            const cw = bw * 0.44
+            const ch = bh * 0.34
+            const chipX = cx - cw / 2
+            const chipY = cy - ch / 2
+
+            roundedRect(ctx, chipX, chipY, cw, ch, w * 0.05)
+            ctx.stroke()
+
+            const padR = Math.max(1.2, w * 0.055)
+            const pads = [
+                [m + bw * 0.18, m + bh * 0.22],
+                [m + bw * 0.82, m + bh * 0.22],
+                [m + bw * 0.18, m + bh * 0.78],
+                [m + bw * 0.82, m + bh * 0.78]
+            ]
+
+            const traceWidth = Math.max(1, navIcon.strokeWidth * 0.75)
+            ctx.lineWidth = traceWidth
+            for (let i = 0; i < pads.length; ++i) {
+                const px = pads[i][0]
+                const py = pads[i][1]
+                const targetX = i < 2 ? chipX + cw * 0.25 : chipX + cw * 0.75
+                const targetY = i % 2 === 0 ? chipY + ch * 0.2 : chipY + ch * 0.8
+
+                ctx.beginPath()
+                ctx.moveTo(px, py)
+                ctx.lineTo(targetX, py)
+                ctx.lineTo(targetX, targetY)
+                ctx.stroke()
+            }
+            ctx.lineWidth = navIcon.strokeWidth
+
+            for (let i = 0; i < pads.length; ++i) {
+                ctx.beginPath()
+                ctx.arc(pads[i][0], pads[i][1], padR, 0, Math.PI * 2)
+                ctx.fill()
             }
         }
 
