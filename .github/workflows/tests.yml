@@ -29,14 +29,20 @@ jobs:
             cmake \
             ninja-build \
             pkg-config \
-            qt6-base-dev \
-            qt6-declarative-dev \
+            libegl1 \
             libgl1-mesa-dev \
+            libxkbcommon-dev \
             libhidapi-dev \
             libusb-1.0-0-dev
 
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          cache: true
+
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}/lib/cmake"
 
       - name: Build tests
         run: cmake --build build --parallel
