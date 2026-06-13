@@ -1,8 +1,13 @@
 #include "backends/mock/MockRgbDevice.h"
 
-#include <QDebug>
-
 namespace lumacore {
+
+namespace {
+
+constexpr BackendCapabilities kMockCapabilities =
+    BackendCapability::DiscoveryRead | BackendCapability::ZoneColorWrite | BackendCapability::ZoneEffectWrite;
+
+} // namespace
 
 MockRgbDevice::MockRgbDevice(QObject* parent)
     : RgbDevice(
@@ -13,6 +18,8 @@ MockRgbDevice::MockRgbDevice(QObject* parent)
           parent
       )
 {
+    setLikelyRgbController(true);
+
     // Modern blue-ish defaults so previews and zone swatches are inviting out of the box.
     const RgbColor header1Color(30, 84, 214);   // #1E54D6
     const RgbColor header2Color(34, 211, 238);   // #22D3EE
@@ -34,10 +41,25 @@ bool MockRgbDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)
     }
 
     mutableZones()[zoneIndex].setColor(color);
-    qInfo().noquote() << QStringLiteral("[MockBackend] %1 / %2 set to %3")
-                             .arg(name(), zones().at(zoneIndex).name(), color.toHexString());
     emit zoneChanged(zoneIndex);
     return true;
+}
+
+BackendCapabilities MockRgbDevice::capabilities() const
+{
+    return kMockCapabilities;
+}
+
+PermissionResult MockRgbDevice::checkRuntimePermission(BackendCapability capability) const
+{
+    if (kMockCapabilities.testFlag(capability)) {
+        return {PermissionStatus::Granted, {}};
+    }
+
+    return {
+        PermissionStatus::Denied,
+        QStringLiteral("Mock backend does not support %1.").arg(backendCapabilityToString(capability)),
+    };
 }
 
 } // namespace lumacore

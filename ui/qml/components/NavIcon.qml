@@ -6,9 +6,18 @@ Item {
     property string name: ""
     property color color: "#F2F5F8"
     property real strokeWidth: 2
+    property bool animationsEnabled: true
+    readonly property int animationDuration: animationsEnabled ? 160 : 0
 
     implicitWidth: 22
     implicitHeight: 22
+
+    Behavior on color {
+        ColorAnimation {
+            duration: navIcon.animationDuration
+            easing.type: Easing.OutCubic
+        }
+    }
 
     onColorChanged: canvas.requestPaint()
     onNameChanged: canvas.requestPaint()
@@ -50,6 +59,15 @@ Item {
                 break
             case "info":
                 drawInfo(ctx, w, h)
+                break
+            case "activity":
+                drawActivity(ctx, w, h)
+                break
+            case "filter":
+                drawFilter(ctx, w, h)
+                break
+            case "check":
+                drawCheck(ctx, w, h)
                 break
             default:
                 break
@@ -182,6 +200,23 @@ Item {
             ctx.stroke()
         }
 
+        function drawActivity(ctx, w, h) {
+            const left = w * 0.16
+            const right = w * 0.84
+            const lineCount = 4
+            const gap = h * 0.18
+            const top = h * 0.2
+
+            for (let i = 0; i < lineCount; ++i) {
+                const y = top + i * gap
+                const lineWidth = right - left - (i % 2 === 0 ? 0 : w * 0.18)
+                ctx.beginPath()
+                ctx.moveTo(left, y)
+                ctx.lineTo(lineWidth, y)
+                ctx.stroke()
+            }
+        }
+
         function drawInfo(ctx, w, h) {
             const cx = w / 2
             const cy = h / 2
@@ -196,6 +231,34 @@ Item {
             ctx.beginPath()
             ctx.moveTo(cx, cy - h * 0.04)
             ctx.lineTo(cx, cy + h * 0.22)
+            ctx.stroke()
+        }
+
+        function drawFilter(ctx, w, h) {
+            const left = w * 0.18
+            const right = w * 0.82
+            const ys = [h * 0.28, h * 0.5, h * 0.72]
+            const widths = [0.64, 0.44, 0.24]
+
+            for (let i = 0; i < ys.length; ++i) {
+                const lineWidth = w * widths[i]
+                ctx.beginPath()
+                ctx.moveTo(left, ys[i])
+                ctx.lineTo(left + lineWidth, ys[i])
+                ctx.stroke()
+            }
+
+            ctx.beginPath()
+            ctx.moveTo(right - w * 0.12, h * 0.28)
+            ctx.lineTo(right, h * 0.28)
+            ctx.stroke()
+        }
+
+        function drawCheck(ctx, w, h) {
+            ctx.beginPath()
+            ctx.moveTo(w * 0.18, h * 0.52)
+            ctx.lineTo(w * 0.42, h * 0.74)
+            ctx.lineTo(w * 0.82, h * 0.28)
             ctx.stroke()
         }
 

@@ -14,7 +14,8 @@ Rectangle {
     property var navModel: [
         { "iconName": "devices", "label": qsTr("Devices"), "badge": "" },
         { "iconName": "profiles", "label": qsTr("Profiles"), "badge": "" },
-        { "iconName": "settings", "label": qsTr("Settings"), "badge": "" }
+        { "iconName": "settings", "label": qsTr("Settings"), "badge": "" },
+        { "iconName": "activity", "label": qsTr("Activities"), "badge": "" }
     ]
 
     signal toggleRequested()

@@ -13,6 +13,7 @@ namespace {
 
 constexpr int kFrameIntervalMs = 16; // ~60 Hz
 constexpr double kRainbowPeriodSeconds = 6.0;
+constexpr double kColorCyclePeriodSeconds = 6.0;
 constexpr double kBreathingPeriodSeconds = 4.0;
 constexpr double kBreathingFloor = 0.12;
 
@@ -107,6 +108,12 @@ QVector<RgbColor> EffectsEngine::computeFrame(const RgbEffect& effect, int ledCo
             const QColor color = QColor::fromHsvF(static_cast<float>(hue), 1.0F, static_cast<float>(brightness));
             colors.append(RgbColor::fromQColor(color));
         }
+        break;
+    }
+    case RgbEffectType::ColorCycle: {
+        const double hue = fractional(elapsedSeconds * effect.speed() / kColorCyclePeriodSeconds);
+        const QColor color = QColor::fromHsvF(static_cast<float>(hue), 1.0F, static_cast<float>(brightness));
+        colors.fill(RgbColor::fromQColor(color), ledCount);
         break;
     }
     case RgbEffectType::Breathing: {

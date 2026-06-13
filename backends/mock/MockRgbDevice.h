@@ -12,6 +12,8 @@ public:
     explicit MockRgbDevice(QObject* parent = nullptr);
 
     [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const RgbColor& color) override;
+    [[nodiscard]] BackendCapabilities capabilities() const override;
+    [[nodiscard]] PermissionResult checkRuntimePermission(BackendCapability capability) const override;
 };
 
 } // namespace lumacore

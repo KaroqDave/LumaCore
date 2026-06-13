@@ -116,7 +116,7 @@ Dialog {
 
         Label {
             Layout.fillWidth: true
-            text: qsTr("Linux-first, open-source RGB control built with C++23 and Qt 6. This release is mock-only: it simulates devices and profiles safely before any real hardware support.")
+            text: qsTr("Linux-first RGB control built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This release keeps the GUI unprivileged, routes backend access through the LumaCore daemon, and exposes controller-aware effects for mock, discovery, and ASUS Aura HID devices.")
             color: Theme.primaryText
             font.pixelSize: 13
             wrapMode: Text.WordWrap
@@ -134,11 +134,20 @@ Dialog {
                 id: infoPill
 
                 anchors.centerIn: parent
-                text: qsTr("Mock backend only — no hardware access")
+                text: qsTr("Daemon-backed - session-confirmed ASUS writes")
                 color: Theme.pillText
                 font.pixelSize: 12
                 font.bold: true
             }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            text: qsTr("ASUS Aura HID support uses allowlisted, config-verified packets for static colors and native hardware modes. Unsupported controller parameters are disabled in the effect editor.")
+            color: Theme.secondaryText
+            font.pixelSize: 12
+            wrapMode: Text.WordWrap
+            lineHeight: 1.3
         }
 
         Label {

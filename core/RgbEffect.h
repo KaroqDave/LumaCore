@@ -10,7 +10,8 @@ namespace lumacore {
 enum class RgbEffectType {
     Static,
     Rainbow,
-    Breathing
+    Breathing,
+    ColorCycle
 };
 
 [[nodiscard]] QString rgbEffectTypeToString(RgbEffectType type);

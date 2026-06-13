@@ -4,6 +4,26 @@
 
 namespace lumacore {
 
+namespace {
+
+QString effectDisplayName(RgbEffectType type)
+{
+    switch (type) {
+    case RgbEffectType::Static:
+        return QStringLiteral("Static");
+    case RgbEffectType::Rainbow:
+        return QStringLiteral("Rainbow");
+    case RgbEffectType::Breathing:
+        return QStringLiteral("Breathing");
+    case RgbEffectType::ColorCycle:
+        return QStringLiteral("Color Cycle");
+    }
+
+    return QStringLiteral("Static");
+}
+
+} // namespace
+
 DeviceTreeModel::DeviceTreeModel(DeviceManager* deviceManager, QObject* parent)
     : QAbstractItemModel(parent)
     , m_deviceManager(deviceManager)
@@ -23,17 +43,36 @@ DeviceTreeModel::DeviceTreeModel(DeviceManager* deviceManager, QObject* parent)
     const auto notifyZoneChanged = [this](int deviceIndex, int zoneIndex) {
         const QModelIndex changedZone = indexForZone(deviceIndex, zoneIndex);
         if (changedZone.isValid()) {
-            emit dataChanged(changedZone, changedZone);
+            emit dataChanged(changedZone, changedZone, {
+                Qt::DisplayRole,
+                DisplayNameRole,
+                DescriptionRole,
+                ZoneTypeRole,
+                LedCountRole,
+                ZoneColorRole,
+                ZoneColorHexRole,
+                ZoneEffectTypeRole,
+                ZoneEffectNameRole,
+                ZoneEffectAnimatedRole,
+                ZoneEffectColorHexRole,
+            });
         }
 
-        const QModelIndex changedDevice = index(deviceIndex, 0);
+        const QModelIndex changedDevice = indexForDevice(deviceIndex);
         if (changedDevice.isValid()) {
             emit dataChanged(changedDevice, changedDevice);
         }
     };
 
+    const auto notifyZoneFrameUpdated = [this](int deviceIndex, int zoneIndex) {
+        const QModelIndex changedZone = indexForZone(deviceIndex, zoneIndex);
+        if (changedZone.isValid()) {
+            emit dataChanged(changedZone, changedZone, {ZoneColorRole, ZoneColorHexRole});
+        }
+    };
+
     connect(m_deviceManager, &DeviceManager::zoneChanged, this, notifyZoneChanged);
-    connect(m_deviceManager, &DeviceManager::zoneFrameUpdated, this, notifyZoneChanged);
+    connect(m_deviceManager, &DeviceManager::zoneFrameUpdated, this, notifyZoneFrameUpdated);
 }
 
 QModelIndex DeviceTreeModel::index(int row, int column, const QModelIndex& parentIndex) const
@@ -106,6 +145,12 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
             return true;
         case IsZoneRole:
             return false;
+        case IsRgbControllerRole:
+            return device->isRgbController();
+        case HasRgbControllerOverrideRole:
+            return device->hasRgbControllerOverride();
+        case RgbControllerOverrideRole:
+            return device->rgbControllerOverride();
         default:
             return {};
         }
@@ -116,6 +161,7 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
     }
 
     const RgbZone& zone = device->zones().at(node->zoneIndex);
+    const RgbEffect& effect = zone.effect();
     switch (role) {
     case Qt::DisplayRole:
     case DisplayNameRole:
@@ -136,12 +182,26 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
         return zone.currentColor().toQColor();
     case ZoneColorHexRole:
         return zone.currentColor().toHexString();
+    case ZoneEffectTypeRole:
+        return static_cast<int>(effect.type());
+    case ZoneEffectNameRole:
+        return effectDisplayName(effect.type());
+    case ZoneEffectAnimatedRole:
+        return effect.isAnimated();
+    case ZoneEffectColorHexRole:
+        return effect.color().toHexString();
     case ZoneCountRole:
         return 0;
     case IsDeviceRole:
         return false;
     case IsZoneRole:
         return true;
+    case IsRgbControllerRole:
+        return device->isRgbController();
+    case HasRgbControllerOverrideRole:
+        return device->hasRgbControllerOverride();
+    case RgbControllerOverrideRole:
+        return device->rgbControllerOverride();
     default:
         return {};
     }
@@ -168,10 +228,36 @@ QHash<int, QByteArray> DeviceTreeModel::roleNames() const
         {LedCountRole, "ledCount"},
         {ZoneColorRole, "zoneColor"},
         {ZoneColorHexRole, "zoneColorHex"},
+        {ZoneEffectTypeRole, "zoneEffectType"},
+        {ZoneEffectNameRole, "zoneEffectName"},
+        {ZoneEffectAnimatedRole, "zoneEffectAnimated"},
+        {ZoneEffectColorHexRole, "zoneEffectColorHex"},
         {ZoneCountRole, "zoneCount"},
         {IsDeviceRole, "isDevice"},
         {IsZoneRole, "isZone"},
+        {IsRgbControllerRole, "isRgbController"},
+        {HasRgbControllerOverrideRole, "hasRgbControllerOverride"},
+        {RgbControllerOverrideRole, "rgbControllerOverride"},
     };
+}
+
+int DeviceTreeModel::deviceFilter() const
+{
+    return static_cast<int>(m_deviceFilter);
+}
+
+void DeviceTreeModel::setDeviceFilter(int deviceFilter)
+{
+    const DeviceFilter nextFilter = deviceFilter == RgbControllers ? RgbControllers : AllDevices;
+    if (m_deviceFilter == nextFilter) {
+        return;
+    }
+
+    beginResetModel();
+    m_deviceFilter = nextFilter;
+    rebuild();
+    endResetModel();
+    emit deviceFilterChanged();
 }
 
 void DeviceTreeModel::rebuild()
@@ -185,6 +271,10 @@ void DeviceTreeModel::rebuild()
     for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
         const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
         if (device == nullptr) {
+            continue;
+        }
+
+        if (m_deviceFilter == RgbControllers && !device->isRgbController()) {
             continue;
         }
 
@@ -217,13 +307,30 @@ DeviceTreeModel::TreeNode* DeviceTreeModel::nodeFromIndex(const QModelIndex& ind
     return m_root.get();
 }
 
-QModelIndex DeviceTreeModel::indexForZone(int deviceIndex, int zoneIndex) const
+QModelIndex DeviceTreeModel::indexForDevice(int deviceIndex) const
 {
-    if (m_root == nullptr || deviceIndex < 0 || deviceIndex >= static_cast<int>(m_root->children.size())) {
+    if (m_root == nullptr || deviceIndex < 0) {
         return {};
     }
 
-    const TreeNode* deviceNode = m_root->children.at(static_cast<std::size_t>(deviceIndex)).get();
+    for (int row = 0; row < static_cast<int>(m_root->children.size()); ++row) {
+        const TreeNode* deviceNode = m_root->children.at(static_cast<std::size_t>(row)).get();
+        if (deviceNode != nullptr && deviceNode->deviceIndex == deviceIndex) {
+            return createIndex(row, 0, const_cast<TreeNode*>(deviceNode));
+        }
+    }
+
+    return {};
+}
+
+QModelIndex DeviceTreeModel::indexForZone(int deviceIndex, int zoneIndex) const
+{
+    if (m_root == nullptr || deviceIndex < 0) {
+        return {};
+    }
+
+    const QModelIndex deviceModelIndex = indexForDevice(deviceIndex);
+    const TreeNode* deviceNode = nodeFromIndex(deviceModelIndex);
     if (deviceNode == nullptr || zoneIndex < 0 || zoneIndex >= static_cast<int>(deviceNode->children.size())) {
         return {};
     }

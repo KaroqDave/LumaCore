@@ -22,6 +22,7 @@ Slider {
             color: Theme.inputBg
             border.color: Theme.border
             border.width: 1
+            opacity: control.enabled ? 1.0 : 0.55
         }
 
         Rectangle {
@@ -29,6 +30,7 @@ Slider {
             height: parent.height
             radius: 3
             color: Theme.accent
+            opacity: control.enabled ? 1.0 : 0.25
 
             Behavior on width {
                 NumberAnimation {
@@ -48,6 +50,7 @@ Slider {
         color: Theme.accent
         border.color: Theme.accentBottom
         border.width: 1
+        opacity: control.enabled ? 1.0 : 0.35
 
         Rectangle {
             anchors.centerIn: parent

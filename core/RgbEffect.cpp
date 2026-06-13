@@ -20,6 +20,8 @@ QString rgbEffectTypeToString(RgbEffectType type)
         return QStringLiteral("Rainbow");
     case RgbEffectType::Breathing:
         return QStringLiteral("Breathing");
+    case RgbEffectType::ColorCycle:
+        return QStringLiteral("ColorCycle");
     }
 
     return QStringLiteral("Static");
@@ -33,6 +35,10 @@ RgbEffectType rgbEffectTypeFromString(const QString& value)
 
     if (value.compare(QStringLiteral("Breathing"), Qt::CaseInsensitive) == 0) {
         return RgbEffectType::Breathing;
+    }
+
+    if (value.compare(QStringLiteral("ColorCycle"), Qt::CaseInsensitive) == 0) {
+        return RgbEffectType::ColorCycle;
     }
 
     return RgbEffectType::Static;

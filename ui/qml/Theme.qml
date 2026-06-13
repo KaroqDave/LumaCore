@@ -49,4 +49,5 @@ QtObject {
     readonly property color pillText:   dark ? "#8BB8FF" : "#1E54D6"
 
     readonly property color success: "#4CAF50"
+    readonly property color warning: "#F59E0B"
 }

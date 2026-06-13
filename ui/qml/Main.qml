@@ -16,7 +16,7 @@ ApplicationWindow {
     color: Theme.window
 
     property color selectedColor: Theme.defaultColor
-    property bool sidebarCollapsed: false
+    property bool sidebarCollapsed: true
     property int currentPage: 0
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
@@ -41,8 +41,9 @@ ApplicationWindow {
 
     readonly property var pageTitles: [
         { "title": qsTr("Devices"), "subtitle": qsTr("Pick a device or zone, then choose a lighting effect.") },
-        { "title": qsTr("Profiles"), "subtitle": qsTr("Save and restore device state while the backend is mock-only.") },
-        { "title": qsTr("Settings"), "subtitle": qsTr("Visual preferences and startup behavior for the app shell.") }
+        { "title": qsTr("Profiles"), "subtitle": qsTr("Save and restore device state for the active backend.") },
+        { "title": qsTr("Settings"), "subtitle": qsTr("Visual preferences and startup behavior for the app shell.") },
+        { "title": qsTr("Activities"), "subtitle": qsTr("Structured activity, warnings, and errors") }
     ]
 
     Binding {
@@ -95,13 +96,21 @@ ApplicationWindow {
         parent: Overlay.overlay
         animationsEnabled: root.animationsEnabled
         selectedColor: root.selectedColor
-        onAccepted: root.selectedColor = selectedColor
+        onAccepted: root.selectedColor = draftColor
     }
 
     AboutDialog {
         id: aboutDialog
 
         parent: Overlay.overlay
+        animationsEnabled: root.animationsEnabled
+    }
+
+    BackendInfoDialog {
+        id: backendInfoDialog
+
+        parent: Overlay.overlay
+        controller: root.controller
         animationsEnabled: root.animationsEnabled
     }
 
@@ -185,7 +194,7 @@ ApplicationWindow {
                                 Layout.preferredWidth: 9
                                 Layout.preferredHeight: 9
                                 radius: 5
-                                color: Theme.success
+                                color: root.controller && root.controller.daemonConnected ? Theme.success : Theme.warning
                             }
 
                             Label {
@@ -209,10 +218,17 @@ ApplicationWindow {
                         }
                     }
 
-                    PillLabel {
+                    BackendStatusChip {
                         Layout.alignment: Qt.AlignVCenter
-                        text: qsTr("Mock backend")
+                        controller: root.controller
                         animationsEnabled: root.animationsEnabled
+                        dryRunEnabled: root.controller ? root.controller.dryRunEnabled : false
+                        daemonConnected: root.controller ? root.controller.daemonConnected : false
+                        daemonState: root.controller ? root.controller.daemonState : qsTr("Disconnected")
+                        backendName: root.controller && root.controller.backendDisplayName.length > 0
+                                     ? root.controller.backendDisplayName
+                                     : qsTr("Daemon backend")
+                        onClicked: backendInfoDialog.open()
                     }
                 }
             }
@@ -233,14 +249,13 @@ ApplicationWindow {
                             Layout.preferredWidth: 280
                             Layout.minimumWidth: 240
                             Layout.fillHeight: true
-                            title: qsTr("Device Tree")
-                            subtitle: qsTr("Pick a device or zone")
                             animationsEnabled: root.animationsEnabled
 
                             DeviceTreePanel {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 treeModel: deviceTreeModel
+                                appController: root.controller
                                 selectedDeviceIndex: root.selectedDeviceIndex
                                 selectedZoneIndex: root.selectedZoneIndex
                                 animationsEnabled: root.animationsEnabled
@@ -250,7 +265,7 @@ ApplicationWindow {
                         }
 
                         SectionCard {
-                            Layout.preferredWidth: 380
+                            Layout.fillWidth: true
                             Layout.minimumWidth: 320
                             Layout.fillHeight: true
                             title: qsTr("Zone Editor")
@@ -277,33 +292,6 @@ ApplicationWindow {
                                 }
                             }
                         }
-
-                        SectionCard {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            title: qsTr("Activity")
-                            subtitle: qsTr("Recent mock backend and profile activity")
-                            animationsEnabled: root.animationsEnabled
-
-                            TextArea {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                text: root.controller.logText
-                                readOnly: true
-                                wrapMode: TextArea.Wrap
-                                color: Theme.primaryText
-                                selectedTextColor: Theme.primaryText
-                                selectionColor: Theme.accent
-                                font.family: "monospace"
-                                font.pixelSize: 12
-
-                                background: Rectangle {
-                                    color: Theme.inputBg
-                                    radius: 12
-                                    border.color: Theme.border
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -311,7 +299,7 @@ ApplicationWindow {
                     SectionCard {
                         anchors.fill: parent
                         title: qsTr("Profile Manager")
-                        subtitle: qsTr("Save and restore device state while the backend is still mock-only.")
+                        subtitle: qsTr("Save and restore device state for the active backend.")
                         animationsEnabled: root.animationsEnabled
 
                         ProfileManager {
@@ -339,6 +327,21 @@ ApplicationWindow {
                         }
                     }
                 }
+
+                Item {
+                    SectionCard {
+                        anchors.fill: parent
+                        title: qsTr("Activity Log")
+                        subtitle: qsTr("Structured activity, warnings, and errors")
+                        animationsEnabled: root.animationsEnabled
+
+                        ActivityLogPanel {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            controller: root.controller
+                        }
+                    }
+                }
             }
         }
     }
@@ -348,9 +351,10 @@ ApplicationWindow {
 
         function onZoneDataChanged(deviceIndex, zoneIndex) {
             if (deviceIndex === root.selectedDeviceIndex && zoneIndex === root.selectedZoneIndex) {
-                // Only follow the zone's color for static effects; animated effects
-                // manage their own base color and would otherwise fight the picker.
-                if (root.controller.zoneEffectType(deviceIndex, zoneIndex) === 0) {
+                // Static and Breathing use a base color. Rainbow and Color Cycle
+                // are generated effects, so following their frame color would fight the picker.
+                const effectType = root.controller.zoneEffectType(deviceIndex, zoneIndex)
+                if (effectType === 0 || effectType === 2) {
                     root.selectedColor = root.controller.zoneEffectColor(deviceIndex, zoneIndex)
                 }
             }

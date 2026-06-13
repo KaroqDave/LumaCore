@@ -10,6 +10,7 @@ Dialog {
     modal: true
     anchors.centerIn: parent
     padding: 24
+    width: 420
 
     property color selectedColor: Theme.defaultColor
     property color draftColor: selectedColor
@@ -19,6 +20,7 @@ Dialog {
     property real saturation: 0.7
     property real value: 0.85
     property bool syncing: false
+    property bool hexInputValid: true
 
     standardButtons: Dialog.NoButton
 
@@ -26,13 +28,45 @@ Dialog {
         return Qt.hsva(h / 360.0, s, v, 1.0)
     }
 
+    function hsvFromColor(color) {
+        const red = Math.max(0, Math.min(1, color.r))
+        const green = Math.max(0, Math.min(1, color.g))
+        const blue = Math.max(0, Math.min(1, color.b))
+        const maxChannel = Math.max(red, green, blue)
+        const minChannel = Math.min(red, green, blue)
+        const delta = maxChannel - minChannel
+        let computedHue = 0
+
+        if (delta > 0) {
+            if (maxChannel === red) {
+                computedHue = 60 * (((green - blue) / delta) % 6)
+            } else if (maxChannel === green) {
+                computedHue = 60 * (((blue - red) / delta) + 2)
+            } else {
+                computedHue = 60 * (((red - green) / delta) + 4)
+            }
+        }
+
+        if (computedHue < 0) {
+            computedHue += 360
+        }
+
+        return {
+            h: computedHue,
+            s: maxChannel === 0 ? 0 : delta / maxChannel,
+            v: maxChannel,
+        }
+    }
+
     function syncHsvFromColor(color) {
+        const hsv = dialog.hsvFromColor(color)
         syncing = true
-        hue = color.hsvHue >= 0 ? color.hsvHue : 0
-        saturation = color.hsvSaturation
-        value = color.hsvValue
+        hue = hsv.h
+        saturation = hsv.s
+        value = hsv.v
         draftColor = color
         hexField.text = dialog.colorToHex(color)
+        hexInputValid = true
         syncing = false
     }
 
@@ -42,6 +76,7 @@ Dialog {
         }
         draftColor = colorFromHsv(hue, saturation, value)
         hexField.text = dialog.colorToHex(draftColor)
+        hexInputValid = true
     }
 
     function colorToHex(color) {
@@ -52,7 +87,15 @@ Dialog {
     }
 
     function parseHex(text) {
-        const normalized = text.trim().replace(/^#/, "")
+        let normalized = text.trim().replace(/^#/, "").replace(/^0x/i, "")
+        if (/^[0-9A-Fa-f]{3}$/.test(normalized)) {
+            normalized = normalized.split("").map(function(component) {
+                return component + component
+            }).join("")
+        } else if (/^[0-9A-Fa-f]{8}$/.test(normalized)) {
+            normalized = normalized.slice(0, 6)
+        }
+
         if (!/^[0-9A-Fa-f]{6}$/.test(normalized)) {
             return null
         }
@@ -63,9 +106,21 @@ Dialog {
             1.0)
     }
 
-    onAboutToShow: syncHsvFromColor(selectedColor)
+    function commitHexInput(restoreInvalid) {
+        const parsed = dialog.parseHex(hexField.text)
+        if (parsed === null) {
+            hexInputValid = false
+            if (restoreInvalid) {
+                hexField.text = dialog.colorToHex(dialog.draftColor)
+            }
+            return false
+        }
 
-    onAccepted: selectedColor = draftColor
+        dialog.syncHsvFromColor(parsed)
+        return true
+    }
+
+    onAboutToShow: syncHsvFromColor(selectedColor)
 
     background: Rectangle {
         color: Theme.surface
@@ -89,6 +144,7 @@ Dialog {
     contentItem: ColumnLayout {
         spacing: 14
         width: 360
+        height: 292
 
         Item {
             Layout.fillWidth: true
@@ -226,15 +282,13 @@ Dialog {
                 font.family: "monospace"
                 font.pixelSize: 12
                 selectByMouse: true
-                maximumLength: 7
+                maximumLength: 10
+                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhPreferUppercase
                 placeholderText: "#1E54D6"
+                color: dialog.hexInputValid ? Theme.primaryText : Theme.warning
+                onTextEdited: dialog.hexInputValid = dialog.parseHex(text) !== null || text.trim().length < 3
                 onEditingFinished: {
-                    const parsed = dialog.parseHex(text)
-                    if (parsed) {
-                        dialog.syncHsvFromColor(parsed)
-                    } else {
-                        text = dialog.colorToHex(dialog.draftColor)
-                    }
+                    dialog.commitHexInput(false)
                 }
             }
         }
@@ -293,8 +347,9 @@ Dialog {
                 text: qsTr("OK")
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: {
-                    dialog.draftColor = dialog.colorFromHsv(dialog.hue, dialog.saturation, dialog.value)
-                    dialog.accept()
+                    if (dialog.commitHexInput(false)) {
+                        dialog.accept()
+                    }
                 }
             }
         }

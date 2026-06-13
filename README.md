@@ -1,150 +1,153 @@
-# <img src="assets/icons/lumacore-128.png" alt="LumaCore icon" width="48" height="48" style="vertical-align: middle;"> LumaCore
+<h1>
+  <span style="display: inline-flex; align-items: center; gap: 10px;">
+    <img src="assets/icons/lumacore-128.png" alt="LumaCore icon" width="40" height="40" />
+    <span>LumaCore</span>
+  </span>
+</h1>
 
-**v0.1.0** — Linux-first, open-source RGB control built with C++23, Qt 6, and CMake.
+**v0.5.5** - Linux-first RGB control built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
-LumaCore is a passion project focused on safe, maintainable RGB control rather than quick hardware hacks. This version is **mock-only** by design: it ships with a Qt Quick desktop app, a core RGB device model, and a simulated ASUS motherboard-style device with three zones. No real hardware access, root permissions, SMBus/I2C writes, USB writes, or hidraw access are used.
+LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
-![LumaCore collapsed sidebar](assets/screenshots/lumacore-devices-collapsed.png)
+![LumaCore ASUS hardware write confirmation](assets/screenshots/lumacore-devices-collapsed-confirmation.png)
 
-## What's new in v0.1.0
+![LumaCore active backend dialog](assets/screenshots/lumacore-backend-dialog.png)
 
-- **UI theming** — centralized `Theme.qml` with a deeper accent blue; reusable `AppButton`, `AppSwitch`, and `AppSlider` components
-- **Dialogs** — custom `ColorPickerDialog` and styled About dialog (replacing native Qt dialog buttons)
-- **Device tree** — modern pill rows, tree connector lines, per-zone color swatches with hex labels, and a motherboard icon
-- **Zone editor** — removed redundant applied-color header bar; live effect preview with speed aligned to the backend
-- **Effects** — static, rainbow, and breathing modes with speed/brightness sliders and real-time preview
-- **Settings** — UI animations toggle and theme picker (Auto / Light / Dark)
+Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 
-## Features (v0.1.0)
+## Current Capabilities
 
-- Qt Quick desktop UI with collapsible nav rail, device tree, zone editor, and activity log
-- In-memory RGB model: devices, zones, and LEDs
-- Mock backend with one simulated **ASUS TUF X870-PLUS WIFI** device:
-  - Header 1 (10 LEDs)
-  - Header 2 (30 LEDs)
-  - Header 3 (30 LEDs)
-- Static, rainbow, and breathing effects per zone with speed and brightness controls
-- Custom in-app color picker and JSON profile save/load under `./profiles`
-- Settings page for theme and animation preferences
-- Activity log and status bar in the UI
-- Embedded multi-resolution application icons
+- Qt Quick desktop UI with a collapsible navigation rail, Devices, Profiles, Settings, Activities, backend status, and an About dialog.
+- In-memory RGB model for devices, zones, LEDs, profiles, static colors, rainbow, breathing, and color-cycle effects.
+- GUI-to-daemon boundary through `backends/daemon/`, `ipc/`, and `lumacore-daemon`.
+- Default daemon `auto` backend that prefers verified ASUS Aura HID control, adds read-only Linux discovery inventory when available, and falls back to the mock backend.
+- Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
+- Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata.
+- ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native breathing/color-cycle/rainbow effects, and All Off.
+- Activity log with structured severity/category entries and console mirroring.
+- Backend capability dialog showing active backend, dry-run state, and supported operations.
 
-Not yet implemented: automated tests and any real hardware discovery or writes.
+## Safety Model
+
+- `lumacore` refuses to run as root; `lumacore-daemon` requires root by default on Linux.
+- Hardware writes are never exposed as raw packet methods to the GUI.
+- Linux discovery is read-only and does not perform RGB writes.
+- Dry-run mode logs write intent and backend-specific previews without applying changes.
+- ASUS Aura writes require an allowlisted device, a verified `EC B0`/`EC 30` config-table response, dry-run off, approved packet builders, and per-device confirmation for the current daemon session.
+- Confirmation is held in memory and is cleared when the daemon restarts or the backend is reinitialized.
+- SMBus/I2C writes, generic hidraw writes, persistent hardware configuration, firmware writes, and unconfirmed ASUS writes are intentionally out of scope.
+
+See `docs/hardware/asus-aura-hid.md` for the ASUS protocol notes, licensing boundary, and validation checklist.
 
 ## Requirements
 
-- C++23 compiler (GCC or Clang)
+- C++23 compiler, such as GCC or Clang
 - CMake 3.24+
 - Ninja or Make
-- Qt 6.5+ (`Core`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`)
+- Qt 6.5+ with `Core`, `Gui`, `Network`, `Qml`, `Quick`, `QuickControls2`, and `QuickDialogs2`
+- Optional for Linux discovery and ASUS Aura HID builds: `pkg-config`, `hidapi`, and/or `libusb`
 
 On Arch-based systems:
 
 ```sh
-sudo pacman -S cmake gcc qt6-base qt6-declarative
+sudo pacman -S cmake gcc qt6-base qt6-declarative hidapi libusb
 ```
 
 Package names vary by distribution; install the equivalent Qt 6 development packages for yours.
 
-## Build and run
+## Build and Run
 
 Configure and build from the repository root:
 
 ```sh
 cmake -S . -B build
 cmake --build build
+```
+
+Start the daemon, then launch the GUI from another terminal:
+
+```sh
+sudo ./build/lumacore-daemon
 ./build/lumacore
 ```
 
-Profiles are stored in `./profiles` relative to the **current working directory** when you launch the app. Running `./build/lumacore` from the repo root writes profiles to `profiles/` in the repository (that directory is gitignored).
+Both binaries use `/run/lumacore/lumacore.sock` by default. Override it with `--socket` when running without the packaged service setup.
 
-## Project layout
+For an unprivileged mock-only development session:
 
-| Path | Role |
-|------|------|
-| `app/` | Application startup and Qt/QML wiring |
-| `core/` | RGB data model, device ownership, effects engine, profile save/load |
-| `backends/mock/` | Safe simulated hardware backend |
-| `ui/` | QML-facing models and `AppController` |
-| `ui/qml/` | Qt Quick user interface |
-| `ui/qml/components/` | Reusable QML components (`AppButton`, `ColorPickerDialog`, `DeviceTreePanel`, etc.) |
-| `assets/icons/` | Application icons (`lumacore.svg` is the source; PNG/ICO sizes are embedded via Qt resources) |
-| `assets/screenshots/` | README and documentation screenshots |
-
-### Data flow
-
-1. `main.cpp` creates `DeviceManager`, UI models, and `AppController`.
-2. `DeviceManager` asks `MockBackend` for devices.
-3. QML displays devices via `DeviceTreeModel` and zones via `ZoneListModel`.
-4. Color and effect changes go from QML → `AppController` → `DeviceManager` → the mock device.
-5. Profile save/load reads and writes JSON under `./profiles`.
-
-`DeviceManager` owns devices with `std::unique_ptr<RgbDevice>`. Devices own zones by value; zones own LEDs by value. QML never owns or directly mutates hardware-shaped objects. `RgbDevice::setZoneStaticColor()` and effect application are the write-like operations today; future hardware backends must keep this boundary and add permission checks, logging, and confirmation before real writes.
-
-## Profile format
-
-Profiles are JSON files in `./profiles`. The filename is the normalized profile name plus `.json` (non-alphanumeric characters become `_`).
-
-```json
-{
-    "formatVersion": 1,
-    "application": "LumaCore",
-    "profileName": "default",
-    "devices": [
-        {
-            "id": "mock-asus-tuf-x870-plus-wifi",
-            "name": "Mock ASUS TUF X870-PLUS WIFI",
-            "vendor": "ASUS",
-            "type": "Motherboard",
-            "zones": [
-                {
-                    "name": "Header 1",
-                    "type": "Motherboard",
-                    "ledCount": 10,
-                    "color": "#1E54D6",
-                    "rgb": {
-                        "red": 30,
-                        "green": 84,
-                        "blue": 214,
-                        "hex": "#1E54D6"
-                    }
-                }
-            ]
-        }
-    ]
-}
+```sh
+./build/lumacore-daemon --allow-unprivileged --backend mock --socket /tmp/lumacore.sock
+./build/lumacore --socket /tmp/lumacore.sock
 ```
 
-**Load rules:** devices match by `id`, zones by `name`, colors from the zone `color` hex string. Unknown devices or zones are skipped; invalid colors are skipped and reported in the UI log. The format may evolve while the project remains mock-only.
+Backend overrides:
 
-## Hardware safety
+```sh
+sudo ./build/lumacore-daemon --backend linux-discovery
+sudo ./build/lumacore-daemon --backend asus-aura-hid
+```
 
-Phase 1 does not touch real hardware. There is no hidapi, libusb, i2c-dev, SMBus, hidraw, udev, root, or administrator code.
+The daemon accepts `--backend auto`, `mock`, `linux-discovery`, or `asus-aura-hid` when those backends are built. `auto` is the default.
 
-**Current guarantees:**
+## CMake Options
 
-- The GUI talks only to QML models and `AppController`.
-- `DeviceManager` owns mock devices only.
-- Static color and effect changes update in-memory mock zones and are logged to the console and UI.
-- Profiles load through the same mock backend path as the UI.
+- `LUMACORE_ENABLE_LINUX_DISCOVERY` builds daemon-only Linux read-only discovery on supported systems.
+- `LUMACORE_ENABLE_HIDAPI` enables hidapi discovery when available.
+- `LUMACORE_ENABLE_LIBUSB` enables libusb discovery when available.
+- `LUMACORE_ENABLE_I2C_DEV` enables optional read-only i2c-dev adapter metadata discovery.
+- `LUMACORE_ENABLE_ASUS_AURA_HID` builds the ASUS Aura USB HID backend with config-verified, confirmation-gated writes. It requires hidapi and Linux discovery.
 
-**Before any real hardware writes:**
+## Tests
 
-- Read-only discovery first
-- Structured logging for discovery and write attempts
-- Explicit permission detection and clear user-facing errors
-- GUI stays unprivileged; privileged work behind a daemon/service boundary
-- User confirmation before potentially risky write paths
-- Tests for profile and effect behavior on the mock backend first
-- No SMBus or Linux `i2c-dev` writes until detection, logging, permissions, confirmation, and a mock-tested control path all exist
+Run all configured CTest targets after building:
 
-## Roadmap
+```sh
+ctest --test-dir build --output-on-failure
+```
 
-1. **Safe foundation** — mock backend, device model, profiles, basic effects (static, breathing, rainbow), safety documentation *(v0.1.0 delivers mock UI polish, effects, theming, profiles, and device tree UX; automated tests still pending)*
-2. **Linux integration** — read-only hardware discovery behind feature flags, structured logging, udev/i2c/hidraw/USB permission handling, unprivileged GUI with a daemon boundary
-3. **First hardware backends** — read-only ASUS Aura-style motherboard discovery; hidapi/libusb where appropriate; SMBus/i2c only after safety flows exist; mock coverage required before any real write path
-4. **Extensibility** — stable backend interface, plugin-style backend loading, profile import/export, device mapping, Windows support without weakening Linux safety boundaries
+Current tests cover the `DeviceManager` write gate path and, when the ASUS backend is built, the ASUS Aura HID protocol serializer.
 
-**Principles:** no direct hardware writes from the GUI, no hidden root requirement, conservative behavior over broad device claims, and a mock backend that stays useful for UI, profile, and effect development.
+## Project Layout
+
+- `app/` - application startup, version helper, and Qt/QML wiring.
+- `core/` - RGB model, effects, profiles, activity log, backend registry, permission gate, and write gate.
+- `backends/mock/` - safe simulated hardware backend.
+- `backends/daemon/` - GUI-facing backend that talks to `lumacore-daemon`.
+- `backends/linux/` - daemon-only read-only Linux discovery backend.
+- `backends/asus/` - ASUS Aura USB HID backend.
+- `daemon/` - privileged daemon entry point and backend registration.
+- `hardware/linux/` - Linux provider probes, HID writer, and ASUS Aura protocol helpers.
+- `ipc/` - local daemon protocol, client, and server.
+- `ui/` and `ui/qml/` - QML-facing controllers, models, and Qt Quick UI.
+- `docs/` - daemon protocol, ASUS hardware notes, and systemd packaging notes.
+- `packaging/systemd/` - example `lumacore-daemon.service`.
+- `tests/` - focused unit tests.
+- `assets/` - icons and screenshots.
+
+## Profiles
+
+Profiles are JSON files stored in `./profiles` relative to the current working directory when `lumacore` starts. Running `./build/lumacore` from the repository root writes profiles to `profiles/`, which is gitignored.
+
+Devices match by `id`, zones match by `name`, and colors are loaded from the zone hex color field. Unknown devices or zones are skipped and invalid colors are reported in the activity log.
+
+## Documentation
+
+- `docs/daemon/protocol.md` documents the newline-delimited JSON socket protocol.
+- `docs/hardware/asus-aura-hid.md` documents the guarded ASUS Aura HID support and protocol research boundaries.
+- `docs/packaging/systemd.md` documents the example systemd service and backend overrides.
+
+## Current Gaps
+
+- Automated coverage is still focused; broader profile, mock-backend, UI integration, CI, sanitizers, and warning-policy work remains.
+- ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation is documented.
+- Profile validation is minimal.
+- `startMinimized` and `applyOnLaunch` settings are persisted, but launch behavior is not fully wired yet.
+- Full install targets and distribution packaging are not implemented.
+
+## License
+
+LumaCore is free software licensed under the GNU General Public License version 2.0 or later (`GPL-2.0-or-later`).
+
+See `LICENSE` for the full terms.

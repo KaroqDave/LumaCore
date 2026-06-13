@@ -1,11 +1,16 @@
 #include "app/Version.h"
+#include "backends/daemon/DaemonBackend.h"
 #include "core/DeviceManager.h"
+#include "ipc/DaemonClient.h"
+#include "ipc/DaemonProtocol.h"
 #include "ui/AppController.h"
 #include "ui/DeviceTreeModel.h"
 #include "ui/DeviceListModel.h"
 #include "ui/SettingsController.h"
 #include "ui/ZoneListModel.h"
 
+#include <QCommandLineOption>
+#include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlComponent>
@@ -17,6 +22,11 @@
 #include <QWindow>
 #include <QtGlobal>
 
+#ifdef Q_OS_LINUX
+#include <unistd.h>
+#endif
+
+#include <cstddef>
 #include <cstdio>
 #include <memory>
 
@@ -38,6 +48,14 @@ QIcon createApplicationIcon()
 
 int main(int argc, char* argv[])
 {
+#ifdef Q_OS_LINUX
+    if (::geteuid() == 0) {
+        const QByteArray message = "LumaCore GUI must not run as root. Start lumacore-daemon as root instead.\n";
+        std::fwrite(message.constData(), 1, static_cast<std::size_t>(message.size()), stderr);
+        return 1;
+    }
+#endif
+
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("LumaCore"));
     app.setApplicationDisplayName(QStringLiteral("LumaCore"));
@@ -46,14 +64,37 @@ int main(int argc, char* argv[])
     app.setWindowIcon(createApplicationIcon());
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
+    QCommandLineParser parser;
+    parser.setApplicationDescription(QStringLiteral("LumaCore RGB controller GUI."));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    const QCommandLineOption socketOption(
+        QStringList {QStringLiteral("s"), QStringLiteral("socket")},
+        QStringLiteral("LumaCore daemon Unix socket path."),
+        QStringLiteral("path"),
+        lumacore::defaultDaemonSocketPath()
+    );
+    parser.addOption(socketOption);
+    parser.process(app);
+
+    auto daemonClient = std::make_shared<lumacore::DaemonClient>(parser.value(socketOption));
     lumacore::DeviceManager deviceManager;
+    deviceManager.registerBackend(std::make_unique<lumacore::DaemonBackend>(daemonClient));
     lumacore::DeviceListModel deviceListModel(&deviceManager);
     lumacore::DeviceTreeModel deviceTreeModel(&deviceManager);
     lumacore::ZoneListModel zoneListModel(&deviceManager);
-    lumacore::AppController appController(&deviceManager);
+    lumacore::AppController appController(&deviceManager, daemonClient);
     lumacore::SettingsController settingsController;
 
-    deviceManager.initializeMockDevices();
+    appController.setDryRunEnabled(settingsController.dryRunEnabled());
+    QObject::connect(
+        &settingsController,
+        &lumacore::SettingsController::dryRunEnabledChanged,
+        &appController,
+        [&settingsController, &appController]() { appController.setDryRunEnabled(settingsController.dryRunEnabled()); }
+    );
+
+    deviceManager.initializeBackends(QStringLiteral("daemon"));
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {

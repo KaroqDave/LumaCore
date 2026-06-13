@@ -56,6 +56,22 @@ void SettingsController::setApplyOnLaunch(bool enabled)
     emit applyOnLaunchChanged();
 }
 
+bool SettingsController::dryRunEnabled() const
+{
+    return m_dryRunEnabled;
+}
+
+void SettingsController::setDryRunEnabled(bool enabled)
+{
+    if (m_dryRunEnabled == enabled) {
+        return;
+    }
+
+    m_dryRunEnabled = enabled;
+    m_settings.setValue(QStringLiteral("safety/dryRunEnabled"), enabled);
+    emit dryRunEnabledChanged();
+}
+
 QString SettingsController::theme() const
 {
     return m_theme;
@@ -101,6 +117,7 @@ void SettingsController::load()
     m_animationsEnabled = m_settings.value(QStringLiteral("ui/animationsEnabled"), true).toBool();
     m_startMinimized = m_settings.value(QStringLiteral("startup/startMinimized"), false).toBool();
     m_applyOnLaunch = m_settings.value(QStringLiteral("startup/applyOnLaunch"), false).toBool();
+    m_dryRunEnabled = m_settings.value(QStringLiteral("safety/dryRunEnabled"), false).toBool();
     m_theme = normalizeTheme(m_settings.value(QStringLiteral("ui/theme"), QStringLiteral("Dark")).toString());
 }
 

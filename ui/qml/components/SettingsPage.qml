@@ -110,6 +110,53 @@ Item {
 
         SectionCard {
             Layout.fillWidth: true
+            title: qsTr("Safety")
+            subtitle: qsTr("Preview write intent without applying changes")
+            surfaceColor: Theme.surface
+            animationsEnabled: page.animationsEnabled
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Dry-run mode")
+                        color: Theme.primaryText
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Logs color and effect changes without updating zones. Useful before real hardware support.")
+                        color: Theme.secondaryText
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                AppSwitch {
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    checked: page.settingsController ? page.settingsController.dryRunEnabled : false
+                    onClicked: {
+                        if (page.settingsController) {
+                            page.settingsController.dryRunEnabled = checked
+                        }
+                        if (appController) {
+                            appController.dryRunEnabled = checked
+                        }
+                    }
+                }
+            }
+        }
+
+        SectionCard {
+            Layout.fillWidth: true
             title: qsTr("Startup")
             subtitle: qsTr("Stored now for later launch behavior")
             surfaceColor: Theme.surface

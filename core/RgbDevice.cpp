@@ -55,6 +55,16 @@ const QString& RgbDevice::vendor() const
     return m_vendor;
 }
 
+const QString& RgbDevice::backendId() const
+{
+    return m_backendId;
+}
+
+void RgbDevice::setBackendId(const QString& backendId)
+{
+    m_backendId = backendId;
+}
+
 RgbDeviceType RgbDevice::type() const
 {
     return m_type;
@@ -68,6 +78,41 @@ QString RgbDevice::typeName() const
 const QVector<RgbZone>& RgbDevice::zones() const
 {
     return m_zones;
+}
+
+bool RgbDevice::likelyRgbController() const
+{
+    return m_likelyRgbController;
+}
+
+void RgbDevice::setLikelyRgbController(bool likelyRgbController)
+{
+    m_likelyRgbController = likelyRgbController;
+}
+
+bool RgbDevice::hasRgbControllerOverride() const
+{
+    return m_rgbControllerOverride.has_value();
+}
+
+bool RgbDevice::rgbControllerOverride() const
+{
+    return m_rgbControllerOverride.value_or(false);
+}
+
+void RgbDevice::setRgbControllerOverride(bool isRgbController)
+{
+    m_rgbControllerOverride = isRgbController;
+}
+
+void RgbDevice::clearRgbControllerOverride()
+{
+    m_rgbControllerOverride.reset();
+}
+
+bool RgbDevice::isRgbController() const
+{
+    return m_rgbControllerOverride.value_or(m_likelyRgbController);
 }
 
 bool RgbDevice::setZoneName(int zoneIndex, const QString& name)
@@ -95,6 +140,54 @@ bool RgbDevice::setZoneLedCount(int zoneIndex, int ledCount)
     m_zones[zoneIndex].setLedCount(ledCount);
     emit zoneChanged(zoneIndex);
     return true;
+}
+
+bool RgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
+{
+    if (zoneIndex < 0 || zoneIndex >= m_zones.size()) {
+        return false;
+    }
+
+    setZoneEffect(zoneIndex, effect);
+    return true;
+}
+
+bool RgbDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors)
+{
+    return setZoneEffectColors(zoneIndex, colors);
+}
+
+bool RgbDevice::applyAllOff()
+{
+    return false;
+}
+
+bool RgbDevice::updateZoneMetadata(int zoneIndex, const QString& name, int ledCount)
+{
+    if (zoneIndex < 0 || zoneIndex >= m_zones.size()) {
+        return false;
+    }
+
+    const bool nameChanged = setZoneName(zoneIndex, name);
+    const bool ledCountChanged = setZoneLedCount(zoneIndex, ledCount);
+    return nameChanged || ledCountChanged;
+}
+
+bool RgbDevice::usesLocalFrameRendering() const
+{
+    return true;
+}
+
+QString RgbDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const
+{
+    Q_UNUSED(zoneIndex)
+    Q_UNUSED(effect)
+    return {};
+}
+
+QString RgbDevice::lastHardwareWriteStatus() const
+{
+    return {};
 }
 
 void RgbDevice::setZoneEffect(int zoneIndex, const RgbEffect& effect)
@@ -128,6 +221,20 @@ bool RgbDevice::setZoneEffectColors(int zoneIndex, const QVector<RgbColor>& colo
 QVector<RgbZone>& RgbDevice::mutableZones()
 {
     return m_zones;
+}
+
+BackendCapabilities RgbDevice::capabilities() const
+{
+    return BackendCapability::None;
+}
+
+PermissionResult RgbDevice::checkRuntimePermission(BackendCapability capability) const
+{
+    Q_UNUSED(capability)
+    return {
+        PermissionStatus::Denied,
+        QStringLiteral("No backend capabilities declared for %1.").arg(name()),
+    };
 }
 
 } // namespace lumacore
