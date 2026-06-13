@@ -17,7 +17,9 @@ find_package(PkgConfig QUIET)
 include(CheckIncludeFileCXX)
 
 qt_standard_project_setup(REQUIRES 6.5)
-qt_policy(SET QTP0004 NEW)
+if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8.0)
+    qt_policy(SET QTP0004 NEW)
+endif()
 
 set(LUMACORE_LINUX_DEFAULT OFF)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
