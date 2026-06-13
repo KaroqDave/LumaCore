@@ -1,9 +1,9 @@
-<h1>
-  <span style="display: inline-flex; align-items: center; gap: 10px;">
-    <img src="assets/icons/lumacore-128.png" alt="LumaCore icon" width="40" height="40" />
-    <span>LumaCore</span>
-  </span>
-</h1>
+<div align="center">
+  <h1>
+    <img src="assets/icons/lumacore-128.png" alt="LumaCore icon" width="64" height="64" align="center" />
+    LumaCore
+  </h1>
+</div>
 
 **v0.5.5** - Linux-first RGB control built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
