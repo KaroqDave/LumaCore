@@ -3,6 +3,11 @@
     <img src="assets/icons/lumacore-128.png" alt="LumaCore icon" width="64" height="64" align="center" />
     LumaCore
   </h1>
+
+  <p>
+    <img src="https://img.shields.io/github/actions/workflow/status/KaroqDave/LumaCore/build.yml?branch=main&label=build%20verified" alt="Build verified" />
+    <img src="https://img.shields.io/github/actions/workflow/status/KaroqDave/LumaCore/tests.yml?branch=main&label=tests%20verified" alt="Tests verified" />
+  </p>
 </div>
 
 **v0.5.5** - Linux-first RGB control built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
