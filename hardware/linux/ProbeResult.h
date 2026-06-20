@@ -32,6 +32,7 @@ struct ProbeResult {
 
 [[nodiscard]] QString stableProbeId(const QString& source, const QString& key);
 [[nodiscard]] QString hexWord(quint16 value);
+[[nodiscard]] QString usbVidPidKey(const ProbeDevice& device);
 [[nodiscard]] bool isKnownRgbController(const ProbeDevice& device);
 [[nodiscard]] bool isLikelyRgbController(const ProbeDevice& device);
 

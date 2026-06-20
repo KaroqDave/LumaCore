@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -113,8 +115,9 @@ Item {
             }
         }
 
-        Popup {
-            id: filterPopup
+        QtObject {
+            property Popup popup: Popup {
+                id: filterPopup
 
             parent: panel
             x: Math.max(0, filterButton.x + filterButton.width - width)
@@ -175,6 +178,8 @@ Item {
                 }
 
                 ItemDelegate {
+                    id: allDevicesFilter
+
                     Layout.fillWidth: true
                     implicitWidth: 180
                     implicitHeight: 40
@@ -184,9 +189,9 @@ Item {
 
                     background: Rectangle {
                         radius: 10
-                        color: parent.down
+                        color: allDevicesFilter.down
                                ? Theme.hover
-                               : (parent.hovered ? Theme.elevated : "transparent")
+                               : (allDevicesFilter.hovered ? Theme.elevated : "transparent")
 
                         Behavior on color {
                             ColorAnimation {
@@ -218,6 +223,8 @@ Item {
                 }
 
                 ItemDelegate {
+                    id: rgbControllersFilter
+
                     Layout.fillWidth: true
                     implicitWidth: 180
                     implicitHeight: 40
@@ -227,9 +234,9 @@ Item {
 
                     background: Rectangle {
                         radius: 10
-                        color: parent.down
+                        color: rgbControllersFilter.down
                                ? Theme.hover
-                               : (parent.hovered ? Theme.elevated : "transparent")
+                               : (rgbControllersFilter.hovered ? Theme.elevated : "transparent")
 
                         Behavior on color {
                             ColorAnimation {
@@ -259,6 +266,7 @@ Item {
                         }
                     }
                 }
+            }
             }
         }
 
@@ -506,7 +514,7 @@ Item {
 
                         Label {
                             Layout.fillWidth: true
-                            text: model.displayName || ""
+                            text: treeDelegate.model.displayName || ""
                             color: treeDelegate.selectedNode ? Theme.selectionText : Theme.primaryText
                             font.pixelSize: treeDelegate.deviceNode ? 13 : 12
                             font.bold: treeDelegate.deviceNode || treeDelegate.selectedNode
@@ -523,8 +531,8 @@ Item {
 
                         Label {
                             Layout.fillWidth: true
-                            visible: (model.description || "").length > 0
-                            text: model.description || ""
+                            visible: (treeDelegate.model.description || "").length > 0
+                            text: treeDelegate.model.description || ""
                             color: treeDelegate.selectedNode ? Theme.selectionSubText : Theme.secondaryText
                             font.pixelSize: 10
                             elide: Text.ElideRight
@@ -640,7 +648,9 @@ Item {
                         spacing: 2
 
                         ItemDelegate {
-                            visible: treeDelegate.deviceNode && !model.isRgbController
+                            id: registerControllerAction
+
+                            visible: treeDelegate.deviceNode && !treeDelegate.model.isRgbController
                             Layout.fillWidth: true
                             implicitWidth: 228
                             implicitHeight: visible ? 38 : 0
@@ -653,7 +663,9 @@ Item {
 
                             background: Rectangle {
                                 radius: 10
-                                color: parent.down ? Theme.hover : (parent.hovered ? Theme.elevated : "transparent")
+                                color: registerControllerAction.down
+                                       ? Theme.hover
+                                       : (registerControllerAction.hovered ? Theme.elevated : "transparent")
 
                                 Behavior on color {
                                     ColorAnimation {
@@ -664,7 +676,7 @@ Item {
 
                             contentItem: Label {
                                 text: qsTr("Register as RGB controller")
-                                color: parent.enabled ? Theme.primaryText : Theme.secondaryText
+                                color: registerControllerAction.enabled ? Theme.primaryText : Theme.secondaryText
                                 font.pixelSize: 12
                                 verticalAlignment: Text.AlignVCenter
                                 leftPadding: 10
@@ -673,7 +685,9 @@ Item {
                         }
 
                         ItemDelegate {
-                            visible: treeDelegate.deviceNode && model.isRgbController
+                            id: removeControllerAction
+
+                            visible: treeDelegate.deviceNode && treeDelegate.model.isRgbController
                             Layout.fillWidth: true
                             implicitWidth: 228
                             implicitHeight: visible ? 38 : 0
@@ -686,7 +700,9 @@ Item {
 
                             background: Rectangle {
                                 radius: 10
-                                color: parent.down ? Theme.hover : (parent.hovered ? Theme.elevated : "transparent")
+                                color: removeControllerAction.down
+                                       ? Theme.hover
+                                       : (removeControllerAction.hovered ? Theme.elevated : "transparent")
 
                                 Behavior on color {
                                     ColorAnimation {
@@ -697,7 +713,7 @@ Item {
 
                             contentItem: Label {
                                 text: qsTr("Remove from RGB controllers")
-                                color: parent.enabled ? Theme.primaryText : Theme.secondaryText
+                                color: removeControllerAction.enabled ? Theme.primaryText : Theme.secondaryText
                                 font.pixelSize: 12
                                 verticalAlignment: Text.AlignVCenter
                                 leftPadding: 10
@@ -706,7 +722,9 @@ Item {
                         }
 
                         ItemDelegate {
-                            visible: treeDelegate.deviceNode && model.hasRgbControllerOverride
+                            id: resetControllerAction
+
+                            visible: treeDelegate.deviceNode && treeDelegate.model.hasRgbControllerOverride
                             Layout.fillWidth: true
                             implicitWidth: 228
                             implicitHeight: visible ? 38 : 0
@@ -719,7 +737,9 @@ Item {
 
                             background: Rectangle {
                                 radius: 10
-                                color: parent.down ? Theme.hover : (parent.hovered ? Theme.elevated : "transparent")
+                                color: resetControllerAction.down
+                                       ? Theme.hover
+                                       : (resetControllerAction.hovered ? Theme.elevated : "transparent")
 
                                 Behavior on color {
                                     ColorAnimation {
@@ -730,7 +750,7 @@ Item {
 
                             contentItem: Label {
                                 text: qsTr("Reset RGB controller override")
-                                color: parent.enabled ? Theme.primaryText : Theme.secondaryText
+                                color: resetControllerAction.enabled ? Theme.primaryText : Theme.secondaryText
                                 font.pixelSize: 12
                                 verticalAlignment: Text.AlignVCenter
                                 leftPadding: 10

@@ -10,9 +10,11 @@
   </p>
 </div>
 
-**v0.5.5** - Linux-first RGB control built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v0.6.1** - Linux-first RGB control with a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
+
+The Windows 10/11 x64 preview preserves the daemon architecture but is intentionally mock-only: it launches the bundled daemon automatically and does not discover hardware or perform physical RGB writes.
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
@@ -31,8 +33,10 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
 - Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata.
 - ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native breathing/color-cycle/rainbow effects, and All Off.
+- Profile save, load, rename, and delete support with atomic JSON writes and legacy color-only profile compatibility.
+- Persistent Auto/Light/Dark themes, animation and dry-run preferences, start-minimized behavior, and an opt-in Windows VRR flicker workaround.
 - Activity log with structured severity/category entries and console mirroring.
-- Backend capability dialog showing active backend, dry-run state, and supported operations.
+- Backend capability dialog showing daemon connection/version details, active backend, dry-run state, and supported operations.
 
 ## Safety Model
 
@@ -87,6 +91,49 @@ For an unprivileged mock-only development session:
 ./build/lumacore --socket /tmp/lumacore.sock
 ```
 
+## VS Code Development
+
+The repository includes CMake presets, clangd configuration, QML language-server configuration, and recommended VS Code extensions. CMake always writes `build/compile_commands.json`, which clangd uses for the real Qt include paths, compiler flags, and generated headers.
+
+On Linux or in WSL, install the dependencies listed above, open the repository in the WSL VS Code window, and select the `linux-debug` configure preset:
+
+```sh
+cmake --preset linux-debug
+cmake --build --preset linux-debug
+ctest --preset linux-debug
+```
+
+WSL is recommended when working on the Linux discovery and ASUS HID backends because those sources are intentionally excluded from native Windows builds.
+
+For a Qt Online Installer setup on Windows, copy `CMakeUserPresets.json.example` to the ignored `CMakeUserPresets.json`, update `QT_ROOT_DIR` and `MINGW_ROOT`, and select the resulting `windows-local` preset in CMake Tools:
+
+```powershell
+Copy-Item CMakeUserPresets.json.example CMakeUserPresets.json
+cmake --preset windows-local
+cmake --build --preset windows-local
+ctest --preset windows-local
+```
+
+The local preset adds Qt and MinGW to the build environment so clangd can query the compiler for its target and standard-library include paths.
+
+On Windows, launching `lumacore.exe` automatically starts the sibling `lumacore-daemon.exe` with the mock backend. Pass `--no-auto-start-daemon` to disable this behavior. The default local endpoint is a versioned, per-user name beginning with `lumacore-daemon-v1-`.
+
+Create the portable preview ZIP from a Release build with:
+
+```powershell
+.\packaging\windows\package.ps1 -BuildDir .\build
+```
+
+See [docs/windows-preview.md](docs/windows-preview.md) for end-user instructions and preview limitations.
+
+Run the same QML analysis enforced by CI with:
+
+```sh
+cmake --build build --target all_qmllint
+```
+
+If switching the same checkout between native Windows and WSL, remove the generated `build` directory before selecting the other platform's preset because CMake build trees are platform-specific.
+
 Backend overrides:
 
 ```sh
@@ -112,12 +159,16 @@ Run all configured CTest targets after building:
 ctest --test-dir build --output-on-failure
 ```
 
-Current tests cover the `DeviceManager` write gate path and, when the ASUS backend is built, the ASUS Aura HID protocol serializer.
+Current tests cover write confirmation and gating, profile persistence and failure handling,
+auto-backend deduplication, daemon protocol framing and snapshots, option parsing, settings and
+application controllers, daemon launch behavior, and, when the ASUS backend is built, the ASUS
+Aura HID configuration parser and protocol serializer.
 
 ## Project Layout
 
 - `app/` - application startup, version helper, and Qt/QML wiring.
-- `core/` - RGB model, effects, profiles, activity log, backend registry, permission gate, and write gate.
+- `core/` - RGB model, effects, profile storage, activity log, backend registry, permission gate, and write gate.
+- `backends/auto/` - daemon-side hardware/discovery aggregation with mock fallback.
 - `backends/mock/` - safe simulated hardware backend.
 - `backends/daemon/` - GUI-facing backend that talks to `lumacore-daemon`.
 - `backends/linux/` - daemon-only read-only Linux discovery backend.
@@ -129,27 +180,29 @@ Current tests cover the `DeviceManager` write gate path and, when the ASUS backe
 - `docs/` - daemon protocol, ASUS hardware notes, and systemd packaging notes.
 - `packaging/systemd/` - example `lumacore-daemon.service`.
 - `tests/` - focused unit tests.
-- `assets/` - icons and screenshots.
+- `assets/` - icons and screenshots. After editing `assets/icons/lumacore.svg`, run `python scripts/generate-icons.py` (requires PySide6 and Pillow).
 
 ## Profiles
 
-Profiles are JSON files stored in `./profiles` relative to the current working directory when `lumacore` starts. Running `./build/lumacore` from the repository root writes profiles to `profiles/`, which is gitignored.
+Profiles are JSON files stored in `./profiles` relative to the current working directory when `lumacore` starts. Running `./build/lumacore` from the repository root writes profiles to `profiles/`, which is gitignored. Saves use `QSaveFile` for atomic replacement.
 
-Devices match by `id`, zones match by `name`, and colors are loaded from the zone hex color field. Unknown devices or zones are skipped and invalid colors are reported in the activity log.
+Devices match by `id`; zones match by `name` with their stored index as a fallback. Profiles restore zone names, LED counts, colors, effect types, speed, and brightness. Legacy color-only zones still load. Unknown devices or zones are skipped, invalid colors are reported in the activity log, and a profile that matches no available zones is rejected.
 
 ## Documentation
 
 - `docs/daemon/protocol.md` documents the newline-delimited JSON socket protocol.
+- `docs/architecture.md` documents runtime boundaries and stable APIs.
+- `docs/refactor-parity.md` is the behavior-preservation checklist for structural changes.
 - `docs/hardware/asus-aura-hid.md` documents the guarded ASUS Aura HID support and protocol research boundaries.
 - `docs/packaging/systemd.md` documents the example systemd service and backend overrides.
 
 ## Current Gaps
 
-- Automated coverage is still focused; broader profile, mock-backend, UI integration, CI, sanitizers, and warning-policy work remains.
+- Automated coverage is still focused; broader mock-backend and end-to-end UI integration, sanitizers, and warning-policy work remains.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation is documented.
 - Profile validation is minimal.
-- `startMinimized` and `applyOnLaunch` settings are persisted, but launch behavior is not fully wired yet.
-- Full install targets and distribution packaging are not implemented.
+- Applying a selected profile on launch is not implemented yet.
+- Native installers, Linux distribution packages, and full install targets are not implemented; Windows packaging currently produces a portable preview ZIP.
 
 ## License
 

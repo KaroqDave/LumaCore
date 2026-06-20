@@ -4,13 +4,9 @@
 #include "core/WriteGate.h"
 
 #include <QDir>
-#include <QFile>
-#include <QFileInfo>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
-#include <QSaveFile>
 #include <QSettings>
 
 namespace lumacore {
@@ -266,8 +262,8 @@ const ActivityLog& DeviceManager::activityLog() const
 
 bool DeviceManager::updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount, QString* errorMessage)
 {
-    RgbDevice* device = deviceAt(deviceIndex);
-    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+    RgbDevice* device = deviceForZone(deviceIndex, zoneIndex);
+    if (device == nullptr) {
         const QString message = QStringLiteral("Could not update selected zone.");
         if (errorMessage != nullptr) {
             *errorMessage = message;
@@ -353,8 +349,8 @@ bool DeviceManager::setZoneStaticColor(int deviceIndex, int zoneIndex, const Rgb
 
 bool DeviceManager::applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEffect& effect)
 {
-    RgbDevice* device = deviceAt(deviceIndex);
-    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+    RgbDevice* device = deviceForZone(deviceIndex, zoneIndex);
+    if (device == nullptr) {
         m_activityLog.error(LogCategory::Effect, QStringLiteral("Could not apply effect: invalid device or zone."));
         return false;
     }
@@ -520,16 +516,6 @@ void DeviceManager::paintZoneFrame(int deviceIndex, int zoneIndex, const QVector
 bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessage)
 {
     const QString normalizedName = normalizeProfileName(profileName);
-    QDir profilesDir(profilesDirectoryPath());
-    if (!profilesDir.exists() && !profilesDir.mkpath(QStringLiteral("."))) {
-        const QString message = QStringLiteral("Could not create profiles directory: %1").arg(profilesDir.absolutePath());
-        if (errorMessage != nullptr) {
-            *errorMessage = message;
-        }
-        m_activityLog.error(LogCategory::Profile, message);
-        return false;
-    }
-
     QJsonArray devicesJson;
     for (const std::unique_ptr<RgbDevice>& device : m_devices) {
         QJsonArray zonesJson;
@@ -563,23 +549,12 @@ bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessag
         {QStringLiteral("devices"), devicesJson},
     };
 
-    QSaveFile file(profileFilePath(normalizedName));
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        const QString message = QStringLiteral("Could not write profile: %1").arg(file.errorString());
+    QString storeError;
+    if (!m_profileStore.save(normalizedName, root, &storeError)) {
         if (errorMessage != nullptr) {
-            *errorMessage = message;
+            *errorMessage = storeError;
         }
-        m_activityLog.error(LogCategory::Profile, message);
-        return false;
-    }
-
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    if (!file.commit()) {
-        const QString message = QStringLiteral("Could not commit profile: %1").arg(file.errorString());
-        if (errorMessage != nullptr) {
-            *errorMessage = message;
-        }
-        m_activityLog.error(LogCategory::Profile, message);
+        m_activityLog.error(LogCategory::Profile, storeError);
         return false;
     }
 
@@ -590,29 +565,18 @@ bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessag
 bool DeviceManager::loadProfile(const QString& profileName, QString* errorMessage)
 {
     const QString normalizedName = normalizeProfileName(profileName);
-    QFile file(profileFilePath(normalizedName));
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        const QString message = QStringLiteral("Could not open profile: %1").arg(file.errorString());
+    QJsonObject profile;
+    QString storeError;
+    if (!m_profileStore.load(normalizedName, &profile, &storeError)) {
         if (errorMessage != nullptr) {
-            *errorMessage = message;
+            *errorMessage = storeError;
         }
-        m_activityLog.error(LogCategory::Profile, message);
-        return false;
-    }
-
-    QJsonParseError parseError;
-    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
-    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        const QString message = QStringLiteral("Invalid profile JSON: %1").arg(parseError.errorString());
-        if (errorMessage != nullptr) {
-            *errorMessage = message;
-        }
-        m_activityLog.error(LogCategory::Profile, message);
+        m_activityLog.error(LogCategory::Profile, storeError);
         return false;
     }
 
     int appliedZones = 0;
-    const QJsonArray devicesJson = document.object().value(QStringLiteral("devices")).toArray();
+    const QJsonArray devicesJson = profile.value(QStringLiteral("devices")).toArray();
     for (const QJsonValue& deviceValue : devicesJson) {
         const QJsonObject deviceObject = deviceValue.toObject();
         const QString deviceId = deviceObject.value(QStringLiteral("id")).toString();
@@ -695,22 +659,12 @@ bool DeviceManager::loadProfile(const QString& profileName, QString* errorMessag
 bool DeviceManager::deleteProfile(const QString& profileName, QString* errorMessage)
 {
     const QString normalizedName = normalizeProfileName(profileName);
-    QFile file(profileFilePath(normalizedName));
-    if (!file.exists()) {
-        const QString message = QStringLiteral("Profile '%1' does not exist.").arg(normalizedName);
+    QString storeError;
+    if (!m_profileStore.remove(normalizedName, &storeError)) {
         if (errorMessage != nullptr) {
-            *errorMessage = message;
+            *errorMessage = storeError;
         }
-        m_activityLog.error(LogCategory::Profile, message);
-        return false;
-    }
-
-    if (!file.remove()) {
-        const QString message = QStringLiteral("Could not delete profile '%1': %2").arg(normalizedName, file.errorString());
-        if (errorMessage != nullptr) {
-            *errorMessage = message;
-        }
-        m_activityLog.error(LogCategory::Profile, message);
+        m_activityLog.error(LogCategory::Profile, storeError);
         return false;
     }
 
@@ -723,41 +677,16 @@ bool DeviceManager::renameProfile(const QString& oldProfileName, const QString& 
     const QString normalizedOldName = normalizeProfileName(oldProfileName);
     const QString normalizedNewName = normalizeProfileName(newProfileName);
 
-    if (normalizedOldName == normalizedNewName) {
-        const QString message = QStringLiteral("Profile already uses that name.");
+    QString storeError;
+    if (!m_profileStore.rename(normalizedOldName, normalizedNewName, &storeError)) {
         if (errorMessage != nullptr) {
-            *errorMessage = message;
+            *errorMessage = storeError;
         }
-        m_activityLog.warning(LogCategory::Profile, message);
-        return false;
-    }
-
-    QFile oldFile(profileFilePath(normalizedOldName));
-    if (!oldFile.exists()) {
-        const QString message = QStringLiteral("Profile '%1' does not exist.").arg(normalizedOldName);
-        if (errorMessage != nullptr) {
-            *errorMessage = message;
+        if (normalizedOldName == normalizedNewName) {
+            m_activityLog.warning(LogCategory::Profile, storeError);
+        } else {
+            m_activityLog.error(LogCategory::Profile, storeError);
         }
-        m_activityLog.error(LogCategory::Profile, message);
-        return false;
-    }
-
-    QFile newFile(profileFilePath(normalizedNewName));
-    if (newFile.exists()) {
-        const QString message = QStringLiteral("Profile '%1' already exists.").arg(normalizedNewName);
-        if (errorMessage != nullptr) {
-            *errorMessage = message;
-        }
-        m_activityLog.error(LogCategory::Profile, message);
-        return false;
-    }
-
-    if (!oldFile.rename(profileFilePath(normalizedNewName))) {
-        const QString message = QStringLiteral("Could not rename profile: %1").arg(oldFile.errorString());
-        if (errorMessage != nullptr) {
-            *errorMessage = message;
-        }
-        m_activityLog.error(LogCategory::Profile, message);
         return false;
     }
 
@@ -770,19 +699,21 @@ bool DeviceManager::renameProfile(const QString& oldProfileName, const QString& 
 
 QStringList DeviceManager::profileNames() const
 {
-    const QDir profilesDir(profilesDirectoryPath());
-    QStringList names;
-
-    for (const QFileInfo& fileInfo : profilesDir.entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name)) {
-        names.append(fileInfo.completeBaseName());
-    }
-
-    return names;
+    return m_profileStore.names();
 }
 
 QString DeviceManager::profilesDirectoryPath() const
 {
-    return QDir::current().filePath(QStringLiteral("profiles"));
+    return m_profileStore.directoryPath();
+}
+
+RgbDevice* DeviceManager::deviceForZone(int deviceIndex, int zoneIndex)
+{
+    RgbDevice* device = deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return nullptr;
+    }
+    return device;
 }
 
 void DeviceManager::registerDevice(std::unique_ptr<RgbDevice> device)
@@ -829,20 +760,9 @@ QString DeviceManager::rgbControllerOverrideKey(const QString& deviceId)
     return QStringLiteral("discovery/rgbControllerOverrides/%1").arg(normalizedId);
 }
 
-QString DeviceManager::profileFilePath(const QString& profileName) const
-{
-    return QDir(profilesDirectoryPath()).filePath(normalizeProfileName(profileName) + QStringLiteral(".json"));
-}
-
 QString DeviceManager::normalizeProfileName(const QString& profileName)
 {
-    QString normalized = profileName.trimmed();
-    if (normalized.isEmpty()) {
-        normalized = QStringLiteral("default");
-    }
-
-    normalized.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]+")), QStringLiteral("_"));
-    return normalized;
+    return ProfileStore::normalizeName(profileName);
 }
 
 } // namespace lumacore

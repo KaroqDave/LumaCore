@@ -85,11 +85,6 @@ public:
         return devices;
     }
 
-    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> discoverDevices() const override
-    {
-        return createDevices();
-    }
-
     [[nodiscard]] lumacore::PermissionResult probe() const override
     {
         return {lumacore::PermissionStatus::Granted, {}};

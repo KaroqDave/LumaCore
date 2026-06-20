@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
@@ -293,7 +295,7 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    visible: editor.hasSelection && editor.selectedDeviceWriteConfirmed && !appController.dryRunEnabled
+                    visible: editor.hasSelection && editor.selectedDeviceWriteConfirmed && !editor.appController.dryRunEnabled
                     text: qsTr("Hardware writes are confirmed for this daemon session. Use All Off if the controller does not respond as expected.")
                     color: Theme.success
                     font.pixelSize: 12
@@ -382,9 +384,11 @@ Item {
                                 }
                             }
 
-                            NumberAnimation on x {
+                            NumberAnimation {
                                 id: rainbowScrollAnim
 
+                                target: rainbowRow
+                                property: "x"
                                 running: editor.effectType === 1 && editor.animationsEnabled && rainbowClip.visible
                                 from: 0
                                 to: -Math.max(1, previewBar.width)
@@ -394,19 +398,23 @@ Item {
                         }
                     }
 
-                    SequentialAnimation on breath {
+                    SequentialAnimation {
                         id: breathingAnim
 
                         running: editor.effectType === 2 && editor.animationsEnabled
                         loops: Animation.Infinite
 
                         NumberAnimation {
+                            target: previewBar
+                            property: "breath"
                             from: 0.12
                             to: 1.0
                             duration: editor.breathingHalfPeriodMs
                             easing.type: Easing.InOutSine
                         }
                         NumberAnimation {
+                            target: previewBar
+                            property: "breath"
                             from: 1.0
                             to: 0.12
                             duration: editor.breathingHalfPeriodMs
@@ -414,9 +422,11 @@ Item {
                         }
                     }
 
-                    NumberAnimation on cycleHue {
+                    NumberAnimation {
                         id: colorCycleAnim
 
+                        target: previewBar
+                        property: "cycleHue"
                         running: editor.effectType === 3 && editor.animationsEnabled
                         loops: Animation.Infinite
                         from: 0
@@ -589,7 +599,7 @@ Item {
                     AppButton {
                         Layout.fillWidth: true
                         variant: "secondary"
-                        enabled: editor.selectedDeviceWriteConfirmed && !appController.dryRunEnabled
+                        enabled: editor.selectedDeviceWriteConfirmed && !editor.appController.dryRunEnabled
                         text: qsTr("All Off")
                         animationsEnabled: editor.animationsEnabled
                         onClicked: editor.appController.allOffDevice(editor.selectedDeviceIndex)

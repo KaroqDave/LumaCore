@@ -31,7 +31,6 @@ DaemonRgbDevice::DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonCli
     , m_capabilities(capabilitiesFromJson(snapshot.value(QStringLiteral("capabilities")).toArray()))
     , m_permission(permissionResultFromJson(snapshot.value(QStringLiteral("permission")).toObject()))
     , m_writeConfirmed(snapshot.value(QStringLiteral("writeConfirmed")).toBool(false))
-    , m_writeRequiresConfirmation(snapshot.value(QStringLiteral("writeRequiresConfirmation")).toBool(false))
     , m_lastHardwareWriteStatus(snapshot.value(QStringLiteral("lastHardwareWriteStatus")).toString())
     , m_client(std::move(client))
 {
@@ -98,7 +97,7 @@ bool DaemonRgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
         return false;
     }
 
-    const DaemonCallResult result = m_client->call(QStringLiteral("applyEffect"), {
+    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::ApplyEffect), {
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
         {QStringLiteral("zoneIndex"), zoneIndex},
         {QStringLiteral("effect"), effect.toJson()},
@@ -135,7 +134,7 @@ bool DaemonRgbDevice::applyAllOff()
         return false;
     }
 
-    const DaemonCallResult result = m_client->call(QStringLiteral("allOff"), {
+    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::AllOff), {
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
     });
     m_lastHardwareWriteStatus = result.result.value(QStringLiteral("hardwareStatus")).toString(
@@ -160,7 +159,7 @@ bool DaemonRgbDevice::updateZoneMetadata(int zoneIndex, const QString& name, int
         return false;
     }
 
-    const DaemonCallResult result = m_client->call(QStringLiteral("updateZone"), {
+    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::UpdateZone), {
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
         {QStringLiteral("zoneIndex"), zoneIndex},
         {QStringLiteral("name"), name.trimmed()},
@@ -186,7 +185,7 @@ QString DaemonRgbDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect& 
         return {};
     }
 
-    const DaemonCallResult result = m_client->call(QStringLiteral("previewEffect"), {
+    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::PreviewEffect), {
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
         {QStringLiteral("zoneIndex"), zoneIndex},
         {QStringLiteral("effect"), effect.toJson()},
@@ -210,7 +209,8 @@ bool DaemonRgbDevice::writeConfirmed() const
 
 bool DaemonRgbDevice::writeRequiresConfirmation() const
 {
-    return m_writeRequiresConfirmation;
+    return checkRuntimePermission(BackendCapability::ZoneColorWrite).status
+        == PermissionStatus::RequiresConfirmation;
 }
 
 bool DaemonRgbDevice::supportsEffect(int effectType) const

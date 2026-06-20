@@ -38,6 +38,15 @@ QString hexWord(quint16 value)
     return QStringLiteral("%1").arg(static_cast<unsigned int>(value), 4, 16, QLatin1Char('0')).toUpper();
 }
 
+QString usbVidPidKey(const ProbeDevice& device)
+{
+    if (device.vendorId.isEmpty() || device.productId.isEmpty()) {
+        return {};
+    }
+
+    return QStringLiteral("%1:%2").arg(device.vendorId.toUpper(), device.productId.toUpper());
+}
+
 bool isKnownRgbController(const ProbeDevice& device)
 {
     return device.vendorId.compare(QStringLiteral("0B05"), Qt::CaseInsensitive) == 0

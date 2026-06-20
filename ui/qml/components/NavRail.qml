@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -165,6 +167,9 @@ Rectangle {
                 model: rail.navModel
 
                 NavItem {
+                    required property int index
+                    required property var modelData
+
                     Layout.fillWidth: true
                     iconName: modelData.iconName
                     label: modelData.label

@@ -1,7 +1,9 @@
 # Build output
 /build/
+/build-*/
 /cmake-build-*/
 /out/
+/dist/
 
 # Runtime data
 /profiles/
@@ -21,7 +23,6 @@ install-check/
 # Qt / QML
 *.autosave
 .qmake.stash
-.qmlls.ini
 
 # Compiled binaries and objects (outside build/)
 *.o
@@ -35,11 +36,16 @@ install-check/
 
 # IDE and editor
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 *.code-workspace
 *.swp
 *~
 .cache/
+
+# Machine-local CMake paths and presets
+CMakeUserPresets.json
 
 # OS
 .DS_Store

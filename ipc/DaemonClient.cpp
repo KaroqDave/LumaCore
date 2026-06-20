@@ -11,6 +11,7 @@ DaemonClient::DaemonClient(QString socketPath, QObject* parent)
     : QObject(parent)
     , m_socketPath(std::move(socketPath))
 {
+    m_socket.setReadBufferSize(kDaemonMaxFrameBytes);
     connect(&m_socket, &QLocalSocket::disconnected, this, [this] {
         emit connectionStateChanged();
     });
@@ -45,6 +46,18 @@ QString DaemonClient::daemonVersion() const
     return m_daemonVersion;
 }
 
+int DaemonClient::daemonProtocolVersion() const
+{
+    return m_daemonProtocolVersion;
+}
+
+bool DaemonClient::protocolCompatible() const
+{
+    // A value of 0 means the handshake has not reported a protocol version yet, so do not
+    // raise a false mismatch before the daemon has been queried.
+    return m_daemonProtocolVersion == 0 || m_daemonProtocolVersion == kDaemonProtocolVersion;
+}
+
 QString DaemonClient::lastError() const
 {
     return m_lastError;
@@ -69,14 +82,23 @@ void DaemonClient::disconnectFromDaemon()
     emit connectionStateChanged();
 }
 
+void DaemonClient::reportConnectionError(const QString& message)
+{
+    setLastError(message);
+}
+
 DaemonCallResult DaemonClient::call(const QString& method, const QJsonObject& params, int timeoutMs)
 {
+    const quint64 requestId = m_nextRequestId++;
+    const QByteArray payload = encodeDaemonMessage(makeDaemonRequest(requestId, method, params));
+    if (payload.size() > kDaemonMaxFrameBytes) {
+        setLastError(QStringLiteral("LumaCore daemon request exceeds the maximum message size."));
+        return {false, {}, m_lastError};
+    }
     if (!ensureConnected(timeoutMs)) {
         return {false, {}, m_lastError};
     }
 
-    const quint64 requestId = m_nextRequestId++;
-    const QByteArray payload = encodeDaemonMessage(makeDaemonRequest(requestId, method, params));
     if (m_socket.write(payload) != payload.size() || !m_socket.waitForBytesWritten(timeoutMs)) {
         setLastError(QStringLiteral("Could not write to LumaCore daemon: %1").arg(m_socket.errorString()));
         disconnectFromDaemon();
@@ -86,6 +108,9 @@ DaemonCallResult DaemonClient::call(const QString& method, const QJsonObject& pa
     DaemonCallResult result = readResponse(requestId, timeoutMs);
     if (result.ok && result.result.contains(QStringLiteral("daemonVersion"))) {
         setDaemonVersion(result.result.value(QStringLiteral("daemonVersion")).toString());
+    }
+    if (result.ok && result.result.contains(QStringLiteral("protocolVersion"))) {
+        setDaemonProtocolVersion(result.result.value(QStringLiteral("protocolVersion")).toInt());
     }
     if (!result.ok) {
         setLastError(result.error);
@@ -114,6 +139,16 @@ void DaemonClient::setDaemonVersion(const QString& version)
     emit daemonInfoChanged();
 }
 
+void DaemonClient::setDaemonProtocolVersion(int version)
+{
+    if (m_daemonProtocolVersion == version) {
+        return;
+    }
+
+    m_daemonProtocolVersion = version;
+    emit daemonInfoChanged();
+}
+
 bool DaemonClient::ensureConnected(int timeoutMs)
 {
     if (isConnected()) {
@@ -139,6 +174,11 @@ DaemonCallResult DaemonClient::readResponse(quint64 requestId, int timeoutMs)
     while (true) {
         const qsizetype newlineIndex = m_buffer.indexOf('\n');
         if (newlineIndex >= 0) {
+            if (newlineIndex > kDaemonMaxMessageBytes) {
+                disconnectFromDaemon();
+                return {false, {}, QStringLiteral("LumaCore daemon response exceeds the maximum message size.")};
+            }
+
             const QByteArray line = m_buffer.left(newlineIndex);
             m_buffer.remove(0, newlineIndex + 1);
             if (line.trimmed().isEmpty()) {
@@ -163,10 +203,17 @@ DaemonCallResult DaemonClient::readResponse(quint64 requestId, int timeoutMs)
             return {true, object.value(QStringLiteral("result")).toObject(), {}};
         }
 
+        if (m_buffer.size() > kDaemonMaxMessageBytes) {
+            disconnectFromDaemon();
+            return {false, {}, QStringLiteral("LumaCore daemon response exceeds the maximum message size.")};
+        }
+
         if (!m_socket.waitForReadyRead(timeoutMs)) {
             return {false, {}, QStringLiteral("Timed out waiting for LumaCore daemon response.")};
         }
-        m_buffer.append(m_socket.readAll());
+        const qint64 remainingCapacity =
+            static_cast<qint64>(kDaemonMaxFrameBytes) - m_buffer.size();
+        m_buffer.append(m_socket.read(remainingCapacity));
     }
 }
 

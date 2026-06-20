@@ -12,6 +12,7 @@ class LinuxDiscoveredDevice final : public RgbDevice
 public:
     explicit LinuxDiscoveredDevice(const hardware::linux::ProbeDevice& device, QObject* parent = nullptr);
 
+    [[nodiscard]] QString discoveryIdentity() const override;
     [[nodiscard]] const QString& source() const;
     [[nodiscard]] const QString& path() const;
     [[nodiscard]] const QString& details() const;
@@ -25,6 +26,7 @@ public:
     [[nodiscard]] PermissionResult checkRuntimePermission(BackendCapability capability) const override;
 
 private:
+    QString m_discoveryIdentity;
     QString m_source;
     QString m_path;
     QString m_details;

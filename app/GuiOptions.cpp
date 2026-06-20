@@ -1,0 +1,65 @@
+#include "app/GuiOptions.h"
+
+#include "ipc/DaemonProtocol.h"
+
+#include <QCommandLineOption>
+#include <QCommandLineParser>
+#include <QCoreApplication>
+
+namespace lumacore {
+
+namespace {
+
+void configureParser(QCommandLineParser& parser)
+{
+    parser.setApplicationDescription(QStringLiteral("LumaCore RGB controller GUI."));
+    parser.addHelpOption();
+    parser.addVersionOption();
+
+    const QCommandLineOption socketOption(
+        QStringList {QStringLiteral("s"), QStringLiteral("socket")},
+        QStringLiteral("LumaCore daemon local endpoint name or path."),
+        QStringLiteral("endpoint"),
+        defaultDaemonSocketPath()
+    );
+    const QCommandLineOption noAutoStartDaemonOption(
+        QStringLiteral("no-auto-start-daemon"),
+        QStringLiteral("Do not automatically start the bundled daemon when it is unavailable.")
+    );
+    parser.addOption(socketOption);
+    parser.addOption(noAutoStartDaemonOption);
+}
+
+GuiOptions optionsFromParser(const QCommandLineParser& parser)
+{
+    return {
+        .daemonSocketPath = parser.value(QStringLiteral("socket")),
+#ifdef Q_OS_WIN
+        .autoStartDaemon = !parser.isSet(QStringLiteral("no-auto-start-daemon")),
+#else
+        .autoStartDaemon = false,
+#endif
+    };
+}
+
+} // namespace
+
+GuiOptions parseGuiOptions(QCoreApplication& application)
+{
+    QCommandLineParser parser;
+    configureParser(parser);
+    parser.process(application);
+    return optionsFromParser(parser);
+}
+
+GuiOptions parseGuiOptionsArguments(const QStringList& arguments, QString* errorMessage)
+{
+    QCommandLineParser parser;
+    configureParser(parser);
+    if (!parser.parse(arguments) && errorMessage != nullptr) {
+        *errorMessage = parser.errorText();
+    }
+    return optionsFromParser(parser);
+}
+
+} // namespace lumacore

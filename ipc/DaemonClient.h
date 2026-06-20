@@ -27,10 +27,13 @@ public:
 
     [[nodiscard]] bool isConnected() const;
     [[nodiscard]] QString daemonVersion() const;
+    [[nodiscard]] int daemonProtocolVersion() const;
+    [[nodiscard]] bool protocolCompatible() const;
     [[nodiscard]] QString lastError() const;
 
     [[nodiscard]] bool connectToDaemon(int timeoutMs = 1000);
     void disconnectFromDaemon();
+    void reportConnectionError(const QString& message);
     [[nodiscard]] DaemonCallResult call(const QString& method, const QJsonObject& params = {}, int timeoutMs = 2000);
 
 signals:
@@ -41,6 +44,7 @@ signals:
 private:
     void setLastError(const QString& message);
     void setDaemonVersion(const QString& version);
+    void setDaemonProtocolVersion(int version);
     [[nodiscard]] bool ensureConnected(int timeoutMs);
     [[nodiscard]] DaemonCallResult readResponse(quint64 requestId, int timeoutMs);
 
@@ -49,6 +53,7 @@ private:
     QByteArray m_buffer;
     quint64 m_nextRequestId {1};
     QString m_daemonVersion;
+    int m_daemonProtocolVersion {0};
     QString m_lastError;
 };
 

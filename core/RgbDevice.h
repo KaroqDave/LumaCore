@@ -34,6 +34,7 @@ public:
     [[nodiscard]] const QString& vendor() const;
     [[nodiscard]] const QString& backendId() const;
     void setBackendId(const QString& backendId);
+    [[nodiscard]] virtual QString discoveryIdentity() const;
     [[nodiscard]] RgbDeviceType type() const;
     [[nodiscard]] QString typeName() const;
     [[nodiscard]] const QVector<RgbZone>& zones() const;
@@ -57,6 +58,9 @@ public:
     [[nodiscard]] virtual QString lastHardwareWriteStatus() const;
     [[nodiscard]] virtual BackendCapabilities capabilities() const;
     [[nodiscard]] virtual PermissionResult checkRuntimePermission(BackendCapability capability) const;
+    [[nodiscard]] virtual bool supportsEffect(int effectType) const;
+    [[nodiscard]] virtual bool supportsEffectSpeed(int effectType) const;
+    [[nodiscard]] virtual bool supportsEffectBrightness(int effectType) const;
 
     void setZoneEffect(int zoneIndex, const RgbEffect& effect);
     [[nodiscard]] RgbEffect zoneEffect(int zoneIndex) const;

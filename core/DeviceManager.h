@@ -3,6 +3,7 @@
 #include "core/ActivityLog.h"
 #include "core/BackendRegistry.h"
 #include "core/EffectsEngine.h"
+#include "core/ProfileStore.h"
 #include "core/RgbColor.h"
 #include "core/RgbDevice.h"
 #include "core/RgbEffect.h"
@@ -67,18 +68,19 @@ signals:
     void dryRunEnabledChanged();
 
 private:
+    [[nodiscard]] RgbDevice* deviceForZone(int deviceIndex, int zoneIndex);
     void registerDevice(std::unique_ptr<RgbDevice> device);
     void applySavedRgbControllerOverride(RgbDevice& device);
     void saveRgbControllerOverride(const RgbDevice& device);
     void removeRgbControllerOverride(const RgbDevice& device);
     [[nodiscard]] static QString rgbControllerOverrideKey(const QString& deviceId);
-    [[nodiscard]] QString profileFilePath(const QString& profileName) const;
     [[nodiscard]] static QString normalizeProfileName(const QString& profileName);
 
     std::vector<std::unique_ptr<RgbDevice>> m_devices;
     std::unique_ptr<EffectsEngine> m_effectsEngine;
     ActivityLog m_activityLog;
     BackendRegistry m_backendRegistry;
+    ProfileStore m_profileStore;
     QSet<QString> m_confirmedWriteDeviceIds;
     bool m_dryRunEnabled {false};
 };

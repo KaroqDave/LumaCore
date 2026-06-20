@@ -7,6 +7,7 @@ Item {
     id: page
 
     property var settingsController
+    property var appController
     property bool animationsEnabled: true
 
     readonly property var themeOptions: ["Auto", "Light", "Dark"]
@@ -64,6 +65,43 @@ Item {
                     onClicked: {
                         if (page.settingsController) {
                             page.settingsController.animationsEnabled = checked
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                visible: Qt.platform.os === "windows"
+                Layout.fillWidth: true
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Reduce VRR flicker")
+                        color: Theme.primaryText
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Keeps the window drawing at a steady rate so G-Sync/FreeSync displays don't flicker. Enable only if you notice VRR flicker, as this increases GPU and power usage.")
+                        color: Theme.secondaryText
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                AppSwitch {
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    checked: page.settingsController ? page.settingsController.reduceVrrFlicker : false
+                    onClicked: {
+                        if (page.settingsController) {
+                            page.settingsController.reduceVrrFlicker = checked
                         }
                     }
                 }
@@ -147,8 +185,8 @@ Item {
                         if (page.settingsController) {
                             page.settingsController.dryRunEnabled = checked
                         }
-                        if (appController) {
-                            appController.dryRunEnabled = checked
+                        if (page.appController) {
+                            page.appController.dryRunEnabled = checked
                         }
                     }
                 }
@@ -212,12 +250,8 @@ Item {
 
                 AppSwitch {
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    checked: page.settingsController ? page.settingsController.applyOnLaunch : false
-                    onClicked: {
-                        if (page.settingsController) {
-                            page.settingsController.applyOnLaunch = checked
-                        }
-                    }
+                    enabled: false
+                    checked: false
                 }
             }
         }

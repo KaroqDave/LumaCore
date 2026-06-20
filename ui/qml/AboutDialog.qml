@@ -12,6 +12,7 @@ Dialog {
     padding: 24
 
     property bool animationsEnabled: true
+    property var controller
 
     standardButtons: Dialog.NoButton
 
@@ -116,7 +117,9 @@ Dialog {
 
         Label {
             Layout.fillWidth: true
-            text: qsTr("Linux-first RGB control built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This release keeps the GUI unprivileged, routes backend access through the LumaCore daemon, and exposes controller-aware effects for mock, discovery, and ASUS Aura HID devices.")
+            text: Qt.platform.os === "windows"
+                  ? qsTr("Windows Preview built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This preview runs the existing daemon architecture with simulated mock devices only; Windows hardware discovery and RGB writes are not supported.")
+                  : qsTr("Linux-first RGB control built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This release keeps the GUI unprivileged, routes backend access through the LumaCore daemon, and exposes controller-aware effects for mock, discovery, and ASUS Aura HID devices.")
             color: Theme.primaryText
             font.pixelSize: 13
             wrapMode: Text.WordWrap
@@ -134,7 +137,9 @@ Dialog {
                 id: infoPill
 
                 anchors.centerIn: parent
-                text: qsTr("Daemon-backed - session-confirmed ASUS writes")
+                text: Qt.platform.os === "windows"
+                      ? qsTr("Daemon-backed - mock devices only")
+                      : qsTr("Daemon-backed - session-confirmed ASUS writes")
                 color: Theme.pillText
                 font.pixelSize: 12
                 font.bold: true
@@ -143,7 +148,9 @@ Dialog {
 
         Label {
             Layout.fillWidth: true
-            text: qsTr("ASUS Aura HID support uses allowlisted, config-verified packets for static colors and native hardware modes. Unsupported controller parameters are disabled in the effect editor.")
+            text: Qt.platform.os === "windows"
+                  ? qsTr("The Windows Preview is isolated from physical RGB hardware. Effects and profiles operate only on the simulated device.")
+                  : qsTr("ASUS Aura HID support uses allowlisted, config-verified packets for static colors and native hardware modes. Unsupported controller parameters are disabled in the effect editor.")
             color: Theme.secondaryText
             font.pixelSize: 12
             wrapMode: Text.WordWrap
@@ -152,7 +159,7 @@ Dialog {
 
         Label {
             Layout.fillWidth: true
-            text: qsTr("Profiles are stored in %1").arg(appController.profilesDirectory)
+            text: qsTr("Profiles are stored in %1").arg(dialog.controller ? dialog.controller.profilesDirectory : "")
             color: Theme.secondaryText
             font.pixelSize: 12
             wrapMode: Text.WordWrap
