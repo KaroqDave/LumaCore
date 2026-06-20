@@ -78,6 +78,7 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_RC_COMPILER "${_lumacore_windres_wrapper}")
 endif()
 
+qt_add_executable(lumacore MANUAL_FINALIZATION)
 add_subdirectory(app)
 
 set_source_files_properties(ui/qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
