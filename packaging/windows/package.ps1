@@ -141,6 +141,30 @@ if ($daemonDeployExit -ne 0) {
     throw "windeployqt failed for lumacore-daemon.exe with exit code $daemonDeployExit."
 }
 
+# windeployqt --compiler-runtime can copy MinGW runtime DLLs that do not match the
+# compiler CMake actually built with. When Qt ships an older bundled toolchain than the
+# standalone MinGW used for the build (e.g. Qt 6.7.3's GCC 11 runtime vs. a GCC 13
+# build), the deployed libstdc++ is missing newer symbols and the GUI fails to start
+# with STATUS_ENTRYPOINT_NOT_FOUND (0xC0000139). Overwrite the runtime with the build
+# compiler's own DLLs so the package matches the binaries.
+$cmakeCache = Join-Path $resolvedBuildDir "CMakeCache.txt"
+if (Test-Path -LiteralPath $cmakeCache) {
+    $compilerMatch = Select-String -LiteralPath $cmakeCache -Pattern '^CMAKE_CXX_COMPILER:[^=]*=(.+)$' |
+        Select-Object -First 1
+    if ($compilerMatch) {
+        $compilerBin = Split-Path -Parent $compilerMatch.Matches[0].Groups[1].Value
+        foreach ($runtimeDll in @("libstdc++-6.dll", "libgcc_s_seh-1.dll", "libwinpthread-1.dll")) {
+            $runtimeSource = Join-Path $compilerBin $runtimeDll
+            if (Test-Path -LiteralPath $runtimeSource) {
+                Copy-Item -LiteralPath $runtimeSource -Destination $stageDir -Force
+                Write-Host "Synced MinGW runtime $runtimeDll from $compilerBin"
+            }
+        }
+    } else {
+        Write-Host "Note: CMAKE_CXX_COMPILER not found in CMakeCache.txt; left deployed runtime as-is."
+    }
+}
+
 foreach ($requiredPath in @(
     "lumacore.exe",
     "lumacore-daemon.exe",
