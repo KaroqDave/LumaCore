@@ -1,17 +1,25 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import LumaCore
 import "components"
 
 ApplicationWindow {
     id: root
 
+    required property var deviceTreeModel
+    required property var appController
+    required property var settingsController
+    required property bool startMinimized
+
     width: 1180
     height: 760
     minimumWidth: 920
     minimumHeight: 620
-    visible: true
+    // Resolve the launch window state declaratively so it is applied during component
+    // completion, before the window is first shown, rather than minimizing after the fact.
+    visibility: root.startMinimized ? Window.Minimized : Window.Windowed
     title: qsTr("LumaCore")
     color: Theme.window
 
@@ -21,8 +29,8 @@ ApplicationWindow {
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
     property real sidebarWidth: sidebarCollapsed ? 74 : 248
-    readonly property var controller: appController
-    readonly property var settings: settingsController
+    readonly property var controller: root.appController
+    readonly property var settings: root.settingsController
     readonly property bool animationsEnabled: settings.animationsEnabled
     readonly property int animationDuration: animationsEnabled ? 180 : 0
 
@@ -65,7 +73,6 @@ ApplicationWindow {
         }
 
         selectedDeviceIndex = deviceIndex
-        zoneModel.deviceIndex = deviceIndex
         selectedZoneIndex = controller.zoneCount(deviceIndex) > 0 ? 0 : -1
         if (selectedZoneIndex >= 0) {
             selectedColor = controller.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex)
@@ -79,7 +86,6 @@ ApplicationWindow {
 
         selectedDeviceIndex = deviceIndex
         selectedZoneIndex = zoneIndex
-        zoneModel.deviceIndex = deviceIndex
         selectedColor = controller.zoneEffectColor(deviceIndex, zoneIndex)
     }
 
@@ -103,6 +109,7 @@ ApplicationWindow {
         id: aboutDialog
 
         parent: Overlay.overlay
+        controller: root.controller
         animationsEnabled: root.animationsEnabled
     }
 
@@ -233,6 +240,37 @@ ApplicationWindow {
                 }
             }
 
+            Rectangle {
+                visible: Qt.platform.os === "windows"
+                Layout.fillWidth: true
+                Layout.preferredHeight: visible ? 48 : 0
+                radius: 14
+                color: Theme.warningBg
+                border.color: Theme.warning
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 10
+
+                    NavIcon {
+                        name: "info"
+                        color: Theme.warning
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Windows Preview: Mock devices only—hardware discovery and RGB writes are not supported.")
+                        color: Theme.primaryText
+                        font.pixelSize: 12
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
             StackLayout {
                 id: pages
 
@@ -254,7 +292,7 @@ ApplicationWindow {
                             DeviceTreePanel {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                treeModel: deviceTreeModel
+                                treeModel: root.deviceTreeModel
                                 appController: root.controller
                                 selectedDeviceIndex: root.selectedDeviceIndex
                                 selectedZoneIndex: root.selectedZoneIndex
@@ -323,6 +361,7 @@ ApplicationWindow {
                             width: settingsScroll.availableWidth
                             height: Math.max(implicitHeight, settingsScroll.availableHeight)
                             settingsController: root.settings
+                            appController: root.controller
                             animationsEnabled: root.animationsEnabled
                         }
                     }

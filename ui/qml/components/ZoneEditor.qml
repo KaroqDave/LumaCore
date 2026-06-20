@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
@@ -293,7 +295,7 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    visible: editor.hasSelection && editor.selectedDeviceWriteConfirmed && !appController.dryRunEnabled
+                    visible: editor.hasSelection && editor.selectedDeviceWriteConfirmed && !editor.appController.dryRunEnabled
                     text: qsTr("Hardware writes are confirmed for this daemon session. Use All Off if the controller does not respond as expected.")
                     color: Theme.success
                     font.pixelSize: 12
@@ -589,7 +591,7 @@ Item {
                     AppButton {
                         Layout.fillWidth: true
                         variant: "secondary"
-                        enabled: editor.selectedDeviceWriteConfirmed && !appController.dryRunEnabled
+                        enabled: editor.selectedDeviceWriteConfirmed && !editor.appController.dryRunEnabled
                         text: qsTr("All Off")
                         animationsEnabled: editor.animationsEnabled
                         onClicked: editor.appController.allOffDevice(editor.selectedDeviceIndex)

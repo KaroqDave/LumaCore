@@ -1,0 +1,32 @@
+{
+  "version": 5,
+  "include": [
+    "CMakePresets.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "windows-local",
+      "displayName": "Windows / Local Qt",
+      "inherits": "windows-mingw",
+      "environment": {
+        "QT_ROOT_DIR": "C:/Qt/6.x.x/mingw_64",
+        "MINGW_ROOT": "C:/Qt/Tools/mingwxxxx_64"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-local",
+      "configurePreset": "windows-local"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-local",
+      "configurePreset": "windows-local",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

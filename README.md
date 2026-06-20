@@ -10,9 +10,11 @@
   </p>
 </div>
 
-**v0.5.5** - Linux-first RGB control built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v0.5.5** - Linux-first RGB control with an initial Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
+
+The Windows 10/11 x64 preview preserves the daemon architecture but is intentionally mock-only: it launches the bundled daemon automatically and does not discover hardware or perform physical RGB writes.
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
@@ -87,6 +89,49 @@ For an unprivileged mock-only development session:
 ./build/lumacore --socket /tmp/lumacore.sock
 ```
 
+## VS Code Development
+
+The repository includes CMake presets, clangd configuration, QML language-server configuration, and recommended VS Code extensions. CMake always writes `build/compile_commands.json`, which clangd uses for the real Qt include paths, compiler flags, and generated headers.
+
+On Linux or in WSL, install the dependencies listed above, open the repository in the WSL VS Code window, and select the `linux-debug` configure preset:
+
+```sh
+cmake --preset linux-debug
+cmake --build --preset linux-debug
+ctest --preset linux-debug
+```
+
+WSL is recommended when working on the Linux discovery and ASUS HID backends because those sources are intentionally excluded from native Windows builds.
+
+For a Qt Online Installer setup on Windows, copy `CMakeUserPresets.json.example` to the ignored `CMakeUserPresets.json`, update `QT_ROOT_DIR` and `MINGW_ROOT`, and select the resulting `windows-local` preset in CMake Tools:
+
+```powershell
+Copy-Item CMakeUserPresets.json.example CMakeUserPresets.json
+cmake --preset windows-local
+cmake --build --preset windows-local
+ctest --preset windows-local
+```
+
+The local preset adds Qt and MinGW to the build environment so clangd can query the compiler for its target and standard-library include paths.
+
+On Windows, launching `lumacore.exe` automatically starts the sibling `lumacore-daemon.exe` with the mock backend. Pass `--no-auto-start-daemon` to disable this behavior. The default local endpoint is a versioned, per-user name beginning with `lumacore-daemon-v1-`.
+
+Create the portable preview ZIP from a Release build with:
+
+```powershell
+.\packaging\windows\package.ps1 -BuildDir .\build
+```
+
+See [docs/windows-preview.md](docs/windows-preview.md) for end-user instructions and preview limitations.
+
+Run the same QML analysis enforced by CI with:
+
+```sh
+cmake --build build --target all_qmllint
+```
+
+If switching the same checkout between native Windows and WSL, remove the generated `build` directory before selecting the other platform's preset because CMake build trees are platform-specific.
+
 Backend overrides:
 
 ```sh
@@ -129,7 +174,7 @@ Current tests cover the `DeviceManager` write gate path and, when the ASUS backe
 - `docs/` - daemon protocol, ASUS hardware notes, and systemd packaging notes.
 - `packaging/systemd/` - example `lumacore-daemon.service`.
 - `tests/` - focused unit tests.
-- `assets/` - icons and screenshots.
+- `assets/` - icons and screenshots. After editing `assets/icons/lumacore.svg`, run `python scripts/generate-icons.py` (requires PySide6 and Pillow).
 
 ## Profiles
 

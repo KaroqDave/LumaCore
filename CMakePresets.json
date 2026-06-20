@@ -1,0 +1,63 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "windows-mingw",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "PATH": "$env{MINGW_ROOT}/bin;$env{QT_ROOT_DIR}/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "$env{QT_ROOT_DIR}",
+        "CMAKE_CXX_COMPILER": "$env{MINGW_ROOT}/bin/g++.exe"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux / WSL Debug",
+      "description": "Uses the system C++ compiler and Qt development packages.",
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

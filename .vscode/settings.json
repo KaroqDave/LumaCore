@@ -1,0 +1,11 @@
+{
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": true,
+  "clangd.arguments": [
+    "--query-driver=C:/Qt/Tools/**/bin/g++.exe,/usr/bin/g++,/usr/bin/clang++"
+  ],
+  "qt-qml.qmlls.additionalImportPaths": [
+    "${workspaceFolder}/build"
+  ]
+}

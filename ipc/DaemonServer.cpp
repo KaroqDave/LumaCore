@@ -3,11 +3,31 @@
 #include "app/Version.h"
 #include "ipc/DaemonProtocol.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QLockFile>
+#include <QtGlobal>
+
+namespace {
+
+#ifdef Q_OS_WIN
+QString endpointLockPath(const QString& socketPath)
+{
+    const QByteArray endpointHash = QCryptographicHash::hash(
+        socketPath.toLower().toUtf8(),
+        QCryptographicHash::Sha256
+    ).toHex();
+    return QDir(QDir::tempPath()).filePath(
+        QStringLiteral("lumacore-daemon-%1.lock").arg(QString::fromLatin1(endpointHash))
+    );
+}
+#endif
+
+} // namespace
 
 namespace lumacore {
 
@@ -18,11 +38,31 @@ DaemonServer::DaemonServer(DeviceManager* deviceManager, QObject* parent)
     connect(&m_server, &QLocalServer::newConnection, this, &DaemonServer::handleNewConnection);
 }
 
+DaemonServer::~DaemonServer()
+{
+    close();
+}
+
 bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
 {
     close();
     m_socketPath = socketPath.isEmpty() ? defaultDaemonSocketPath() : socketPath;
+    m_acceptedConnection = false;
 
+#ifdef Q_OS_WIN
+    m_endpointLock = std::make_unique<QLockFile>(endpointLockPath(m_socketPath));
+    m_endpointLock->setStaleLockTime(0);
+    if (!m_endpointLock->tryLock(0)) {
+        const QString message = QStringLiteral(
+            "Another LumaCore daemon is already using endpoint %1."
+        ).arg(m_socketPath);
+        if (errorMessage != nullptr) {
+            *errorMessage = message;
+        }
+        m_endpointLock.reset();
+        return false;
+    }
+#else
     const QFileInfo socketInfo(m_socketPath);
     QDir socketDir(socketInfo.absolutePath());
     if (!socketDir.exists() && !socketDir.mkpath(QStringLiteral("."))) {
@@ -32,18 +72,24 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
         }
         return false;
     }
+#endif
 
     QLocalServer::removeServer(m_socketPath);
+#ifdef Q_OS_WIN
+    m_server.setSocketOptions(QLocalServer::UserAccessOption);
+#else
     m_server.setSocketOptions(
         QLocalServer::UserAccessOption
         | QLocalServer::GroupAccessOption
         | QLocalServer::OtherAccessOption
     );
+#endif
     if (!m_server.listen(m_socketPath)) {
         const QString message = QStringLiteral("Could not listen on %1: %2").arg(m_socketPath, m_server.errorString());
         if (errorMessage != nullptr) {
             *errorMessage = message;
         }
+        m_endpointLock.reset();
         return false;
     }
 
@@ -52,6 +98,7 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
 
 void DaemonServer::close()
 {
+    m_closing = true;
     for (QLocalSocket* socket : m_buffers.keys()) {
         if (socket != nullptr) {
             socket->disconnectFromServer();
@@ -65,6 +112,8 @@ void DaemonServer::close()
     if (!m_socketPath.isEmpty()) {
         QLocalServer::removeServer(m_socketPath);
     }
+    m_endpointLock.reset();
+    m_closing = false;
 }
 
 QString DaemonServer::socketPath() const
@@ -72,9 +121,16 @@ QString DaemonServer::socketPath() const
     return m_socketPath;
 }
 
+void DaemonServer::setExitWhenIdle(bool enabled)
+{
+    m_exitWhenIdle = enabled;
+}
+
 void DaemonServer::handleNewConnection()
 {
     while (QLocalSocket* socket = m_server.nextPendingConnection()) {
+        m_acceptedConnection = true;
+        socket->setReadBufferSize(kDaemonMaxFrameBytes);
         m_buffers.insert(socket, {});
         connect(socket, &QLocalSocket::readyRead, this, [this, socket] {
             handleReadyRead(socket);
@@ -91,12 +147,37 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
         return;
     }
 
-    QByteArray& buffer = m_buffers[socket];
-    buffer.append(socket->readAll());
-
     while (true) {
+        // Re-resolve the buffer every iteration: writing/flushing a response or
+        // disconnecting can synchronously emit disconnected(), which runs
+        // handleDisconnected() and erases this socket's entry, invalidating the
+        // reference. Bail out as soon as the socket is no longer tracked.
+        const auto bufferIt = m_buffers.find(socket);
+        if (bufferIt == m_buffers.end()) {
+            return;
+        }
+        QByteArray& buffer = bufferIt.value();
+
         const qsizetype newlineIndex = buffer.indexOf('\n');
         if (newlineIndex < 0) {
+            if (buffer.size() > kDaemonMaxMessageBytes) {
+                buffer.clear();
+                socket->disconnectFromServer();
+                return;
+            }
+
+            const qint64 remainingCapacity =
+                static_cast<qint64>(kDaemonMaxFrameBytes) - buffer.size();
+            if (socket->bytesAvailable() > 0 && remainingCapacity > 0) {
+                buffer.append(socket->read(remainingCapacity));
+                continue;
+            }
+            return;
+        }
+
+        if (newlineIndex > kDaemonMaxMessageBytes) {
+            buffer.clear();
+            socket->disconnectFromServer();
             return;
         }
 
@@ -118,7 +199,12 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
             response = handleRequest(request);
         }
 
-        socket->write(encodeDaemonMessage(response));
+        QByteArray encodedResponse = encodeDaemonMessage(response);
+        if (encodedResponse.size() > kDaemonMaxFrameBytes) {
+            encodedResponse =
+                encodeDaemonMessage(makeDaemonError(requestId, QStringLiteral("Daemon response exceeds the maximum message size.")));
+        }
+        socket->write(encodedResponse);
         socket->flush();
     }
 }
@@ -129,20 +215,26 @@ void DaemonServer::handleDisconnected(QLocalSocket* socket)
     if (socket != nullptr) {
         socket->deleteLater();
     }
+    if (!m_closing && m_exitWhenIdle && m_acceptedConnection && m_buffers.isEmpty()) {
+        emit idleExitRequested();
+    }
 }
 
 QJsonObject DaemonServer::handleRequest(const QJsonObject& request)
 {
     const quint64 requestId = request.value(QStringLiteral("id")).toString().toULongLong();
-    if (request.value(QStringLiteral("version")).toInt() != kDaemonProtocolVersion) {
-        return makeDaemonError(requestId, QStringLiteral("Unsupported daemon protocol version."));
-    }
-
     const QString method = request.value(QStringLiteral("method")).toString();
     const QJsonObject params = request.value(QStringLiteral("params")).toObject();
 
+    // Answer the hello/status handshake regardless of the request's protocol version so a
+    // client running a different protocol can read protocolVersion and surface a clear
+    // mismatch instead of every call failing opaquely.
     if (method == QStringLiteral("hello") || method == QStringLiteral("status")) {
         return makeDaemonResult(requestId, statusPayload());
+    }
+
+    if (request.value(QStringLiteral("version")).toInt() != kDaemonProtocolVersion) {
+        return makeDaemonError(requestId, QStringLiteral("Unsupported daemon protocol version."));
     }
     if (method == QStringLiteral("listDevices")) {
         return makeDaemonResult(requestId, listDevicesPayload());
@@ -180,6 +272,7 @@ QJsonObject DaemonServer::statusPayload() const
     const BackendDescriptor descriptor = m_deviceManager == nullptr ? BackendDescriptor {} : m_deviceManager->backendRegistry().activeDescriptor();
     return {
         {QStringLiteral("daemonVersion"), applicationVersion()},
+        {QStringLiteral("protocolVersion"), kDaemonProtocolVersion},
         {QStringLiteral("socketPath"), m_socketPath},
         {QStringLiteral("backend"), backendDescriptorToJson(descriptor)},
         {QStringLiteral("deviceCount"), m_deviceManager == nullptr ? 0 : m_deviceManager->deviceCount()},

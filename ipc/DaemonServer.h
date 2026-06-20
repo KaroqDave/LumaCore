@@ -10,6 +10,10 @@
 #include <QHash>
 #include <QString>
 
+#include <memory>
+
+class QLockFile;
+
 namespace lumacore {
 
 class DaemonServer final : public QObject
@@ -18,10 +22,15 @@ class DaemonServer final : public QObject
 
 public:
     explicit DaemonServer(DeviceManager* deviceManager, QObject* parent = nullptr);
+    ~DaemonServer() override;
 
     [[nodiscard]] bool listen(const QString& socketPath, QString* errorMessage = nullptr);
     void close();
     [[nodiscard]] QString socketPath() const;
+    void setExitWhenIdle(bool enabled);
+
+signals:
+    void idleExitRequested();
 
 private:
     void handleNewConnection();
@@ -44,6 +53,10 @@ private:
     QLocalServer m_server;
     QString m_socketPath;
     QHash<QLocalSocket*, QByteArray> m_buffers;
+    std::unique_ptr<QLockFile> m_endpointLock;
+    bool m_exitWhenIdle {false};
+    bool m_acceptedConnection {false};
+    bool m_closing {false};
 };
 
 } // namespace lumacore

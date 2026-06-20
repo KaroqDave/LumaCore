@@ -39,6 +39,11 @@ AsusAuraHidDevice::AsusAuraHidDevice(
     initializeZones();
 }
 
+QString AsusAuraHidDevice::discoveryIdentity() const
+{
+    return hardware::linux::usbVidPidKey(m_device);
+}
+
 void AsusAuraHidDevice::initializeZones()
 {
     const RgbColor previewColors[] = {

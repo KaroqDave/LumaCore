@@ -50,7 +50,7 @@ bool isAllowedAuraDevice(const hardware::linux::ProbeDevice& device)
 
 QString physicalControllerKey(const hardware::linux::ProbeDevice& device)
 {
-    return QStringLiteral("%1:%2").arg(device.vendorId.toUpper(), device.productId.toUpper());
+    return hardware::linux::usbVidPidKey(device);
 }
 
 QString interfaceSummary(const hardware::linux::ProbeDevice& device)

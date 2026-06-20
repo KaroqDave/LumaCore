@@ -34,6 +34,7 @@ public:
     [[nodiscard]] const QString& vendor() const;
     [[nodiscard]] const QString& backendId() const;
     void setBackendId(const QString& backendId);
+    [[nodiscard]] virtual QString discoveryIdentity() const;
     [[nodiscard]] RgbDeviceType type() const;
     [[nodiscard]] QString typeName() const;
     [[nodiscard]] const QVector<RgbZone>& zones() const;

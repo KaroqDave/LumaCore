@@ -20,6 +20,7 @@ public:
         QObject* parent = nullptr
     );
 
+    [[nodiscard]] QString discoveryIdentity() const override;
     [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const RgbColor& color) override;
     [[nodiscard]] bool applyZoneEffect(int zoneIndex, const RgbEffect& effect) override;
     [[nodiscard]] bool applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors) override;

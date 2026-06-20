@@ -1,12 +1,28 @@
 #include "ipc/DaemonProtocol.h"
 
+#include <QCryptographicHash>
+#include <QDir>
 #include <QJsonDocument>
+#include <QStandardPaths>
+#include <QtGlobal>
 
 namespace lumacore {
 
 QString defaultDaemonSocketPath()
 {
+#ifdef Q_OS_WIN
+    QString userScope = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (userScope.isEmpty()) {
+        userScope = QDir::homePath();
+    }
+    const QByteArray userHash = QCryptographicHash::hash(
+        QDir::cleanPath(userScope).toLower().toUtf8(),
+        QCryptographicHash::Sha256
+    ).toHex().left(12);
+    return QStringLiteral("lumacore-daemon-v1-%1").arg(QString::fromLatin1(userHash));
+#else
     return QStringLiteral("/run/lumacore/lumacore.sock");
+#endif
 }
 
 QByteArray encodeDaemonMessage(const QJsonObject& message)

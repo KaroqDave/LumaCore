@@ -22,7 +22,7 @@ private:
     mutable BackendDescriptor m_descriptor {
         QStringLiteral("daemon"),
         QStringLiteral("LumaCore Daemon"),
-        QStringLiteral("Privileged LumaCore daemon over a local Unix socket."),
+        QStringLiteral("LumaCore daemon over a local IPC endpoint."),
         BackendCapability::DiscoveryRead | BackendCapability::ZoneColorWrite | BackendCapability::ZoneEffectWrite,
     };
 };

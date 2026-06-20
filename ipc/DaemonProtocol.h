@@ -14,6 +14,8 @@
 namespace lumacore {
 
 inline constexpr int kDaemonProtocolVersion = 1;
+inline constexpr int kDaemonMaxMessageBytes = 1024 * 1024;
+inline constexpr int kDaemonMaxFrameBytes = kDaemonMaxMessageBytes + 1;
 
 [[nodiscard]] QString defaultDaemonSocketPath();
 

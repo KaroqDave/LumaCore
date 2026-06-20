@@ -1,13 +1,15 @@
 # Daemon Protocol
 
-`lumacore` talks to `lumacore-daemon` over a local Unix domain socket. Messages are newline-delimited JSON objects with protocol version `1`.
+`lumacore` talks to `lumacore-daemon` over a local IPC endpoint. Messages are newline-delimited JSON objects with protocol version `1`.
+Each request or response is limited to 1 MiB. Oversized requests are rejected by closing the connection. The daemon replaces oversized responses with a matching protocol error; the client closes the connection if a peer sends an oversized response.
 
 ## Boundary
 
 - `lumacore` is the unprivileged Qt Quick GUI.
 - `lumacore-daemon` owns hardware-facing backends and chooses the active backend.
-- The default socket path is `/run/lumacore/lumacore.sock`; both binaries accept `--socket` to override it.
+- Linux defaults to `/run/lumacore/lumacore.sock`; Windows uses a versioned, per-user name beginning with `lumacore-daemon-v1-`. Both binaries accept `--socket` to override the endpoint.
 - The daemon default backend is `auto`, which aggregates verified ASUS Aura HID control with read-only Linux discovery inventory, then falls back to mock.
+- On Windows Preview builds, the GUI starts the sibling daemon with `--backend mock --exit-on-disconnect` unless `--no-auto-start-daemon` is supplied. The endpoint is restricted to the current Windows user.
 
 ## Request Shape
 
@@ -21,7 +23,7 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 
 ## Methods
 
-- `hello` / `status` returns daemon version, socket path, active backend descriptor, device count, and dry-run state.
+- `hello` / `status` returns daemon version, protocol version, socket path, active backend descriptor, device count, and dry-run state. The daemon answers this handshake regardless of the request's protocol version so the client can detect a version mismatch and surface it instead of failing opaquely; all other methods still require a matching `version`.
 - `listDevices` returns the status payload plus device and zone data.
 - `previewEffect` returns backend-specific dry-run preview text for one zone/effect.
 - `applyEffect` applies a static color or effect through `DeviceManager`, `WriteGate`, and the active backend.

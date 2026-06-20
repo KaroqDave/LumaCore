@@ -24,6 +24,22 @@ void SettingsController::setAnimationsEnabled(bool enabled)
     emit animationsEnabledChanged();
 }
 
+bool SettingsController::reduceVrrFlicker() const
+{
+    return m_reduceVrrFlicker;
+}
+
+void SettingsController::setReduceVrrFlicker(bool enabled)
+{
+    if (m_reduceVrrFlicker == enabled) {
+        return;
+    }
+
+    m_reduceVrrFlicker = enabled;
+    m_settings.setValue(QStringLiteral("ui/reduceVrrFlicker"), enabled);
+    emit reduceVrrFlickerChanged();
+}
+
 bool SettingsController::startMinimized() const
 {
     return m_startMinimized;
@@ -115,6 +131,7 @@ void SettingsController::setTheme(const QString& theme)
 void SettingsController::load()
 {
     m_animationsEnabled = m_settings.value(QStringLiteral("ui/animationsEnabled"), true).toBool();
+    m_reduceVrrFlicker = m_settings.value(QStringLiteral("ui/reduceVrrFlicker"), true).toBool();
     m_startMinimized = m_settings.value(QStringLiteral("startup/startMinimized"), false).toBool();
     m_applyOnLaunch = m_settings.value(QStringLiteral("startup/applyOnLaunch"), false).toBool();
     m_dryRunEnabled = m_settings.value(QStringLiteral("safety/dryRunEnabled"), false).toBool();

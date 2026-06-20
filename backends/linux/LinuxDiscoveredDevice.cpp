@@ -4,6 +4,7 @@ namespace lumacore {
 
 LinuxDiscoveredDevice::LinuxDiscoveredDevice(const hardware::linux::ProbeDevice& device, QObject* parent)
     : RgbDevice(device.id, device.name, device.vendor, device.type, parent)
+    , m_discoveryIdentity(hardware::linux::usbVidPidKey(device))
     , m_source(device.source)
     , m_path(device.path)
     , m_details(device.details)
@@ -11,6 +12,11 @@ LinuxDiscoveredDevice::LinuxDiscoveredDevice(const hardware::linux::ProbeDevice&
     setLikelyRgbController(hardware::linux::isLikelyRgbController(device));
     mutableZones().append(RgbZone(QStringLiteral("Read-only discovery"), RgbZoneType::Unknown, 1, RgbColor(96, 96, 96)));
     mutableZones()[0].setEffect(RgbEffect(RgbEffectType::Static, RgbColor(96, 96, 96)));
+}
+
+QString LinuxDiscoveredDevice::discoveryIdentity() const
+{
+    return m_discoveryIdentity;
 }
 
 const QString& LinuxDiscoveredDevice::source() const

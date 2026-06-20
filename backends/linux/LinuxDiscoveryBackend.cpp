@@ -36,14 +36,6 @@ QString providerSummary()
     return providers.isEmpty() ? QStringLiteral("no providers compiled in") : providers.join(QStringLiteral(", "));
 }
 
-QString deviceVidPidKey(const hardware::linux::ProbeDevice& device)
-{
-    if (device.vendorId.isEmpty() || device.productId.isEmpty()) {
-        return {};
-    }
-    return QStringLiteral("%1:%2").arg(device.vendorId.toUpper(), device.productId.toUpper());
-}
-
 } // namespace
 
 BackendDescriptor LinuxDiscoveryBackend::descriptor() const
@@ -73,7 +65,7 @@ std::vector<std::unique_ptr<RgbDevice>> LinuxDiscoveryBackend::discoverDevices()
         }
 
         for (const hardware::linux::ProbeDevice& probeDevice : result.devices) {
-            const QString vidPid = deviceVidPidKey(probeDevice);
+            const QString vidPid = hardware::linux::usbVidPidKey(probeDevice);
             if (probeDevice.source == QStringLiteral("hidapi") && !vidPid.isEmpty()) {
                 seenHidVidPid.insert(vidPid);
             } else if (probeDevice.source == QStringLiteral("libusb") && !vidPid.isEmpty() && seenHidVidPid.contains(vidPid)) {

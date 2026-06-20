@@ -160,12 +160,20 @@ int AppController::backendDeviceCount() const
 
 bool AppController::daemonConnected() const
 {
-    return m_daemonClient != nullptr && m_daemonClient->isConnected();
+    return m_daemonClient != nullptr
+        && m_daemonClient->isConnected()
+        && m_daemonClient->protocolCompatible();
 }
 
 QString AppController::daemonState() const
 {
-    return daemonConnected() ? QStringLiteral("Connected") : QStringLiteral("Disconnected");
+    if (m_daemonClient == nullptr || !m_daemonClient->isConnected()) {
+        return QStringLiteral("Disconnected");
+    }
+    if (!m_daemonClient->protocolCompatible()) {
+        return QStringLiteral("Incompatible daemon");
+    }
+    return QStringLiteral("Connected");
 }
 
 QString AppController::daemonSocketPath() const
@@ -196,11 +204,6 @@ void AppController::setDryRunEnabled(bool enabled)
 
     m_deviceManager->setDryRunEnabled(enabled);
     syncDaemonDryRun();
-}
-
-bool AppController::applyStaticColor(int deviceIndex, int zoneIndex, const QColor& color)
-{
-    return applyEffect(deviceIndex, zoneIndex, static_cast<int>(RgbEffectType::Static), color, 1.0, 100);
 }
 
 bool AppController::applyEffect(int deviceIndex, int zoneIndex, int effectType, const QColor& color, double speed, int brightness)
@@ -491,24 +494,6 @@ bool AppController::allOffDevice(int deviceIndex)
     return true;
 }
 
-bool AppController::deviceIsRgbController(int deviceIndex) const
-{
-    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
-    return device != nullptr && device->isRgbController();
-}
-
-bool AppController::deviceHasRgbControllerOverride(int deviceIndex) const
-{
-    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
-    return device != nullptr && device->hasRgbControllerOverride();
-}
-
-bool AppController::deviceRgbControllerOverride(int deviceIndex) const
-{
-    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
-    return device != nullptr && device->rgbControllerOverride();
-}
-
 bool AppController::markDeviceRgbController(int deviceIndex)
 {
     if (m_deviceManager == nullptr || !m_deviceManager->markDeviceRgbController(deviceIndex, true)) {
@@ -555,16 +540,6 @@ QString AppController::zoneName(int deviceIndex, int zoneIndex) const
     return device->zones().at(zoneIndex).name();
 }
 
-QString AppController::zoneTypeName(int deviceIndex, int zoneIndex) const
-{
-    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
-    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
-        return {};
-    }
-
-    return device->zones().at(zoneIndex).typeName();
-}
-
 int AppController::zoneLedCount(int deviceIndex, int zoneIndex) const
 {
     const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
@@ -573,16 +548,6 @@ int AppController::zoneLedCount(int deviceIndex, int zoneIndex) const
     }
 
     return device->zones().at(zoneIndex).ledCount();
-}
-
-QColor AppController::zoneColor(int deviceIndex, int zoneIndex) const
-{
-    const RgbDevice* device = m_deviceManager == nullptr ? nullptr : m_deviceManager->deviceAt(deviceIndex);
-    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
-        return {};
-    }
-
-    return device->zones().at(zoneIndex).currentColor().toQColor();
 }
 
 QString AppController::zoneColorHex(int deviceIndex, int zoneIndex) const

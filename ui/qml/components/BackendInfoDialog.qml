@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -110,6 +112,8 @@ Dialog {
                            : []
 
                     delegate: Rectangle {
+                        id: capabilityPill
+
                         required property string modelData
 
                         radius: 999
@@ -122,7 +126,7 @@ Dialog {
                             id: capLabel
 
                             anchors.centerIn: parent
-                            text: modelData
+                            text: capabilityPill.modelData
                             color: Theme.primaryText
                             font.pixelSize: 11
                             font.bold: true

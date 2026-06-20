@@ -65,6 +65,11 @@ void RgbDevice::setBackendId(const QString& backendId)
     m_backendId = backendId;
 }
 
+QString RgbDevice::discoveryIdentity() const
+{
+    return {};
+}
+
 RgbDeviceType RgbDevice::type() const
 {
     return m_type;

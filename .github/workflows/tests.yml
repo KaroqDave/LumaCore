@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  tests:
-    name: Tests verified
+  linux-tests:
+    name: Linux tests verified
     runs-on: ubuntu-latest
 
     steps:
@@ -44,8 +44,41 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}/lib/cmake"
 
+      - name: Lint QML
+        run: cmake --build build --target all_qmllint
+
       - name: Build tests
         run: cmake --build build --parallel
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
+
+  windows-tests:
+    name: Windows tests verified
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt and MinGW
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          arch: win64_mingw
+          tools: tools_mingw1120
+          add-tools-to-path: true
+          cache: true
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+
+      - name: Lint QML
+        run: cmake --build build-windows --target all_qmllint
+
+      - name: Build tests
+        run: cmake --build build-windows --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build-windows --output-on-failure

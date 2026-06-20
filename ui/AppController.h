@@ -52,7 +52,6 @@ public:
     [[nodiscard]] bool dryRunEnabled() const;
     void setDryRunEnabled(bool enabled);
 
-    Q_INVOKABLE bool applyStaticColor(int deviceIndex, int zoneIndex, const QColor& color);
     Q_INVOKABLE bool applyEffect(int deviceIndex, int zoneIndex, int effectType, const QColor& color, double speed, int brightness);
     Q_INVOKABLE int zoneEffectType(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE QColor zoneEffectColor(int deviceIndex, int zoneIndex) const;
@@ -60,7 +59,6 @@ public:
     Q_INVOKABLE int zoneEffectBrightness(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE bool updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount);
     Q_INVOKABLE int zoneCount(int deviceIndex) const;
-    Q_INVOKABLE QString deviceName(int deviceIndex) const;
     Q_INVOKABLE bool deviceWritable(int deviceIndex) const;
     Q_INVOKABLE QString devicePermissionReason(int deviceIndex) const;
     Q_INVOKABLE QString deviceLastHardwareWriteStatus(int deviceIndex) const;
@@ -72,16 +70,11 @@ public:
     Q_INVOKABLE bool confirmDeviceWrites(int deviceIndex);
     Q_INVOKABLE bool revokeDeviceWrites(int deviceIndex);
     Q_INVOKABLE bool allOffDevice(int deviceIndex);
-    Q_INVOKABLE bool deviceIsRgbController(int deviceIndex) const;
-    Q_INVOKABLE bool deviceHasRgbControllerOverride(int deviceIndex) const;
-    Q_INVOKABLE bool deviceRgbControllerOverride(int deviceIndex) const;
     Q_INVOKABLE bool markDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool removeDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool resetDeviceRgbControllerOverride(int deviceIndex);
     Q_INVOKABLE QString zoneName(int deviceIndex, int zoneIndex) const;
-    Q_INVOKABLE QString zoneTypeName(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE int zoneLedCount(int deviceIndex, int zoneIndex) const;
-    Q_INVOKABLE QColor zoneColor(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE QString zoneColorHex(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE bool saveProfile(const QString& profileName);
     Q_INVOKABLE bool loadProfile(const QString& profileName);
@@ -100,6 +93,7 @@ signals:
     void dryRunEnabledChanged();
 
 private:
+    [[nodiscard]] QString deviceName(int deviceIndex) const;
     void appendLog(const QString& message);
     void setStatusMessage(const QString& message);
     void setLocalDaemonWriteConfirmed(int deviceIndex, bool confirmed);

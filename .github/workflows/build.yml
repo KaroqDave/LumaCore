@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build verified
+  linux-build:
+    name: Linux build verified
     runs-on: ubuntu-latest
 
     steps:
@@ -46,3 +46,38 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
+
+  windows-preview:
+    name: Windows preview package
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt and MinGW
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          arch: win64_mingw
+          tools: tools_mingw1120
+          add-tools-to-path: true
+          cache: true
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build-windows --parallel
+
+      - name: Package portable preview
+        shell: pwsh
+        run: .\packaging\windows\package.ps1 -BuildDir .\build-windows
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: LumaCore-Windows-x64
+          path: dist/LumaCore-Windows-x64.zip
+          if-no-files-found: error
