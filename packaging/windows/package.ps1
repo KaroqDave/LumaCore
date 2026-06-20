@@ -10,6 +10,66 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Run an external tool with its stdin closed and a hard timeout. windeployqt (and
+# the helpers it spawns, such as qmlimportscanner) can block forever in a
+# non-interactive CI shell while waiting on inherited stdin; closing stdin gives
+# them an immediate EOF. The timeout converts any remaining wedge into a fast,
+# clearly located failure instead of letting the job hang for hours. Output is
+# captured and echoed so the step log shows progress and the failing command.
+function Invoke-Tool {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [string]$WorkingDirectory = $PWD.Path,
+        [int]$TimeoutSeconds = 600,
+        [string]$Label = ""
+    )
+
+    if ([string]::IsNullOrEmpty($Label)) {
+        $Label = [System.IO.Path]::GetFileName($FilePath)
+    }
+
+    $quoted = $Arguments | ForEach-Object {
+        if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
+    }
+
+    Write-Host "==> $Label (timeout ${TimeoutSeconds}s)"
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $FilePath
+    $psi.Arguments = ($quoted -join ' ')
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
+    [void]$proc.Start()
+    $proc.StandardInput.Close()
+
+    # Drain both pipes asynchronously so a full pipe buffer cannot deadlock the child.
+    $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+    $stderrTask = $proc.StandardError.ReadToEndAsync()
+
+    if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
+        Write-Host "$Label exceeded ${TimeoutSeconds}s; terminating the process tree."
+        & taskkill.exe /PID $proc.Id /T /F *> $null
+        try { [void]$proc.WaitForExit(5000) } catch { }
+        throw "$Label timed out after $TimeoutSeconds seconds."
+    }
+
+    $stdout = $stdoutTask.Result
+    $stderr = $stderrTask.Result
+    if (-not [string]::IsNullOrWhiteSpace($stdout)) { Write-Host $stdout.TrimEnd() }
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) { Write-Host $stderr.TrimEnd() }
+    Write-Host "<== $Label exit $($proc.ExitCode)"
+
+    return $proc.ExitCode
+}
+
 $sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $resolvedBuildDir = (Resolve-Path $BuildDir).Path
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
@@ -54,29 +114,31 @@ Copy-Item -LiteralPath $guiPath, $daemonPath -Destination $stageDir
 Copy-Item -LiteralPath (Join-Path $sourceRoot "LICENSE") -Destination $stageDir
 Copy-Item -LiteralPath (Join-Path $sourceRoot "docs\windows-preview.md") -Destination (Join-Path $stageDir "README-Windows.md")
 
-& $deployTool `
-    --release `
-    --compiler-runtime `
-    --no-translations `
-    --skip-plugin-types qmltooling `
-    --verbose 0 `
-    --dir $stageDir `
-    --qmldir (Join-Path $sourceRoot "ui\qml") `
+$guiDeployExit = Invoke-Tool -FilePath $deployTool -Label "windeployqt lumacore.exe" -TimeoutSeconds 900 -Arguments @(
+    "--release",
+    "--compiler-runtime",
+    "--no-translations",
+    "--skip-plugin-types", "qmltooling",
+    "--verbose", "1",
+    "--dir", $stageDir,
+    "--qmldir", (Join-Path $sourceRoot "ui\qml"),
     (Join-Path $stageDir "lumacore.exe")
-if ($LASTEXITCODE -ne 0) {
-    throw "windeployqt failed for lumacore.exe with exit code $LASTEXITCODE."
+)
+if ($guiDeployExit -ne 0) {
+    throw "windeployqt failed for lumacore.exe with exit code $guiDeployExit."
 }
 
-& $deployTool `
-    --release `
-    --compiler-runtime `
-    --no-translations `
-    --no-plugins `
-    --verbose 0 `
-    --dir $stageDir `
+$daemonDeployExit = Invoke-Tool -FilePath $deployTool -Label "windeployqt lumacore-daemon.exe" -TimeoutSeconds 600 -Arguments @(
+    "--release",
+    "--compiler-runtime",
+    "--no-translations",
+    "--no-plugins",
+    "--verbose", "1",
+    "--dir", $stageDir,
     (Join-Path $stageDir "lumacore-daemon.exe")
-if ($LASTEXITCODE -ne 0) {
-    throw "windeployqt failed for lumacore-daemon.exe with exit code $LASTEXITCODE."
+)
+if ($daemonDeployExit -ne 0) {
+    throw "windeployqt failed for lumacore-daemon.exe with exit code $daemonDeployExit."
 }
 
 foreach ($requiredPath in @(
@@ -91,21 +153,24 @@ foreach ($requiredPath in @(
 }
 
 foreach ($executable in @("lumacore.exe", "lumacore-daemon.exe")) {
-    $process = Start-Process `
+    $versionExit = Invoke-Tool `
         -FilePath (Join-Path $stageDir $executable) `
-        -ArgumentList "--version" `
+        -Arguments @("--version") `
         -WorkingDirectory $stageDir `
-        -Wait `
-        -PassThru `
-        -WindowStyle Hidden
-    if ($process.ExitCode -ne 0) {
-        throw "$executable --version failed with exit code $($process.ExitCode)."
+        -TimeoutSeconds 60 `
+        -Label "$executable --version"
+    if ($versionExit -ne 0) {
+        throw "$executable --version failed with exit code $versionExit."
     }
 }
 
 $archiveTool = Get-Command tar.exe -ErrorAction Stop
-& $archiveTool.Source -a -c -f $zipPath -C $resolvedOutputDir (Split-Path -Leaf $stageDir)
-if ($LASTEXITCODE -ne 0) {
-    throw "tar.exe failed to create the portable ZIP with exit code $LASTEXITCODE."
+$archiveExit = Invoke-Tool `
+    -FilePath $archiveTool.Source `
+    -Arguments @("-a", "-c", "-f", $zipPath, "-C", $resolvedOutputDir, (Split-Path -Leaf $stageDir)) `
+    -TimeoutSeconds 300 `
+    -Label "tar (portable ZIP)"
+if ($archiveExit -ne 0) {
+    throw "tar.exe failed to create the portable ZIP with exit code $archiveExit."
 }
 Write-Host "Created $zipPath"

@@ -50,6 +50,7 @@ jobs:
   windows-preview:
     name: Windows preview package
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
