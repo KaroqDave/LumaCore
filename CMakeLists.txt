@@ -85,7 +85,6 @@ set_source_files_properties(ui/qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TR
 qt_add_qml_module(lumacore
     URI LumaCore
     VERSION 1.0
-    NO_GENERATE_QMLTYPES
     QML_FILES
         ui/qml/AboutDialog.qml
         ui/qml/Theme.qml
