@@ -191,6 +191,33 @@ int main(int argc, char* argv[])
 
     using namespace lumacore;
 
+    for (const DaemonMethod method : {
+             DaemonMethod::Hello,
+             DaemonMethod::Status,
+             DaemonMethod::ListDevices,
+             DaemonMethod::PreviewEffect,
+             DaemonMethod::ApplyEffect,
+             DaemonMethod::UpdateZone,
+             DaemonMethod::ConfirmWrites,
+             DaemonMethod::RevokeWrites,
+             DaemonMethod::AllOff,
+             DaemonMethod::SetDryRun,
+             DaemonMethod::ActivityLogSnapshot,
+         }) {
+        if (!require(
+                daemonMethodFromName(daemonMethodName(method)) == method,
+                "daemon method names should round-trip without changing protocol strings"
+            )) {
+            return 1;
+        }
+    }
+    if (!require(
+            daemonMethodFromName(QStringLiteral("unknown")) == DaemonMethod::Unknown,
+            "unknown daemon method names should remain distinguishable"
+        )) {
+        return 1;
+    }
+
     DaemonClient client(QStringLiteral("unused-test-socket"));
     const DaemonCallResult oversizedRequest = client.call(
         QStringLiteral("test"),

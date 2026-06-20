@@ -17,6 +17,24 @@ inline constexpr int kDaemonProtocolVersion = 1;
 inline constexpr int kDaemonMaxMessageBytes = 1024 * 1024;
 inline constexpr int kDaemonMaxFrameBytes = kDaemonMaxMessageBytes + 1;
 
+enum class DaemonMethod {
+    Unknown,
+    Hello,
+    Status,
+    ListDevices,
+    PreviewEffect,
+    ApplyEffect,
+    UpdateZone,
+    ConfirmWrites,
+    RevokeWrites,
+    AllOff,
+    SetDryRun,
+    ActivityLogSnapshot,
+};
+
+[[nodiscard]] QString daemonMethodName(DaemonMethod method);
+[[nodiscard]] DaemonMethod daemonMethodFromName(const QString& name);
+
 [[nodiscard]] QString defaultDaemonSocketPath();
 
 [[nodiscard]] QByteArray encodeDaemonMessage(const QJsonObject& message);

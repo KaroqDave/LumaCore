@@ -98,6 +98,17 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (!require(
+            !manager.deleteProfile(QStringLiteral("missing"), &errorMessage),
+            "deleting a missing profile should fail"
+        )
+        || !require(
+            errorMessage == QStringLiteral("Profile 'missing' does not exist."),
+            "missing profile deletion should preserve its public error text"
+        )) {
+        return 1;
+    }
+
     QDir().mkpath(QStringLiteral("profiles"));
     if (!require(
             writeProfileFile(QStringLiteral("profiles/malformed.json"), QByteArrayLiteral("{not-json")),

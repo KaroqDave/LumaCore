@@ -157,7 +157,9 @@ Run all configured CTest targets after building:
 ctest --test-dir build --output-on-failure
 ```
 
-Current tests cover the `DeviceManager` write gate path and, when the ASUS backend is built, the ASUS Aura HID protocol serializer.
+Current tests cover write confirmation and gating, profile persistence, auto-backend deduplication,
+daemon protocol framing and snapshots, option parsing, settings persistence, daemon launch behavior,
+and, when the ASUS backend is built, the ASUS Aura HID protocol serializer.
 
 ## Project Layout
 
@@ -185,6 +187,8 @@ Devices match by `id`, zones match by `name`, and colors are loaded from the zon
 ## Documentation
 
 - `docs/daemon/protocol.md` documents the newline-delimited JSON socket protocol.
+- `docs/architecture.md` documents runtime boundaries and stable APIs.
+- `docs/refactor-parity.md` is the behavior-preservation checklist for structural changes.
 - `docs/hardware/asus-aura-hid.md` documents the guarded ASUS Aura HID support and protocol research boundaries.
 - `docs/packaging/systemd.md` documents the example systemd service and backend overrides.
 

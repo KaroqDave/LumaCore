@@ -50,7 +50,7 @@ private:
 
     QSettings m_settings;
     bool m_animationsEnabled {true};
-    bool m_reduceVrrFlicker {true};
+    bool m_reduceVrrFlicker {false};
     bool m_startMinimized {false};
     bool m_applyOnLaunch {false};
     bool m_dryRunEnabled {false};

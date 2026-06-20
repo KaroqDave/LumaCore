@@ -8,6 +8,61 @@
 
 namespace lumacore {
 
+QString daemonMethodName(DaemonMethod method)
+{
+    switch (method) {
+    case DaemonMethod::Hello:
+        return QStringLiteral("hello");
+    case DaemonMethod::Status:
+        return QStringLiteral("status");
+    case DaemonMethod::ListDevices:
+        return QStringLiteral("listDevices");
+    case DaemonMethod::PreviewEffect:
+        return QStringLiteral("previewEffect");
+    case DaemonMethod::ApplyEffect:
+        return QStringLiteral("applyEffect");
+    case DaemonMethod::UpdateZone:
+        return QStringLiteral("updateZone");
+    case DaemonMethod::ConfirmWrites:
+        return QStringLiteral("confirmWrites");
+    case DaemonMethod::RevokeWrites:
+        return QStringLiteral("revokeWrites");
+    case DaemonMethod::AllOff:
+        return QStringLiteral("allOff");
+    case DaemonMethod::SetDryRun:
+        return QStringLiteral("setDryRun");
+    case DaemonMethod::ActivityLogSnapshot:
+        return QStringLiteral("activityLogSnapshot");
+    case DaemonMethod::Unknown:
+        break;
+    }
+
+    return {};
+}
+
+DaemonMethod daemonMethodFromName(const QString& name)
+{
+    for (const DaemonMethod method : {
+             DaemonMethod::Hello,
+             DaemonMethod::Status,
+             DaemonMethod::ListDevices,
+             DaemonMethod::PreviewEffect,
+             DaemonMethod::ApplyEffect,
+             DaemonMethod::UpdateZone,
+             DaemonMethod::ConfirmWrites,
+             DaemonMethod::RevokeWrites,
+             DaemonMethod::AllOff,
+             DaemonMethod::SetDryRun,
+             DaemonMethod::ActivityLogSnapshot,
+         }) {
+        if (name == daemonMethodName(method)) {
+            return method;
+        }
+    }
+
+    return DaemonMethod::Unknown;
+}
+
 QString defaultDaemonSocketPath()
 {
 #ifdef Q_OS_WIN

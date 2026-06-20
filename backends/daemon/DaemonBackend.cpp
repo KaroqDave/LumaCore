@@ -31,7 +31,7 @@ std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::discoverDevices() const
         return devices;
     }
 
-    const DaemonCallResult response = m_client->call(QStringLiteral("listDevices"));
+    const DaemonCallResult response = m_client->call(daemonMethodName(DaemonMethod::ListDevices));
     if (!response.ok) {
         return devices;
     }
@@ -59,7 +59,7 @@ PermissionResult DaemonBackend::probe() const
         return {PermissionStatus::Denied, QStringLiteral("Daemon client is not available.")};
     }
 
-    const DaemonCallResult response = m_client->call(QStringLiteral("status"));
+    const DaemonCallResult response = m_client->call(daemonMethodName(DaemonMethod::Status));
     if (!response.ok) {
         return {PermissionStatus::Denied, response.error};
     }

@@ -35,9 +35,9 @@ public:
     [[nodiscard]] PermissionResult checkRuntimePermission(BackendCapability capability) const override;
     [[nodiscard]] bool writeConfirmed() const;
     [[nodiscard]] bool writeRequiresConfirmation() const;
-    [[nodiscard]] bool supportsEffect(int effectType) const;
-    [[nodiscard]] bool supportsEffectSpeed(int effectType) const;
-    [[nodiscard]] bool supportsEffectBrightness(int effectType) const;
+    [[nodiscard]] bool supportsEffect(int effectType) const override;
+    [[nodiscard]] bool supportsEffectSpeed(int effectType) const override;
+    [[nodiscard]] bool supportsEffectBrightness(int effectType) const override;
     void setWriteConfirmed(bool confirmed);
 
 private:
@@ -47,7 +47,6 @@ private:
     QHash<QString, PermissionResult> m_permissions;
     QHash<int, EffectSupport> m_effectSupport;
     bool m_writeConfirmed {false};
-    bool m_writeRequiresConfirmation {false};
     QString m_lastHardwareWriteStatus;
     std::shared_ptr<DaemonClient> m_client;
 };

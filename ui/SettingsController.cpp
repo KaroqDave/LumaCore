@@ -131,7 +131,7 @@ void SettingsController::setTheme(const QString& theme)
 void SettingsController::load()
 {
     m_animationsEnabled = m_settings.value(QStringLiteral("ui/animationsEnabled"), true).toBool();
-    m_reduceVrrFlicker = m_settings.value(QStringLiteral("ui/reduceVrrFlicker"), true).toBool();
+    m_reduceVrrFlicker = m_settings.value(QStringLiteral("ui/reduceVrrFlicker"), false).toBool();
     m_startMinimized = m_settings.value(QStringLiteral("startup/startMinimized"), false).toBool();
     m_applyOnLaunch = m_settings.value(QStringLiteral("startup/applyOnLaunch"), false).toBool();
     m_dryRunEnabled = m_settings.value(QStringLiteral("safety/dryRunEnabled"), false).toBool();

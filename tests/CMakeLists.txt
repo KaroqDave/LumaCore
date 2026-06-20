@@ -1,25 +1,27 @@
-qt_add_executable(lumacore_device_manager_write_gate_test
+function(lumacore_add_test_executable target test_name)
+    qt_add_executable(${target} ${ARGN})
+    add_test(NAME ${test_name} COMMAND ${target})
+endfunction()
+
+lumacore_add_test_executable(lumacore_device_manager_write_gate_test device_manager_write_gate
     DeviceManagerWriteGateTest.cpp
 )
 target_link_libraries(lumacore_device_manager_write_gate_test PRIVATE lumacore_core Qt6::Core)
-add_test(NAME device_manager_write_gate COMMAND lumacore_device_manager_write_gate_test)
 
-qt_add_executable(lumacore_profile_persistence_test
+lumacore_add_test_executable(lumacore_profile_persistence_test profile_persistence
     ProfilePersistenceTest.cpp
 )
 target_link_libraries(lumacore_profile_persistence_test PRIVATE lumacore_core Qt6::Core)
-add_test(NAME profile_persistence COMMAND lumacore_profile_persistence_test)
 
-qt_add_executable(lumacore_auto_backend_test
+lumacore_add_test_executable(lumacore_auto_backend_test auto_backend
     AutoBackendTest.cpp
     ${PROJECT_SOURCE_DIR}/backends/auto/AutoBackend.cpp
     ${PROJECT_SOURCE_DIR}/backends/auto/AutoBackend.h
 )
 target_include_directories(lumacore_auto_backend_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_auto_backend_test PRIVATE lumacore_core Qt6::Core)
-add_test(NAME auto_backend COMMAND lumacore_auto_backend_test)
 
-qt_add_executable(lumacore_daemon_protocol_test
+lumacore_add_test_executable(lumacore_daemon_protocol_test daemon_protocol
     DaemonProtocolTest.cpp
 )
 target_link_libraries(lumacore_daemon_protocol_test
@@ -28,9 +30,8 @@ target_link_libraries(lumacore_daemon_protocol_test
         lumacore_ipc
         Qt6::Core
 )
-add_test(NAME daemon_protocol COMMAND lumacore_daemon_protocol_test)
 
-qt_add_executable(lumacore_option_parsing_test
+lumacore_add_test_executable(lumacore_option_parsing_test option_parsing
     OptionParsingTest.cpp
     ${PROJECT_SOURCE_DIR}/app/GuiOptions.cpp
     ${PROJECT_SOURCE_DIR}/app/GuiOptions.h
@@ -39,7 +40,16 @@ qt_add_executable(lumacore_option_parsing_test
 )
 target_include_directories(lumacore_option_parsing_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_option_parsing_test PRIVATE lumacore_ipc Qt6::Core)
-add_test(NAME option_parsing COMMAND lumacore_option_parsing_test)
+
+lumacore_add_test_executable(lumacore_settings_controller_test settings_controller
+    SettingsControllerTest.cpp
+)
+target_link_libraries(lumacore_settings_controller_test PRIVATE lumacore_ui Qt6::Core)
+
+lumacore_add_test_executable(lumacore_app_controller_test app_controller
+    AppControllerTest.cpp
+)
+target_link_libraries(lumacore_app_controller_test PRIVATE lumacore_ui Qt6::Core)
 
 qt_add_executable(lumacore_daemon_launch_exit_fixture DaemonLaunchFixture.cpp)
 target_link_libraries(lumacore_daemon_launch_exit_fixture PRIVATE Qt6::Core)
@@ -72,6 +82,8 @@ if(WIN32)
             auto_backend
             daemon_protocol
             option_parsing
+            settings_controller
+            app_controller
             daemon_launcher
         PROPERTY ENVIRONMENT_MODIFICATION
             "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
@@ -80,11 +92,11 @@ if(WIN32)
 endif()
 
 if(TARGET lumacore_asus_aura_backend)
-    qt_add_executable(lumacore_asus_aura_protocol_test
+    lumacore_add_test_executable(lumacore_asus_aura_protocol_test asus_aura_hid_protocol
         AsusAuraHidProtocolTest.cpp
+        ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidConfig.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.h
     )
     target_link_libraries(lumacore_asus_aura_protocol_test PRIVATE lumacore_core Qt6::Core)
-    add_test(NAME asus_aura_hid_protocol COMMAND lumacore_asus_aura_protocol_test)
 endif()

@@ -242,4 +242,27 @@ PermissionResult RgbDevice::checkRuntimePermission(BackendCapability capability)
     };
 }
 
+bool RgbDevice::supportsEffect(int effectType) const
+{
+    if (effectType < static_cast<int>(RgbEffectType::Static)
+        || effectType > static_cast<int>(RgbEffectType::ColorCycle)) {
+        return false;
+    }
+
+    const bool animated = effectType != static_cast<int>(RgbEffectType::Static);
+    return capabilities().testFlag(
+        animated ? BackendCapability::ZoneEffectWrite : BackendCapability::ZoneColorWrite
+    );
+}
+
+bool RgbDevice::supportsEffectSpeed(int effectType) const
+{
+    return effectType != static_cast<int>(RgbEffectType::Static) && supportsEffect(effectType);
+}
+
+bool RgbDevice::supportsEffectBrightness(int effectType) const
+{
+    return supportsEffect(effectType);
+}
+
 } // namespace lumacore

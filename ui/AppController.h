@@ -93,6 +93,9 @@ signals:
     void dryRunEnabledChanged();
 
 private:
+    [[nodiscard]] RgbDevice* deviceAt(int deviceIndex);
+    [[nodiscard]] const RgbDevice* deviceAt(int deviceIndex) const;
+    [[nodiscard]] const RgbZone* zoneAt(int deviceIndex, int zoneIndex) const;
     [[nodiscard]] QString deviceName(int deviceIndex) const;
     void appendLog(const QString& message);
     void setStatusMessage(const QString& message);

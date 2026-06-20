@@ -14,6 +14,8 @@ qt_add_library(lumacore_core STATIC
     EffectsEngine.h
     PermissionGate.cpp
     PermissionGate.h
+    ProfileStore.cpp
+    ProfileStore.h
     RgbBackend.cpp
     RgbBackend.h
     RgbColor.cpp

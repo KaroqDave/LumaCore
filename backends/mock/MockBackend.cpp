@@ -27,11 +27,6 @@ std::vector<std::unique_ptr<RgbDevice>> MockBackend::createDevices() const
     return devices;
 }
 
-std::vector<std::unique_ptr<RgbDevice>> MockBackend::discoverDevices() const
-{
-    return createDevices();
-}
-
 PermissionResult MockBackend::probe() const
 {
     return {PermissionStatus::Granted, {}};

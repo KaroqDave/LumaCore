@@ -10,12 +10,13 @@ class QQuickWindow;
 
 namespace lumacore {
 
-// Keeps a Qt Quick window presenting at the monitor's refresh rate while it is
-// visible and focused. Qt Quick renders on demand, so an idle window presents
-// almost no frames while interaction or animation bursts present at vsync. On a
-// variable-refresh-rate display (NVIDIA G-Sync / AMD FreeSync / Adaptive-Sync)
-// the desktop refresh rate follows the focused window, so those swings make the
-// panel refresh rate jump around, which is seen as brightness flicker.
+// On Windows, keeps a Qt Quick window presenting at the monitor's refresh rate
+// while it is visible and focused. Qt Quick renders on demand, so an idle window
+// presents almost no frames while interaction or animation bursts present at
+// vsync. On a variable-refresh-rate display (NVIDIA G-Sync / AMD FreeSync /
+// Adaptive-Sync) the desktop refresh rate follows the focused window, so those
+// swings make the panel refresh rate jump around, which is seen as brightness
+// flicker.
 //
 // While active, this guard chains a fresh update request to every presented
 // frame, pinning the present rate to the refresh rate so the panel stays at a
@@ -47,7 +48,7 @@ private:
 
     QPointer<QQuickWindow> m_window;
     QMetaObject::Connection m_renderConnection;
-    bool m_enabled {true};
+    bool m_enabled {false};
     bool m_running {false};
     bool m_interactiveMoveResize {false};
 };

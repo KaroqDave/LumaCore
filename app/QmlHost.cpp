@@ -74,6 +74,7 @@ bool QmlHost::load(const QmlBindings& bindings, const QIcon& applicationIcon, bo
         window->setIcon(applicationIcon);
     }
 
+#ifdef Q_OS_WIN
     if (auto* quickWindow = qobject_cast<QQuickWindow*>(m_rootObject.get())) {
         m_vrrFlickerGuard = std::make_unique<VrrFlickerGuard>(quickWindow);
         if (bindings.settingsController != nullptr) {
@@ -87,6 +88,7 @@ bool QmlHost::load(const QmlBindings& bindings, const QIcon& applicationIcon, bo
             );
         }
     }
+#endif
 
     return true;
 }

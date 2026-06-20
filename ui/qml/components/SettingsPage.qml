@@ -71,6 +71,7 @@ Item {
             }
 
             RowLayout {
+                visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
                 spacing: 12
 
@@ -88,7 +89,7 @@ Item {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Keeps the window drawing at a steady rate so G-Sync/FreeSync displays don't flicker. Disable to save power if you don't use a variable-refresh-rate monitor.")
+                        text: qsTr("Keeps the window drawing at a steady rate so G-Sync/FreeSync displays don't flicker. Enable only if you notice VRR flicker, as this increases GPU and power usage.")
                         color: Theme.secondaryText
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
@@ -97,7 +98,7 @@ Item {
 
                 AppSwitch {
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    checked: page.settingsController ? page.settingsController.reduceVrrFlicker : true
+                    checked: page.settingsController ? page.settingsController.reduceVrrFlicker : false
                     onClicked: {
                         if (page.settingsController) {
                             page.settingsController.reduceVrrFlicker = checked

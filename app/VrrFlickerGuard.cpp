@@ -23,20 +23,28 @@ VrrFlickerGuard::VrrFlickerGuard(QQuickWindow* window, QObject* parent)
     // for the whole lifetime of the process.
     QObject::connect(m_window, &QWindow::visibilityChanged, this, [this]() { reevaluate(); });
     QObject::connect(m_window, &QWindow::activeChanged, this, [this]() { reevaluate(); });
+    QObject::connect(m_window, &QObject::destroyed, this, [this]() {
+        m_window.clear();
+        stopContinuousRendering();
+    });
 
+#ifdef Q_OS_WIN
     if (QCoreApplication* app = QCoreApplication::instance()) {
         app->installNativeEventFilter(this);
     }
+#endif
 
     reevaluate();
 }
 
 VrrFlickerGuard::~VrrFlickerGuard()
 {
+    stopContinuousRendering();
+#ifdef Q_OS_WIN
     if (QCoreApplication* app = QCoreApplication::instance()) {
         app->removeNativeEventFilter(this);
     }
-    stopContinuousRendering();
+#endif
 }
 
 void VrrFlickerGuard::setEnabled(bool enabled)
@@ -61,10 +69,14 @@ void VrrFlickerGuard::reevaluate()
         return;
     }
 
+#ifdef Q_OS_WIN
     const bool onScreen = m_window->isVisible()
         && m_window->visibility() != QWindow::Minimized
         && m_window->visibility() != QWindow::Hidden;
     const bool shouldRun = m_enabled && onScreen && m_window->isActive() && !m_interactiveMoveResize;
+#else
+    constexpr bool shouldRun = false;
+#endif
 
     if (shouldRun) {
         startContinuousRendering();
@@ -79,22 +91,26 @@ void VrrFlickerGuard::startContinuousRendering()
         return;
     }
 
-    // Request the next frame as soon as the current one is presented. frameSwapped
-    // is emitted on the render thread under the threaded render loop, so route the
-    // request back through this guard (GUI thread) via a queued connection.
+    // Force the next Qt Quick repaint as soon as the current frame is presented.
+    // QWindow::requestUpdate() is insufficient here because it does not force an
+    // unchanged Qt Quick scene to render another frame. frameSwapped is emitted
+    // on the render thread under the threaded render loop, so always route the
+    // request back through this guard on the GUI thread.
     m_renderConnection = QObject::connect(
         m_window,
         &QQuickWindow::frameSwapped,
         this,
         [this]() {
-            if (!m_window.isNull()) {
-                m_window->requestUpdate();
+            // A callback queued before stopContinuousRendering() may still run.
+            if (m_running && !m_window.isNull()) {
+                m_window->update();
             }
-        }
+        },
+        Qt::QueuedConnection
     );
 
     m_running = true;
-    m_window->requestUpdate();
+    m_window->update();
 }
 
 void VrrFlickerGuard::stopContinuousRendering()

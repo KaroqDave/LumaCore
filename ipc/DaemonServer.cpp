@@ -223,48 +223,46 @@ void DaemonServer::handleDisconnected(QLocalSocket* socket)
 QJsonObject DaemonServer::handleRequest(const QJsonObject& request)
 {
     const quint64 requestId = request.value(QStringLiteral("id")).toString().toULongLong();
-    const QString method = request.value(QStringLiteral("method")).toString();
+    const QString methodName = request.value(QStringLiteral("method")).toString();
+    const DaemonMethod method = daemonMethodFromName(methodName);
     const QJsonObject params = request.value(QStringLiteral("params")).toObject();
 
     // Answer the hello/status handshake regardless of the request's protocol version so a
     // client running a different protocol can read protocolVersion and surface a clear
     // mismatch instead of every call failing opaquely.
-    if (method == QStringLiteral("hello") || method == QStringLiteral("status")) {
+    if (method == DaemonMethod::Hello || method == DaemonMethod::Status) {
         return makeDaemonResult(requestId, statusPayload());
     }
 
     if (request.value(QStringLiteral("version")).toInt() != kDaemonProtocolVersion) {
         return makeDaemonError(requestId, QStringLiteral("Unsupported daemon protocol version."));
     }
-    if (method == QStringLiteral("listDevices")) {
+    switch (method) {
+    case DaemonMethod::ListDevices:
         return makeDaemonResult(requestId, listDevicesPayload());
-    }
-    if (method == QStringLiteral("previewEffect")) {
+    case DaemonMethod::PreviewEffect:
         return makeDaemonResult(requestId, previewEffect(params));
-    }
-    if (method == QStringLiteral("applyEffect")) {
+    case DaemonMethod::ApplyEffect:
         return makeDaemonResult(requestId, applyEffect(params));
-    }
-    if (method == QStringLiteral("updateZone")) {
+    case DaemonMethod::UpdateZone:
         return makeDaemonResult(requestId, updateZone(params));
-    }
-    if (method == QStringLiteral("confirmWrites")) {
+    case DaemonMethod::ConfirmWrites:
         return makeDaemonResult(requestId, confirmWrites(params));
-    }
-    if (method == QStringLiteral("revokeWrites")) {
+    case DaemonMethod::RevokeWrites:
         return makeDaemonResult(requestId, revokeWrites(params));
-    }
-    if (method == QStringLiteral("allOff")) {
+    case DaemonMethod::AllOff:
         return makeDaemonResult(requestId, allOff(params));
-    }
-    if (method == QStringLiteral("setDryRun")) {
+    case DaemonMethod::SetDryRun:
         return makeDaemonResult(requestId, setDryRun(params));
-    }
-    if (method == QStringLiteral("activityLogSnapshot")) {
+    case DaemonMethod::ActivityLogSnapshot:
         return makeDaemonResult(requestId, activityLogSnapshot());
+    case DaemonMethod::Unknown:
+    case DaemonMethod::Hello:
+    case DaemonMethod::Status:
+        break;
     }
 
-    return makeDaemonError(requestId, QStringLiteral("Unknown daemon method: %1").arg(method));
+    return makeDaemonError(requestId, QStringLiteral("Unknown daemon method: %1").arg(methodName));
 }
 
 QJsonObject DaemonServer::statusPayload() const
