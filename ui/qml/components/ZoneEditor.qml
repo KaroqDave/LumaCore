@@ -384,9 +384,11 @@ Item {
                                 }
                             }
 
-                            NumberAnimation on x {
+                            NumberAnimation {
                                 id: rainbowScrollAnim
 
+                                target: rainbowRow
+                                property: "x"
                                 running: editor.effectType === 1 && editor.animationsEnabled && rainbowClip.visible
                                 from: 0
                                 to: -Math.max(1, previewBar.width)
@@ -396,19 +398,23 @@ Item {
                         }
                     }
 
-                    SequentialAnimation on breath {
+                    SequentialAnimation {
                         id: breathingAnim
 
                         running: editor.effectType === 2 && editor.animationsEnabled
                         loops: Animation.Infinite
 
                         NumberAnimation {
+                            target: previewBar
+                            property: "breath"
                             from: 0.12
                             to: 1.0
                             duration: editor.breathingHalfPeriodMs
                             easing.type: Easing.InOutSine
                         }
                         NumberAnimation {
+                            target: previewBar
+                            property: "breath"
                             from: 1.0
                             to: 0.12
                             duration: editor.breathingHalfPeriodMs
@@ -416,9 +422,11 @@ Item {
                         }
                     }
 
-                    NumberAnimation on cycleHue {
+                    NumberAnimation {
                         id: colorCycleAnim
 
+                        target: previewBar
+                        property: "cycleHue"
                         running: editor.effectType === 3 && editor.animationsEnabled
                         loops: Animation.Infinite
                         from: 0
