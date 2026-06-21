@@ -7,6 +7,7 @@
 #include <memory>
 
 class QQmlComponent;
+class QWindow;
 
 namespace lumacore {
 
@@ -33,6 +34,7 @@ public:
         const QIcon& applicationIcon,
         bool startMinimized
     );
+    [[nodiscard]] QWindow* mainWindow() const;
 
 private:
     QQmlApplicationEngine m_engine;

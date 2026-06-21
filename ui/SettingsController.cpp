@@ -1,5 +1,7 @@
 #include "ui/SettingsController.h"
 
+#include <QTime>
+
 namespace lumacore {
 
 SettingsController::SettingsController(QObject* parent)
@@ -56,6 +58,37 @@ void SettingsController::setStartMinimized(bool enabled)
     emit startMinimizedChanged();
 }
 
+bool SettingsController::closeToTray() const
+{
+    return m_closeToTray;
+}
+
+void SettingsController::setCloseToTray(bool enabled)
+{
+    if (m_closeToTray == enabled) {
+        return;
+    }
+
+    m_closeToTray = enabled;
+    m_settings.setValue(QStringLiteral("startup/closeToTray"), enabled);
+    emit closeToTrayChanged();
+}
+
+bool SettingsController::trayAvailable() const
+{
+    return m_trayAvailable;
+}
+
+void SettingsController::setTrayAvailable(bool available)
+{
+    if (m_trayAvailable == available) {
+        return;
+    }
+
+    m_trayAvailable = available;
+    emit trayAvailableChanged();
+}
+
 bool SettingsController::applyOnLaunch() const
 {
     return m_applyOnLaunch;
@@ -71,6 +104,72 @@ void SettingsController::setApplyOnLaunch(bool enabled)
     m_applyOnLaunch = sanitizedEnabled;
     m_settings.setValue(QStringLiteral("startup/applyOnLaunch"), sanitizedEnabled);
     emit applyOnLaunchChanged();
+}
+
+bool SettingsController::scheduledProfileEnabled() const
+{
+    return m_scheduledProfileEnabled;
+}
+
+void SettingsController::setScheduledProfileEnabled(bool enabled)
+{
+    const bool sanitizedEnabled = enabled && !m_scheduledProfile.isEmpty();
+    if (m_scheduledProfileEnabled == sanitizedEnabled) {
+        return;
+    }
+
+    m_scheduledProfileEnabled = sanitizedEnabled;
+    m_settings.setValue(QStringLiteral("schedule/enabled"), sanitizedEnabled);
+    emit scheduledProfileEnabledChanged();
+}
+
+QString SettingsController::scheduledProfile() const
+{
+    return m_scheduledProfile;
+}
+
+void SettingsController::setScheduledProfile(const QString& profileName)
+{
+    const QString sanitizedProfileName = profileName.trimmed();
+    if (m_scheduledProfile == sanitizedProfileName) {
+        return;
+    }
+
+    m_scheduledProfile = sanitizedProfileName;
+    if (m_scheduledProfile.isEmpty()) {
+        m_settings.remove(QStringLiteral("schedule/profile"));
+        setScheduledProfileEnabled(false);
+    } else {
+        m_settings.setValue(QStringLiteral("schedule/profile"), m_scheduledProfile);
+    }
+    emit scheduledProfileChanged();
+}
+
+namespace {
+
+QString normalizeScheduleTime(const QString& value)
+{
+    const QTime parsed = QTime::fromString(value.trimmed(), QStringLiteral("HH:mm"));
+    return parsed.isValid() ? parsed.toString(QStringLiteral("HH:mm")) : QStringLiteral("18:00");
+}
+
+} // namespace
+
+QString SettingsController::scheduledProfileTime() const
+{
+    return m_scheduledProfileTime;
+}
+
+void SettingsController::setScheduledProfileTime(const QString& time)
+{
+    const QString sanitizedTime = normalizeScheduleTime(time);
+    if (m_scheduledProfileTime == sanitizedTime) {
+        return;
+    }
+
+    m_scheduledProfileTime = sanitizedTime;
+    m_settings.setValue(QStringLiteral("schedule/time"), sanitizedTime);
+    emit scheduledProfileTimeChanged();
 }
 
 bool SettingsController::dryRunEnabled() const
@@ -156,11 +255,18 @@ void SettingsController::load()
     m_animationsEnabled = m_settings.value(QStringLiteral("ui/animationsEnabled"), true).toBool();
     m_reduceVrrFlicker = m_settings.value(QStringLiteral("ui/reduceVrrFlicker"), false).toBool();
     m_startMinimized = m_settings.value(QStringLiteral("startup/startMinimized"), false).toBool();
+    m_closeToTray = m_settings.value(QStringLiteral("startup/closeToTray"), false).toBool();
     m_dryRunEnabled = m_settings.value(QStringLiteral("safety/dryRunEnabled"), false).toBool();
     m_theme = normalizeTheme(m_settings.value(QStringLiteral("ui/theme"), QStringLiteral("Dark")).toString());
     m_activeProfile = m_settings.value(QStringLiteral("startup/activeProfile")).toString().trimmed();
     m_applyOnLaunch = !m_activeProfile.isEmpty()
         && m_settings.value(QStringLiteral("startup/applyOnLaunch"), false).toBool();
+    m_scheduledProfile = m_settings.value(QStringLiteral("schedule/profile")).toString().trimmed();
+    m_scheduledProfileTime = normalizeScheduleTime(
+        m_settings.value(QStringLiteral("schedule/time"), QStringLiteral("18:00")).toString()
+    );
+    m_scheduledProfileEnabled = !m_scheduledProfile.isEmpty()
+        && m_settings.value(QStringLiteral("schedule/enabled"), false).toBool();
 }
 
 } // namespace lumacore

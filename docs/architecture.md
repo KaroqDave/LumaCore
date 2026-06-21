@@ -15,6 +15,12 @@ The public boundaries are intentionally narrower than the implementation modules
 `DaemonClient` supports concurrent request correlation, cancellation, timeouts, bounded reconnect,
 and a synchronous compatibility wrapper used by startup discovery and bulk profile application.
 After reconnect, the GUI requests a fresh device snapshot and replaces the proxy-device set atomically.
+When the desktop exposes a system tray, `TrayController` owns the native tray icon and mediates
+Show/Hide, explicit Quit, and the opt-in close-to-tray window lifecycle.
+`ProfileScheduleRunner` is a GUI-session timer that applies one persisted profile schedule
+through the normal `AppController` profile path; it does not move scheduling into the daemon.
+Diagnostics export is assembled in `AppController` as a sanitized JSON report containing
+runtime state, backend/device summaries, profile names, and recent activity without profile contents.
 
 ## Module responsibilities
 
@@ -43,6 +49,7 @@ Behavior-preserving refactors must keep these boundaries stable unless a dedicat
 The following should not be bundled into structural refactors:
 
 - replacing the remaining synchronous startup/profile compatibility paths;
+- moving profile scheduling into a background daemon or operating-system timer;
 - daemon protocol version changes or field removal;
 - profile location or schema changes;
 - replacing the QML controller surface;

@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v0.8.0** - Linux-first RGB control with resilient asynchronous daemon communication and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v0.9.0** - Linux-first RGB control with tray operation, global controls, daily profile scheduling, diagnostics export, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
@@ -27,6 +27,7 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 ## Current Capabilities
 
 - Qt Quick desktop UI with a collapsible navigation rail, Devices, Profiles, Settings, Activities, backend status, and an About dialog.
+- Global controls for applying one effect or brightness level across compatible zones and sending All Off to every writable device, with partial-result reporting.
 - In-memory RGB model for devices, zones, LEDs, profiles, static colors, rainbow, breathing, and color-cycle effects.
 - GUI-to-daemon boundary through `backends/daemon/`, `ipc/`, and `lumacore-daemon`.
 - Non-blocking interactive daemon requests with correlated responses, cancellation, bounded reconnect backoff, automatic device refresh, stable selection restoration, and manual Retry/Rescan controls.
@@ -35,9 +36,9 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata.
 - ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native breathing/color-cycle/rainbow effects, and All Off.
 - Profile save, load, rename, confirmed overwrite/delete, JSON import/export, compatibility reporting, partial-result summaries, and persisted active-profile selection with atomic writes and legacy color-only profile compatibility.
-- Persistent Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, and an opt-in Windows VRR flicker workaround.
+- Persistent Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, daily in-app profile scheduling, opt-in close-to-tray behavior, and an opt-in Windows VRR flicker workaround.
 - Activity log with structured severity/category entries and console mirroring.
-- Backend capability dialog showing daemon connection/version details, active backend, dry-run state, and supported operations.
+- Backend capability dialog showing daemon connection/version details, active backend, dry-run state, supported operations, Retry/Rescan, and sanitized diagnostics export.
 
 ## Safety Model
 
@@ -56,7 +57,7 @@ See `docs/hardware/asus-aura-hid.md` for the ASUS protocol notes, licensing boun
 - C++23 compiler, such as GCC or Clang
 - CMake 3.24+
 - Ninja or Make
-- Qt 6.5+ with `Core`, `Gui`, `Network`, `Qml`, `Quick`, `QuickControls2`, and `QuickDialogs2`
+- Qt 6.5+ with `Core`, `Gui`, `Network`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`, and `Widgets`
 - Optional for Linux discovery and ASUS Aura HID builds: `pkg-config`, `hidapi`, and/or `libusb`
 
 On Arch-based systems:
@@ -201,6 +202,7 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 
 - Automated coverage is still focused; broader mock-backend and end-to-end UI integration, sanitizers, and warning-policy work remains.
 - Bulk profile application still uses the synchronous compatibility path; direct interactive device operations are asynchronous.
+- Profile scheduling currently runs inside the GUI session; daemon/systemd background scheduling is not implemented.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation is documented.
 - Profile validation is minimal.
 - Native installers, Linux distribution packages, and full install targets are not implemented; Windows packaging currently produces a portable preview ZIP.

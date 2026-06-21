@@ -361,31 +361,50 @@ ApplicationWindow {
                             }
                         }
 
-                        SectionCard {
+                        ColumnLayout {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 320
                             Layout.fillHeight: true
-                            title: qsTr("Zone Editor")
-                            subtitle: qsTr("Rename zones, tune LED counts, and apply lighting effects.")
-                            animationsEnabled: root.animationsEnabled
+                            spacing: 14
 
-                            ScrollView {
-                                id: zoneScroll
-
+                            SectionCard {
                                 Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                clip: true
-                                contentWidth: availableWidth
+                                animationsEnabled: root.animationsEnabled
 
-                                ZoneEditor {
-                                    width: zoneScroll.availableWidth
-                                    height: Math.max(implicitHeight, zoneScroll.availableHeight)
+                                GlobalControls {
+                                    Layout.fillWidth: true
                                     appController: root.controller
-                                    selectedDeviceIndex: root.selectedDeviceIndex
-                                    selectedZoneIndex: root.selectedZoneIndex
                                     selectedColor: root.selectedColor
                                     animationsEnabled: root.animationsEnabled
                                     onChooseColorRequested: colorDialog.open()
+                                }
+                            }
+
+                            SectionCard {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                title: qsTr("Zone Editor")
+                                subtitle: qsTr("Rename zones, tune LED counts, and apply lighting effects.")
+                                animationsEnabled: root.animationsEnabled
+
+                                ScrollView {
+                                    id: zoneScroll
+
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    clip: true
+                                    contentWidth: availableWidth
+
+                                    ZoneEditor {
+                                        width: zoneScroll.availableWidth
+                                        height: Math.max(implicitHeight, zoneScroll.availableHeight)
+                                        appController: root.controller
+                                        selectedDeviceIndex: root.selectedDeviceIndex
+                                        selectedZoneIndex: root.selectedZoneIndex
+                                        selectedColor: root.selectedColor
+                                        animationsEnabled: root.animationsEnabled
+                                        onChooseColorRequested: colorDialog.open()
+                                    }
                                 }
                             }
                         }

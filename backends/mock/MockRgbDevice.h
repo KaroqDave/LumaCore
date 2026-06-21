@@ -12,6 +12,7 @@ public:
     explicit MockRgbDevice(QObject* parent = nullptr);
 
     [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const RgbColor& color) override;
+    [[nodiscard]] bool applyAllOff() override;
     [[nodiscard]] BackendCapabilities capabilities() const override;
     [[nodiscard]] PermissionResult checkRuntimePermission(BackendCapability capability) const override;
 };

@@ -10,8 +10,12 @@ target_sources(lumacore
         GuiApplication.h
         GuiOptions.cpp
         GuiOptions.h
+        ProfileScheduleRunner.cpp
+        ProfileScheduleRunner.h
         QmlHost.cpp
         QmlHost.h
+        TrayController.cpp
+        TrayController.h
         VrrFlickerGuard.cpp
         VrrFlickerGuard.h
         main.cpp
@@ -63,4 +67,5 @@ target_link_libraries(lumacore
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
+        Qt6::Widgets
 )

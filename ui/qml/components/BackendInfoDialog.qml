@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import LumaCore
 
@@ -18,6 +19,16 @@ Dialog {
     readonly property bool recoveryBusy: controller ? controller.daemonRecoveryBusy : false
 
     standardButtons: Dialog.NoButton
+
+    FileDialog {
+        id: diagnosticsDialog
+
+        title: qsTr("Export LumaCore Diagnostics")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [qsTr("LumaCore diagnostics (*.json)")]
+        onAccepted: dialog.controller.exportDiagnostics(selectedFile)
+    }
 
     background: Rectangle {
         color: Theme.surface
@@ -68,6 +79,15 @@ Dialog {
                 text: qsTr("Rescan")
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: dialog.controller.rescanDaemonDevices()
+            }
+
+            AppButton {
+                enabled: dialog.controller
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Export")
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: diagnosticsDialog.open()
             }
 
             AppButton {

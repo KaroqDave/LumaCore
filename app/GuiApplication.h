@@ -12,20 +12,22 @@
 
 #include <memory>
 
-class QGuiApplication;
+class QApplication;
 
 namespace lumacore {
 
 class DaemonLauncher;
+class ProfileScheduleRunner;
+class TrayController;
 
 class GuiApplication final
 {
 public:
-    GuiApplication(QGuiApplication& qtApplication, const GuiOptions& options);
+    GuiApplication(QApplication& qtApplication, const GuiOptions& options);
     ~GuiApplication();
 
     [[nodiscard]] static bool validateEnvironment();
-    static void configureQtApplication(QGuiApplication& application);
+    static void configureQtApplication(QApplication& application);
     [[nodiscard]] int run();
 
 private:
@@ -43,6 +45,8 @@ private:
     AppController m_appController;
     SettingsController m_settingsController;
     QmlHost m_qmlHost;
+    std::unique_ptr<TrayController> m_trayController;
+    std::unique_ptr<ProfileScheduleRunner> m_profileScheduleRunner;
     bool m_autoStartDaemon {false};
 };
 

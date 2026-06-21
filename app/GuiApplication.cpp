@@ -1,10 +1,12 @@
 #include "app/GuiApplication.h"
 
 #include "app/DaemonLauncher.h"
+#include "app/ProfileScheduleRunner.h"
+#include "app/TrayController.h"
 #include "app/Version.h"
 #include "backends/daemon/DaemonBackend.h"
 
-#include <QGuiApplication>
+#include <QApplication>
 #include <QSize>
 #include <QtGlobal>
 
@@ -39,7 +41,7 @@ GuiApplication::BackendContext::BackendContext(const QString& socketPath)
     deviceManager.registerBackend(std::make_unique<DaemonBackend>(daemonClient));
 }
 
-GuiApplication::GuiApplication(QGuiApplication& qtApplication, const GuiOptions& options)
+GuiApplication::GuiApplication(QApplication& qtApplication, const GuiOptions& options)
     : m_applicationIcon(qtApplication.windowIcon())
     , m_backendContext(options.daemonSocketPath)
     , m_deviceTreeModel(&m_backendContext.deviceManager)
@@ -80,7 +82,7 @@ bool GuiApplication::validateEnvironment()
     return true;
 }
 
-void GuiApplication::configureQtApplication(QGuiApplication& application)
+void GuiApplication::configureQtApplication(QApplication& application)
 {
     application.setApplicationName(QStringLiteral("LumaCore"));
     application.setApplicationDisplayName(QStringLiteral("LumaCore"));
@@ -112,7 +114,17 @@ int GuiApplication::run()
         return 1;
     }
 
-    return QGuiApplication::exec();
+    m_trayController = std::make_unique<TrayController>(
+        m_qmlHost.mainWindow(),
+        &m_settingsController,
+        m_applicationIcon
+    );
+    m_profileScheduleRunner = std::make_unique<ProfileScheduleRunner>(
+        &m_settingsController,
+        &m_appController
+    );
+
+    return QApplication::exec();
 }
 
 } // namespace lumacore

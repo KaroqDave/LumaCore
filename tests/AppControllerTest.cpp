@@ -5,6 +5,9 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTemporaryDir>
 #include <QUrl>
 
@@ -169,6 +172,111 @@ int main(int argc, char* argv[])
             )) {
             return 1;
         }
+    }
+
+    QVariantMap globalResult;
+    QObject::connect(
+        &controller,
+        &lumacore::AppController::globalOperationFinished,
+        &controller,
+        [&globalResult](const QVariantMap& result) { globalResult = result; }
+    );
+
+    const QColor globalColor(QStringLiteral("#336699"));
+    if (!require(
+            controller.applyEffectGlobally(2, globalColor, 1.5, 60),
+            "global effects should start when writable zones are available"
+        )
+        || !require(
+            globalResult.value(QStringLiteral("applied")).toInt() == controller.zoneCount(0),
+            "global effect result should report every applied zone"
+        )) {
+        return 1;
+    }
+    for (int zoneIndex = 0; zoneIndex < controller.zoneCount(0); ++zoneIndex) {
+        if (!require(
+                controller.zoneEffectType(0, zoneIndex) == static_cast<int>(lumacore::RgbEffectType::Breathing),
+                "global effects should update every compatible zone"
+            )
+            || !require(
+                controller.zoneEffectBrightness(0, zoneIndex) == 60,
+                "global effects should apply the selected brightness"
+            )) {
+            return 1;
+        }
+    }
+    if (!require(controller.setGlobalBrightness(25), "global brightness should start")
+        || !require(
+            globalResult.value(QStringLiteral("operation")).toString() == QStringLiteral("Global brightness"),
+            "global brightness should publish a structured result"
+        )
+        || !require(
+            controller.zoneEffectType(0, 0) == static_cast<int>(lumacore::RgbEffectType::Breathing),
+            "global brightness should preserve the current effect"
+        )
+        || !require(
+            controller.zoneEffectBrightness(0, 0) == 25,
+            "global brightness should update the current effect brightness"
+        )
+        || !require(controller.allOffAllDevices(), "global All Off should start")
+        || !require(
+            globalResult.value(QStringLiteral("applied")).toInt() == 1,
+            "global All Off should report applied devices"
+        )
+        || !require(
+            controller.zoneEffectBrightness(0, 0) == 0,
+            "global All Off should turn zones off"
+        )) {
+        return 1;
+    }
+
+    const QVariantMap diagnostics = controller.diagnosticsReport();
+    const QVariantList diagnosticDevices = diagnostics.value(QStringLiteral("devices")).toList();
+    if (!require(
+            diagnostics.value(QStringLiteral("schemaVersion")).toInt() == 1,
+            "diagnostics should expose a stable schema version"
+        )
+        || !require(
+            diagnostics.value(QStringLiteral("backend")).toMap().value(QStringLiteral("id")).toString()
+                == QStringLiteral("mock"),
+            "diagnostics should include the active backend"
+        )
+        || !require(!diagnosticDevices.isEmpty(), "diagnostics should include device summaries")
+        || !require(
+            diagnosticDevices.first().toMap().value(QStringLiteral("zones")).toList().size()
+                == controller.zoneCount(0),
+            "diagnostics should include zone summaries"
+        )
+        || !require(
+            diagnostics.value(QStringLiteral("activity")).toList().size() > 0,
+            "diagnostics should include recent activity"
+        )) {
+        return 1;
+    }
+
+    const QString diagnosticsPath = profileDirectory.filePath(QStringLiteral("diagnostics.json"));
+    if (!require(
+            controller.exportDiagnostics(QUrl::fromLocalFile(diagnosticsPath)),
+            "controller should export diagnostics"
+        )
+        || !require(QFile::exists(diagnosticsPath), "diagnostics export should create a file")) {
+        return 1;
+    }
+
+    QFile diagnosticsFile(diagnosticsPath);
+    if (!require(diagnosticsFile.open(QIODevice::ReadOnly), "diagnostics export should be readable")) {
+        return 1;
+    }
+    const QJsonDocument diagnosticsDocument = QJsonDocument::fromJson(diagnosticsFile.readAll());
+    if (!require(diagnosticsDocument.isObject(), "diagnostics export should contain JSON object data")
+        || !require(
+            diagnosticsDocument.object()
+                .value(QStringLiteral("devices"))
+                .toArray()
+                .size() == controller.backendDeviceCount(),
+            "diagnostics export should preserve the device count"
+        )) {
+        return 1;
     }
 
     const QColor savedColor(QStringLiteral("#112233"));

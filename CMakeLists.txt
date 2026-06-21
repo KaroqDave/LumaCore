@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 0.8.0
+    VERSION 0.9.0
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2 QuickDialogs2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2 QuickDialogs2 Widgets)
 find_package(PkgConfig QUIET)
 
 include(CheckIncludeFileCXX)
@@ -98,6 +98,7 @@ qt_add_qml_module(lumacore
         ui/qml/components/ColorPickerDialog.qml
         ui/qml/components/DeviceTreePanel.qml
         ui/qml/components/EffectSelector.qml
+        ui/qml/components/GlobalControls.qml
         ui/qml/components/NavIcon.qml
         ui/qml/components/NavItem.qml
         ui/qml/components/NavRail.qml

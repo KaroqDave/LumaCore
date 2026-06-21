@@ -75,6 +75,9 @@ public:
     Q_INVOKABLE bool confirmDeviceWrites(int deviceIndex);
     Q_INVOKABLE bool revokeDeviceWrites(int deviceIndex);
     Q_INVOKABLE bool allOffDevice(int deviceIndex);
+    Q_INVOKABLE bool applyEffectGlobally(int effectType, const QColor& color, double speed, int brightness);
+    Q_INVOKABLE bool setGlobalBrightness(int brightness);
+    Q_INVOKABLE bool allOffAllDevices();
     Q_INVOKABLE bool markDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool removeDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool resetDeviceRgbControllerOverride(int deviceIndex);
@@ -91,12 +94,15 @@ public:
     Q_INVOKABLE bool renameProfile(const QString& oldProfileName, const QString& newProfileName);
     Q_INVOKABLE QString importProfile(const QUrl& sourceUrl);
     Q_INVOKABLE bool exportProfile(const QString& profileName, const QUrl& destinationUrl);
+    Q_INVOKABLE QVariantMap diagnosticsReport() const;
+    Q_INVOKABLE bool exportDiagnostics(const QUrl& destinationUrl);
     Q_INVOKABLE QVariantMap profileCompatibility(const QString& profileName);
     Q_INVOKABLE bool profileExists(const QString& profileName) const;
     Q_INVOKABLE QStringList profileNames() const;
     Q_INVOKABLE bool retryDaemonConnection();
     Q_INVOKABLE bool rescanDaemonDevices();
     [[nodiscard]] bool applyProfileOnLaunch(const QString& profileName);
+    [[nodiscard]] bool applyScheduledProfile(const QString& profileName);
     void enableDaemonRecovery();
 
 signals:
@@ -110,6 +116,7 @@ signals:
     void dryRunEnabledChanged();
     void pendingDaemonOperationsChanged();
     void daemonDevicesRefreshed();
+    void globalOperationFinished(QVariantMap result);
 
 private:
     [[nodiscard]] RgbDevice* deviceAt(int deviceIndex);
@@ -124,6 +131,13 @@ private:
     void syncDaemonDryRun();
     void beginDaemonOperation();
     void endDaemonOperation();
+    bool applyGlobalEffectInternal(
+        int effectType,
+        const QColor& color,
+        double speed,
+        int brightness,
+        bool preserveCurrentEffect
+    );
     bool refreshDaemonDevices(bool recoveredConnection);
 
     DeviceManager* m_deviceManager {nullptr};

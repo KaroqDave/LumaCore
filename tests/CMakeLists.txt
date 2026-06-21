@@ -47,6 +47,14 @@ lumacore_add_test_executable(lumacore_settings_controller_test settings_controll
 )
 target_link_libraries(lumacore_settings_controller_test PRIVATE lumacore_ui Qt6::Core)
 
+lumacore_add_test_executable(lumacore_profile_schedule_runner_test profile_schedule_runner
+    ProfileScheduleRunnerTest.cpp
+    ${PROJECT_SOURCE_DIR}/app/ProfileScheduleRunner.cpp
+    ${PROJECT_SOURCE_DIR}/app/ProfileScheduleRunner.h
+)
+target_include_directories(lumacore_profile_schedule_runner_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(lumacore_profile_schedule_runner_test PRIVATE lumacore_ui Qt6::Core)
+
 lumacore_add_test_executable(lumacore_app_controller_test app_controller
     AppControllerTest.cpp
 )
@@ -84,6 +92,7 @@ if(WIN32)
             daemon_protocol
             option_parsing
             settings_controller
+            profile_schedule_runner
             app_controller
             daemon_launcher
         PROPERTY ENVIRONMENT_MODIFICATION

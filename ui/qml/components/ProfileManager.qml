@@ -359,6 +359,17 @@ Item {
                 font.bold: true
                 wrapMode: Text.WordWrap
             }
+
+            Label {
+                visible: manager.settingsController
+                         && manager.settingsController.scheduledProfile === manager.pendingDeleteProfile
+                Layout.fillWidth: true
+                text: qsTr("This is the scheduled profile. Deleting it will also disable the daily schedule.")
+                color: Theme.warning
+                font.pixelSize: 12
+                font.bold: true
+                wrapMode: Text.WordWrap
+            }
         }
 
         footer: RowLayout {
@@ -386,6 +397,10 @@ Item {
                         if (manager.settingsController
                                 && manager.settingsController.activeProfile === deletedName) {
                             manager.settingsController.activeProfile = ""
+                        }
+                        if (manager.settingsController
+                                && manager.settingsController.scheduledProfile === deletedName) {
+                            manager.settingsController.scheduledProfile = ""
                         }
                         profileNameField.text = "default"
                         manager.refreshProfiles()
@@ -517,6 +532,10 @@ Item {
                     if (manager.appController.renameProfile(oldName, profileNameField.text)) {
                         if (manager.settingsController && manager.settingsController.activeProfile === oldName) {
                             manager.settingsController.activeProfile = newName
+                        }
+                        if (manager.settingsController
+                                && manager.settingsController.scheduledProfile === oldName) {
+                            manager.settingsController.scheduledProfile = newName
                         }
                         manager.refreshProfiles(newName)
                     }

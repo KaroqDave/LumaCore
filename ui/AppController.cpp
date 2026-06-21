@@ -7,12 +7,20 @@
 #include "core/RgbColor.h"
 #include "core/RgbEffect.h"
 
+#include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPointer>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QSysInfo>
 #include <QTimer>
 #include <QtGlobal>
 
+#include <functional>
+#include <memory>
 #include <utility>
 
 namespace lumacore {
@@ -29,6 +37,73 @@ bool isAnimatedEffect(int effectType)
 {
     return effectType != static_cast<int>(RgbEffectType::Static);
 }
+
+QString sanitizedDiagnosticString(QString value, const QString& profilesDirectory = {})
+{
+    const QString homePath = QDir::toNativeSeparators(QDir::homePath());
+    const QString tempPath = QDir::toNativeSeparators(QDir::tempPath());
+    const QString appDataPath = QDir::toNativeSeparators(
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+    );
+    const QString normalizedProfilesDirectory = QDir::toNativeSeparators(profilesDirectory);
+
+    const auto replacePath = [&value](const QString& path, const QString& replacement) {
+        if (!path.isEmpty()) {
+            value.replace(path, replacement, Qt::CaseInsensitive);
+            value.replace(QDir::fromNativeSeparators(path), replacement, Qt::CaseInsensitive);
+        }
+    };
+
+    replacePath(normalizedProfilesDirectory, QStringLiteral("<profiles>"));
+    replacePath(appDataPath, QStringLiteral("<app-data>"));
+    replacePath(tempPath, QStringLiteral("<temp>"));
+    replacePath(homePath, QStringLiteral("<home>"));
+    return value;
+}
+
+QString permissionStatusDiagnosticName(PermissionStatus status)
+{
+    switch (status) {
+    case PermissionStatus::Granted:
+        return QStringLiteral("granted");
+    case PermissionStatus::Denied:
+        return QStringLiteral("denied");
+    case PermissionStatus::RequiresConfirmation:
+        return QStringLiteral("requires-confirmation");
+    case PermissionStatus::NotApplicable:
+        return QStringLiteral("not-applicable");
+    }
+    return QStringLiteral("unknown");
+}
+
+QVariantMap permissionToDiagnostics(const PermissionResult& permission)
+{
+    return QVariantMap {
+        {QStringLiteral("status"), permissionStatusDiagnosticName(permission.status)},
+        {QStringLiteral("reason"), permission.reason},
+    };
+}
+
+QVariantMap effectToDiagnostics(const RgbEffect& effect)
+{
+    return QVariantMap {
+        {QStringLiteral("type"), rgbEffectTypeToString(effect.type())},
+        {QStringLiteral("color"), effect.color().toHexString()},
+        {QStringLiteral("speed"), effect.speed()},
+        {QStringLiteral("brightness"), effect.brightness()},
+    };
+}
+
+struct GlobalOperationState {
+    QString operation;
+    int total {0};
+    int applied {0};
+    int skipped {0};
+    int failed {0};
+    int pending {0};
+    bool dispatching {true};
+    QStringList details;
+};
 
 } // namespace
 
@@ -648,6 +723,287 @@ bool AppController::allOffDevice(int deviceIndex)
     return true;
 }
 
+bool AppController::applyEffectGlobally(
+    int effectType,
+    const QColor& color,
+    double speed,
+    int brightness
+)
+{
+    return applyGlobalEffectInternal(effectType, color, speed, brightness, false);
+}
+
+bool AppController::setGlobalBrightness(int brightness)
+{
+    return applyGlobalEffectInternal(
+        static_cast<int>(RgbEffectType::Static),
+        QColor(Qt::black),
+        1.0,
+        brightness,
+        true
+    );
+}
+
+bool AppController::applyGlobalEffectInternal(
+    int effectType,
+    const QColor& color,
+    double speed,
+    int brightness,
+    bool preserveCurrentEffect
+)
+{
+    if (m_deviceManager == nullptr
+        || (!preserveCurrentEffect && (!isValidEffectType(effectType) || !color.isValid()))) {
+        setStatusMessage(QStringLiteral("Could not start global lighting operation."));
+        return false;
+    }
+
+    auto state = std::make_shared<GlobalOperationState>();
+    state->operation = preserveCurrentEffect
+        ? QStringLiteral("Global brightness")
+        : QStringLiteral("Global effect");
+    const QPointer<AppController> self(this);
+    const auto finish = std::make_shared<std::function<void()>>();
+    *finish = [self, state]() {
+        if (self == nullptr || state->dispatching || state->pending > 0) {
+            return;
+        }
+
+        const QVariantMap result {
+            {QStringLiteral("operation"), state->operation},
+            {QStringLiteral("total"), state->total},
+            {QStringLiteral("applied"), state->applied},
+            {QStringLiteral("skipped"), state->skipped},
+            {QStringLiteral("failed"), state->failed},
+            {QStringLiteral("partial"), state->applied > 0 && (state->skipped > 0 || state->failed > 0)},
+            {QStringLiteral("details"), state->details},
+        };
+        self->setStatusMessage(
+            state->failed == 0 && state->skipped == 0
+                ? QStringLiteral("%1 completed for %2 target(s).").arg(state->operation).arg(state->applied)
+                : QStringLiteral("%1 completed: %2 applied, %3 skipped, %4 failed.")
+                      .arg(state->operation)
+                      .arg(state->applied)
+                      .arg(state->skipped)
+                      .arg(state->failed)
+        );
+        self->refreshDaemonActivityLog();
+        emit self->globalOperationFinished(result);
+    };
+
+    const int boundedBrightness = qBound(0, brightness, 100);
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        RgbDevice* device = deviceAt(deviceIndex);
+        if (device == nullptr || !deviceWritable(deviceIndex)) {
+            continue;
+        }
+
+        for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+            ++state->total;
+            RgbEffect effect = preserveCurrentEffect
+                ? device->zoneEffect(zoneIndex)
+                : RgbEffect(
+                      static_cast<RgbEffectType>(effectType),
+                      RgbColor::fromQColor(color),
+                      speed,
+                      boundedBrightness
+                  );
+            if (preserveCurrentEffect) {
+                effect.setBrightness(boundedBrightness);
+            }
+
+            if (!deviceSupportsEffect(deviceIndex, static_cast<int>(effect.type()))) {
+                ++state->skipped;
+                state->details.append(
+                    QStringLiteral("%1 / %2: effect is not supported.")
+                        .arg(device->name(), device->zones().at(zoneIndex).name())
+                );
+                continue;
+            }
+            if (preserveCurrentEffect
+                && !deviceSupportsEffectBrightness(deviceIndex, static_cast<int>(effect.type()))) {
+                ++state->skipped;
+                state->details.append(
+                    QStringLiteral("%1 / %2: brightness control is not supported.")
+                        .arg(device->name(), device->zones().at(zoneIndex).name())
+                );
+                continue;
+            }
+            if (!dryRunEnabled()
+                && deviceRequiresConfirmation(deviceIndex)
+                && !deviceWriteConfirmed(deviceIndex)) {
+                ++state->skipped;
+                state->details.append(
+                    QStringLiteral("%1 / %2: hardware writes are not confirmed.")
+                        .arg(device->name(), device->zones().at(zoneIndex).name())
+                );
+                continue;
+            }
+
+            if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(device)) {
+                ++state->pending;
+                beginDaemonOperation();
+                const quint64 requestId = daemonDevice->applyZoneEffectAsync(
+                    zoneIndex,
+                    effect,
+                    !dryRunEnabled(),
+                    [self, state, finish, deviceIndex, zoneIndex](bool success, const QString& error) {
+                        if (self == nullptr) {
+                            return;
+                        }
+                        self->endDaemonOperation();
+                        --state->pending;
+                        if (success) {
+                            ++state->applied;
+                        } else {
+                            ++state->failed;
+                            state->details.append(
+                                error.isEmpty()
+                                    ? QStringLiteral("Device %1 / zone %2: write failed.")
+                                          .arg(deviceIndex)
+                                          .arg(zoneIndex)
+                                    : error
+                            );
+                        }
+                        emit self->zoneDataChanged(deviceIndex, zoneIndex);
+                        (*finish)();
+                    }
+                );
+                Q_UNUSED(requestId)
+                continue;
+            }
+
+            if (m_deviceManager->applyZoneEffect(deviceIndex, zoneIndex, effect)) {
+                ++state->applied;
+            } else {
+                ++state->failed;
+                state->details.append(
+                    QStringLiteral("%1 / %2: write failed.")
+                        .arg(device->name(), device->zones().at(zoneIndex).name())
+                );
+            }
+        }
+    }
+
+    state->dispatching = false;
+    if (state->total == 0) {
+        setStatusMessage(QStringLiteral("No writable zones are available."));
+        return false;
+    }
+
+    setStatusMessage(QStringLiteral("%1 started for %2 target(s).").arg(state->operation).arg(state->total));
+    (*finish)();
+    return true;
+}
+
+bool AppController::allOffAllDevices()
+{
+    if (m_deviceManager == nullptr) {
+        setStatusMessage(QStringLiteral("Could not start global All Off."));
+        return false;
+    }
+
+    auto state = std::make_shared<GlobalOperationState>();
+    state->operation = QStringLiteral("All Off");
+    const QPointer<AppController> self(this);
+    const auto finish = std::make_shared<std::function<void()>>();
+    *finish = [self, state]() {
+        if (self == nullptr || state->dispatching || state->pending > 0) {
+            return;
+        }
+
+        const QVariantMap result {
+            {QStringLiteral("operation"), state->operation},
+            {QStringLiteral("total"), state->total},
+            {QStringLiteral("applied"), state->applied},
+            {QStringLiteral("skipped"), state->skipped},
+            {QStringLiteral("failed"), state->failed},
+            {QStringLiteral("partial"), state->applied > 0 && (state->skipped > 0 || state->failed > 0)},
+            {QStringLiteral("details"), state->details},
+        };
+        self->setStatusMessage(
+            state->failed == 0 && state->skipped == 0
+                ? QStringLiteral("All Off completed for %1 device(s).").arg(state->applied)
+                : QStringLiteral("All Off completed: %1 applied, %2 skipped, %3 failed.")
+                      .arg(state->applied)
+                      .arg(state->skipped)
+                      .arg(state->failed)
+        );
+        self->refreshDaemonActivityLog();
+        emit self->globalOperationFinished(result);
+    };
+
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        RgbDevice* device = deviceAt(deviceIndex);
+        if (device == nullptr || !deviceWritable(deviceIndex)) {
+            continue;
+        }
+
+        ++state->total;
+        if (!dryRunEnabled()
+            && deviceRequiresConfirmation(deviceIndex)
+            && !deviceWriteConfirmed(deviceIndex)) {
+            ++state->skipped;
+            state->details.append(
+                QStringLiteral("%1: hardware writes are not confirmed.").arg(device->name())
+            );
+            continue;
+        }
+
+        if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(device)) {
+            ++state->pending;
+            beginDaemonOperation();
+            const quint64 requestId = daemonDevice->applyAllOffAsync(
+                !dryRunEnabled(),
+                [self, state, finish, deviceIndex](bool success, const QString& error) {
+                    if (self == nullptr) {
+                        return;
+                    }
+                    self->endDaemonOperation();
+                    --state->pending;
+                    if (success) {
+                        ++state->applied;
+                    } else {
+                        ++state->failed;
+                        state->details.append(
+                            error.isEmpty()
+                                ? QStringLiteral("Device %1: All Off failed.").arg(deviceIndex)
+                                : error
+                        );
+                    }
+                    emit self->zoneDataChanged(deviceIndex, -1);
+                    (*finish)();
+                }
+            );
+            Q_UNUSED(requestId)
+            continue;
+        }
+
+        QString error;
+        if (m_deviceManager->applyAllOff(deviceIndex, &error)) {
+            ++state->applied;
+            emit zoneDataChanged(deviceIndex, -1);
+        } else {
+            ++state->failed;
+            state->details.append(
+                error.isEmpty()
+                    ? QStringLiteral("%1: All Off failed.").arg(device->name())
+                    : error
+            );
+        }
+    }
+
+    state->dispatching = false;
+    if (state->total == 0) {
+        setStatusMessage(QStringLiteral("No writable devices are available."));
+        return false;
+    }
+
+    setStatusMessage(QStringLiteral("All Off started for %1 device(s).").arg(state->total));
+    (*finish)();
+    return true;
+}
+
 bool AppController::markDeviceRgbController(int deviceIndex)
 {
     if (m_deviceManager == nullptr || !m_deviceManager->markDeviceRgbController(deviceIndex, true)) {
@@ -866,6 +1222,205 @@ bool AppController::exportProfile(const QString& profileName, const QUrl& destin
     return true;
 }
 
+QVariantMap AppController::diagnosticsReport() const
+{
+    if (m_deviceManager == nullptr) {
+        return {};
+    }
+
+    const QString profilesDirectory = m_deviceManager->profilesDirectoryPath();
+    const auto sanitize = [&profilesDirectory](const QString& value) {
+        return sanitizedDiagnosticString(value, profilesDirectory);
+    };
+
+    const BackendDescriptor backend = m_deviceManager->backendRegistry().activeDescriptor();
+    QVariantList backendCapabilities;
+    for (const BackendCapability capability : {
+             BackendCapability::DiscoveryRead,
+             BackendCapability::ZoneColorWrite,
+             BackendCapability::ZoneEffectWrite,
+         }) {
+        if (backend.capabilities.testFlag(capability)) {
+            backendCapabilities.append(backendCapabilityToString(capability));
+        }
+    }
+
+    QVariantList profileNames;
+    for (const QString& profileName : m_deviceManager->profileNames()) {
+        profileNames.append(profileName);
+    }
+
+    QVariantList devices;
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
+        if (device == nullptr) {
+            continue;
+        }
+
+        QVariantList deviceCapabilities;
+        for (const BackendCapability capability : {
+                 BackendCapability::DiscoveryRead,
+                 BackendCapability::ZoneColorWrite,
+                 BackendCapability::ZoneEffectWrite,
+             }) {
+            if (device->capabilities().testFlag(capability)) {
+                deviceCapabilities.append(backendCapabilityToString(capability));
+            }
+        }
+
+        QVariantMap permissions {
+            {
+                backendCapabilityToString(BackendCapability::DiscoveryRead),
+                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::DiscoveryRead)),
+            },
+            {
+                backendCapabilityToString(BackendCapability::ZoneColorWrite),
+                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::ZoneColorWrite)),
+            },
+            {
+                backendCapabilityToString(BackendCapability::ZoneEffectWrite),
+                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::ZoneEffectWrite)),
+            },
+        };
+
+        QVariantList effects;
+        for (const RgbEffectType effectType : {
+                 RgbEffectType::Static,
+                 RgbEffectType::Rainbow,
+                 RgbEffectType::Breathing,
+                 RgbEffectType::ColorCycle,
+             }) {
+            const int effectTypeValue = static_cast<int>(effectType);
+            effects.append(QVariantMap {
+                {QStringLiteral("type"), rgbEffectTypeToString(effectType)},
+                {QStringLiteral("supported"), device->supportsEffect(effectTypeValue)},
+                {QStringLiteral("speed"), device->supportsEffectSpeed(effectTypeValue)},
+                {QStringLiteral("brightness"), device->supportsEffectBrightness(effectTypeValue)},
+            });
+        }
+
+        QVariantList zones;
+        const QVector<RgbZone>& deviceZones = device->zones();
+        for (int zoneIndex = 0; zoneIndex < deviceZones.size(); ++zoneIndex) {
+            const RgbZone& zone = deviceZones.at(zoneIndex);
+            zones.append(QVariantMap {
+                {QStringLiteral("index"), zoneIndex},
+                {QStringLiteral("name"), zone.name()},
+                {QStringLiteral("type"), zone.typeName()},
+                {QStringLiteral("ledCount"), zone.ledCount()},
+                {QStringLiteral("currentColor"), zone.currentColor().toHexString()},
+                {QStringLiteral("effect"), effectToDiagnostics(zone.effect())},
+            });
+        }
+
+        devices.append(QVariantMap {
+            {QStringLiteral("index"), deviceIndex},
+            {QStringLiteral("id"), device->id()},
+            {QStringLiteral("name"), device->name()},
+            {QStringLiteral("vendor"), device->vendor()},
+            {QStringLiteral("type"), device->typeName()},
+            {QStringLiteral("backendId"), device->backendId()},
+            {QStringLiteral("discoveryIdentity"), device->discoveryIdentity()},
+            {QStringLiteral("likelyRgbController"), device->likelyRgbController()},
+            {QStringLiteral("hasRgbControllerOverride"), device->hasRgbControllerOverride()},
+            {QStringLiteral("isRgbController"), device->isRgbController()},
+            {QStringLiteral("writeConfirmed"), m_deviceManager->deviceWriteConfirmed(deviceIndex)},
+            {QStringLiteral("writable"), deviceWritable(deviceIndex)},
+            {QStringLiteral("lastHardwareWriteStatus"), sanitize(device->lastHardwareWriteStatus())},
+            {QStringLiteral("capabilities"), deviceCapabilities},
+            {QStringLiteral("permissions"), permissions},
+            {QStringLiteral("supportedEffects"), effects},
+            {QStringLiteral("zones"), zones},
+        });
+    }
+
+    QVariantList activity;
+    for (const QString& line : m_logLines) {
+        activity.append(sanitize(line));
+    }
+
+    return QVariantMap {
+        {QStringLiteral("schemaVersion"), 1},
+        {
+            QStringLiteral("generatedAt"),
+            QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs),
+        },
+        {
+            QStringLiteral("application"),
+            QVariantMap {
+                {QStringLiteral("name"), QStringLiteral("LumaCore")},
+                {QStringLiteral("version"), QStringLiteral(LUMACORE_VERSION)},
+                {QStringLiteral("qtVersion"), QString::fromUtf8(qVersion())},
+                {QStringLiteral("platform"), QSysInfo::prettyProductName()},
+                {QStringLiteral("buildAbi"), QSysInfo::buildAbi()},
+                {QStringLiteral("kernel"), QSysInfo::kernelType()},
+                {QStringLiteral("kernelVersion"), QSysInfo::kernelVersion()},
+            },
+        },
+        {
+            QStringLiteral("backend"),
+            QVariantMap {
+                {QStringLiteral("id"), backend.id},
+                {QStringLiteral("displayName"), backend.displayName},
+                {QStringLiteral("description"), backend.description},
+                {QStringLiteral("capabilities"), backendCapabilities},
+                {QStringLiteral("deviceCount"), m_deviceManager->deviceCount()},
+            },
+        },
+        {
+            QStringLiteral("daemon"),
+            QVariantMap {
+                {QStringLiteral("state"), daemonState()},
+                {QStringLiteral("connected"), daemonConnected()},
+                {QStringLiteral("recoveryBusy"), daemonRecoveryBusy()},
+                {QStringLiteral("socketPath"), sanitize(daemonSocketPath())},
+                {QStringLiteral("version"), daemonVersion()},
+                {QStringLiteral("lastError"), sanitize(daemonLastError())},
+                {QStringLiteral("pendingOperations"), pendingDaemonOperations()},
+            },
+        },
+        {
+            QStringLiteral("safety"),
+            QVariantMap {
+                {QStringLiteral("dryRunEnabled"), dryRunEnabled()},
+                {QStringLiteral("profilesDirectory"), sanitize(profilesDirectory)},
+            },
+        },
+        {QStringLiteral("profiles"), profileNames},
+        {QStringLiteral("devices"), devices},
+        {QStringLiteral("activity"), activity},
+    };
+}
+
+bool AppController::exportDiagnostics(const QUrl& destinationUrl)
+{
+    if (m_deviceManager == nullptr || !destinationUrl.isLocalFile()) {
+        setStatusMessage(QStringLiteral("Choose a local destination for the diagnostics export."));
+        return false;
+    }
+
+    QString destinationPath = destinationUrl.toLocalFile();
+    if (QFileInfo(destinationPath).suffix().isEmpty()) {
+        destinationPath.append(QStringLiteral(".json"));
+    }
+
+    QSaveFile output(destinationPath);
+    if (!output.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        setStatusMessage(QStringLiteral("Could not open diagnostics export destination."));
+        return false;
+    }
+
+    const QJsonDocument document = QJsonDocument::fromVariant(diagnosticsReport());
+    output.write(document.toJson(QJsonDocument::Indented));
+    if (!output.commit()) {
+        setStatusMessage(QStringLiteral("Could not write diagnostics export."));
+        return false;
+    }
+
+    setStatusMessage(QStringLiteral("Exported diagnostics report."));
+    return true;
+}
+
 QVariantMap AppController::profileCompatibility(const QString& profileName)
 {
     if (m_deviceManager == nullptr) {
@@ -931,6 +1486,22 @@ bool AppController::applyProfileOnLaunch(const QString& profileName)
     }
 
     setStatusMessage(QStringLiteral("Applied active profile '%1' on launch.").arg(selectedProfile));
+    return true;
+}
+
+bool AppController::applyScheduledProfile(const QString& profileName)
+{
+    const QString selectedProfile = profileName.trimmed();
+    if (selectedProfile.isEmpty()) {
+        setStatusMessage(QStringLiteral("No profile is selected for the schedule."));
+        return false;
+    }
+
+    if (!loadProfile(selectedProfile)) {
+        return false;
+    }
+
+    setStatusMessage(QStringLiteral("Applied scheduled profile '%1'.").arg(selectedProfile));
     return true;
 }
 
