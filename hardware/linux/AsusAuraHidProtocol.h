@@ -73,13 +73,8 @@ struct AsusAuraConfigTable {
 [[nodiscard]] bool isAsusAuraWriteValidatedProduct(const QString& productId);
 [[nodiscard]] QByteArray buildAsusAuraConfigTableRequest();
 [[nodiscard]] AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response);
+[[nodiscard]] bool isAsusAuraConfigTableWriteReady(const AsusAuraConfigTable& config);
 [[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraStaticColorPreview(
-    int zoneIndex,
-    const RgbColor& color,
-    int ledCount,
-    int brightness
-);
-[[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraStaticColorWrite(
     int zoneIndex,
     const RgbColor& color,
     int ledCount,
@@ -98,7 +93,6 @@ struct AsusAuraConfigTable {
     const RgbEffect& effect,
     int ledCount
 );
-[[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraAllOffWrite();
 [[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraAllOffWrite(const AsusAuraConfigTable& config);
 
 } // namespace lumacore::hardware::linux

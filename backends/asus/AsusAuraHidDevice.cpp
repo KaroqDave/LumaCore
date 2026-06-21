@@ -35,6 +35,8 @@ AsusAuraHidDevice::AsusAuraHidDevice(
     , m_configTable(std::move(configTable))
     , m_configSummary(std::move(configSummary))
 {
+    m_configTableVerified = m_configTableVerified
+        && hardware::linux::isAsusAuraConfigTableWriteReady(m_configTable);
     setLikelyRgbController(true);
     initializeZones();
 }

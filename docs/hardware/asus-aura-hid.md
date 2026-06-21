@@ -47,9 +47,10 @@ Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research
 - Approved packets use 65-byte reports based on GPL-compatible OpenRGB protocol references. The sequence starts with the OpenRGB mainboard `EC52 53 00 01` setup packet.
 - Fixed RGB headers are targeted from the parsed config table with `EC35` static mode plus `EC36` color data at the computed RGB-header LED offset.
 - Addressable headers are targeted from the parsed config table with `EC35` direct mode plus chunked `EC40` direct color packets, with the apply bit set only on the final chunk.
-- Breathing uses native ASUS mode `0x02` plus `EC36` mode color data only where fixed-header color mapping is verified. Color-bearing native effects on addressable headers are blocked until the EC36 addressable color mapping is captured and tested.
+- Native effects on individual fixed RGB headers are blocked because those headers share one channel-wide `EC35` effect channel. Color-bearing native effects on addressable headers are also blocked until the EC36 addressable color mapping is captured and tested.
 - Color cycle uses native ASUS spectrum-cycle mode `0x04`.
 - Rainbow uses native ASUS mode `0x05`.
+- Native mode brightness is accepted only as `0` (off) or `100`; intermediate values are rejected until a hardware brightness field is verified.
 - LumaCore stores effect speed in the UI/model and logs it in previews, but no ASUS speed payload byte is encoded until a verified field is documented.
 - The All Off action sends one explicit `EC35` off-mode packet per parsed config channel and requires session confirmation.
 - Successful and failed real HID writes are recorded in the activity log with interface/path, report count, byte count, and protocol summary or transport error.

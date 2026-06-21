@@ -114,9 +114,9 @@ AuraCandidate probeAuraCandidate(const hardware::linux::ProbeDevice& device)
     }
 
     const hardware::linux::AsusAuraConfigTable config = hardware::linux::parseAsusAuraConfigTableResponse(response.response);
-    candidate.configVerified = config.valid;
+    candidate.configVerified = hardware::linux::isAsusAuraConfigTableWriteReady(config);
     candidate.config = config;
-    candidate.configSummary = config.valid
+    candidate.configSummary = candidate.configVerified
         ? QStringLiteral("ASUS Aura HID validated %1. %2").arg(interfaceSummary(device), config.summary)
         : QStringLiteral("ASUS Aura HID config-table response invalid for %1: %2")
               .arg(interfaceSummary(device))
