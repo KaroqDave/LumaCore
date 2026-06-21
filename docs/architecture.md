@@ -9,8 +9,12 @@ The public boundaries are intentionally narrower than the implementation modules
 2. The GUI registers `DaemonBackend` with its local `DeviceManager`.
 3. `DaemonBackend` obtains device snapshots through daemon protocol version 1.
 4. QML reads device data through `DeviceTreeModel` and invokes actions through `AppController`.
-5. Proxy `DaemonRgbDevice` objects translate write operations into daemon calls.
+5. Proxy `DaemonRgbDevice` objects translate interactive write operations into correlated asynchronous daemon calls.
 6. The daemon's `DeviceManager` applies permission checks, confirmation state, dry-run policy, and backend writes.
+
+`DaemonClient` supports concurrent request correlation, cancellation, timeouts, bounded reconnect,
+and a synchronous compatibility wrapper used by startup discovery and bulk profile application.
+After reconnect, the GUI requests a fresh device snapshot and replaces the proxy-device set atomically.
 
 ## Module responsibilities
 
@@ -38,7 +42,7 @@ Behavior-preserving refactors must keep these boundaries stable unless a dedicat
 
 The following should not be bundled into structural refactors:
 
-- asynchronous daemon calls;
+- replacing the remaining synchronous startup/profile compatibility paths;
 - daemon protocol version changes or field removal;
 - profile location or schema changes;
 - replacing the QML controller surface;

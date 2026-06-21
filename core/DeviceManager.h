@@ -38,6 +38,7 @@ public:
     [[nodiscard]] RgbDevice* deviceAt(int index);
     [[nodiscard]] const RgbDevice* deviceAt(int index) const;
     [[nodiscard]] const std::vector<std::unique_ptr<RgbDevice>>& devices() const;
+    void replaceDevices(std::vector<std::unique_ptr<RgbDevice>> devices);
     [[nodiscard]] bool markDeviceRgbController(int deviceIndex, bool isRgbController);
     [[nodiscard]] bool clearDeviceRgbControllerOverride(int deviceIndex);
     [[nodiscard]] bool confirmDeviceWrites(int deviceIndex);

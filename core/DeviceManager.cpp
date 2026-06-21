@@ -197,6 +197,20 @@ const std::vector<std::unique_ptr<RgbDevice>>& DeviceManager::devices() const
     return m_devices;
 }
 
+void DeviceManager::replaceDevices(std::vector<std::unique_ptr<RgbDevice>> devices)
+{
+    m_effectsEngine->stopAll();
+    m_devices.clear();
+    m_confirmedWriteDeviceIds.clear();
+    for (std::unique_ptr<RgbDevice>& device : devices) {
+        if (device) {
+            registerDevice(std::move(device));
+        }
+    }
+    emit devicesChanged();
+    m_activityLog.info(LogCategory::Device, QStringLiteral("Refreshed %1 device(s).").arg(deviceCount()));
+}
+
 bool DeviceManager::markDeviceRgbController(int deviceIndex, bool isRgbController)
 {
     RgbDevice* device = deviceAt(deviceIndex);

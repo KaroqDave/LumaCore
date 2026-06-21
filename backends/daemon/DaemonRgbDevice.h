@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QJsonObject>
 
+#include <functional>
 #include <memory>
 
 namespace lumacore {
@@ -15,6 +16,8 @@ class DaemonRgbDevice final : public RgbDevice
     Q_OBJECT
 
 public:
+    using OperationHandler = std::function<void(bool success, QString error)>;
+
     struct EffectSupport {
         bool supported {false};
         bool speed {false};
@@ -39,6 +42,19 @@ public:
     [[nodiscard]] bool supportsEffectSpeed(int effectType) const override;
     [[nodiscard]] bool supportsEffectBrightness(int effectType) const override;
     void setWriteConfirmed(bool confirmed);
+    [[nodiscard]] quint64 applyZoneEffectAsync(
+        int zoneIndex,
+        const RgbEffect& effect,
+        bool updateLocalState,
+        OperationHandler handler
+    );
+    [[nodiscard]] quint64 applyAllOffAsync(bool updateLocalState, OperationHandler handler);
+    [[nodiscard]] quint64 updateZoneMetadataAsync(
+        int zoneIndex,
+        const QString& name,
+        int ledCount,
+        OperationHandler handler
+    );
 
 private:
     int m_daemonDeviceIndex {-1};

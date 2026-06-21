@@ -28,7 +28,9 @@ class AppController final : public QObject
     Q_PROPERTY(QString daemonSocketPath READ daemonSocketPath NOTIFY daemonInfoChanged)
     Q_PROPERTY(QString daemonVersion READ daemonVersion NOTIFY daemonInfoChanged)
     Q_PROPERTY(QString daemonLastError READ daemonLastError NOTIFY daemonInfoChanged)
+    Q_PROPERTY(bool daemonRecoveryBusy READ daemonRecoveryBusy NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool dryRunEnabled READ dryRunEnabled WRITE setDryRunEnabled NOTIFY dryRunEnabledChanged)
+    Q_PROPERTY(int pendingDaemonOperations READ pendingDaemonOperations NOTIFY pendingDaemonOperationsChanged)
 
 public:
     explicit AppController(
@@ -50,7 +52,9 @@ public:
     [[nodiscard]] QString daemonSocketPath() const;
     [[nodiscard]] QString daemonVersion() const;
     [[nodiscard]] QString daemonLastError() const;
+    [[nodiscard]] bool daemonRecoveryBusy() const;
     [[nodiscard]] bool dryRunEnabled() const;
+    [[nodiscard]] int pendingDaemonOperations() const;
     void setDryRunEnabled(bool enabled);
 
     Q_INVOKABLE bool applyEffect(int deviceIndex, int zoneIndex, int effectType, const QColor& color, double speed, int brightness);
@@ -74,6 +78,9 @@ public:
     Q_INVOKABLE bool markDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool removeDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool resetDeviceRgbControllerOverride(int deviceIndex);
+    Q_INVOKABLE QString deviceId(int deviceIndex) const;
+    Q_INVOKABLE int deviceIndexForId(const QString& deviceId) const;
+    Q_INVOKABLE int zoneIndexForName(int deviceIndex, const QString& zoneName) const;
     Q_INVOKABLE QString zoneName(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE int zoneLedCount(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE QString zoneColorHex(int deviceIndex, int zoneIndex) const;
@@ -87,7 +94,10 @@ public:
     Q_INVOKABLE QVariantMap profileCompatibility(const QString& profileName);
     Q_INVOKABLE bool profileExists(const QString& profileName) const;
     Q_INVOKABLE QStringList profileNames() const;
+    Q_INVOKABLE bool retryDaemonConnection();
+    Q_INVOKABLE bool rescanDaemonDevices();
     [[nodiscard]] bool applyProfileOnLaunch(const QString& profileName);
+    void enableDaemonRecovery();
 
 signals:
     void statusMessageChanged();
@@ -98,6 +108,8 @@ signals:
     void daemonInfoChanged();
     void writeConfirmationChanged(int deviceIndex);
     void dryRunEnabledChanged();
+    void pendingDaemonOperationsChanged();
+    void daemonDevicesRefreshed();
 
 private:
     [[nodiscard]] RgbDevice* deviceAt(int deviceIndex);
@@ -110,11 +122,17 @@ private:
     void refreshBackendInfo();
     void refreshDaemonActivityLog();
     void syncDaemonDryRun();
+    void beginDaemonOperation();
+    void endDaemonOperation();
+    bool refreshDaemonDevices(bool recoveredConnection);
 
     DeviceManager* m_deviceManager {nullptr};
     std::shared_ptr<DaemonClient> m_daemonClient;
     QString m_statusMessage;
     QStringList m_logLines;
+    int m_pendingDaemonOperations {0};
+    bool m_daemonRecoveryEnabled {false};
+    bool m_daemonRefreshInProgress {false};
 };
 
 } // namespace lumacore

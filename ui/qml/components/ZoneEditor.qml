@@ -24,6 +24,9 @@ Item {
     property int deviceDiagnosticsRevision: 0
     property bool writeConfirmationOverlayDismissed: false
     readonly property real brightnessFactor: effectBrightness / 100.0
+    readonly property bool daemonOperationPending: appController
+        ? appController.pendingDaemonOperations > 0
+        : false
     readonly property bool usesBaseColor: effectType !== 1 && effectType !== 3
     readonly property bool usesSpeed: effectType !== 0
     readonly property bool selectedDeviceWritable: appController && selectedDeviceIndex >= 0
@@ -157,10 +160,7 @@ Item {
         if (!editor.appController) {
             return
         }
-
-        if (editor.appController.confirmDeviceWrites(editor.selectedDeviceIndex)) {
-            editor.writeConfirmationOverlayDismissed = true
-        }
+        editor.appController.confirmDeviceWrites(editor.selectedDeviceIndex)
     }
 
     implicitHeight: content.implicitHeight
@@ -187,7 +187,7 @@ Item {
                 id: nameField
 
                 Layout.fillWidth: true
-                enabled: editor.hasSelection && editor.selectedDeviceWritable
+                enabled: editor.hasSelection && editor.selectedDeviceWritable && !editor.daemonOperationPending
                 selectByMouse: true
                 placeholderText: qsTr("Zone name")
             }
@@ -202,7 +202,7 @@ Item {
                 id: ledSpin
 
                 Layout.fillWidth: true
-                enabled: editor.hasSelection && editor.selectedDeviceWritable
+                enabled: editor.hasSelection && editor.selectedDeviceWritable && !editor.daemonOperationPending
                 from: 1
                 to: 512
                 editable: true
@@ -217,7 +217,7 @@ Item {
             AppButton {
                 Layout.fillWidth: true
                 variant: "primary"
-                enabled: editor.hasSelection && editor.selectedDeviceWritable
+                enabled: editor.hasSelection && editor.selectedDeviceWritable && !editor.daemonOperationPending
                 text: qsTr("Save Zone")
                 animationsEnabled: editor.animationsEnabled
                 onClicked: {
@@ -585,7 +585,10 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 42
                     variant: "primary"
-                    enabled: editor.hasSelection && editor.selectedDeviceWritable && editor.selectedEffectSupported
+                    enabled: editor.hasSelection
+                        && editor.selectedDeviceWritable
+                        && editor.selectedEffectSupported
+                        && !editor.daemonOperationPending
                     text: qsTr("Apply Effect to Zone")
                     animationsEnabled: editor.animationsEnabled
                     onClicked: editor.applyEffectSafely()
@@ -599,7 +602,9 @@ Item {
                     AppButton {
                         Layout.fillWidth: true
                         variant: "secondary"
-                        enabled: editor.selectedDeviceWriteConfirmed && !editor.appController.dryRunEnabled
+                        enabled: editor.selectedDeviceWriteConfirmed
+                            && !editor.appController.dryRunEnabled
+                            && !editor.daemonOperationPending
                         text: qsTr("All Off")
                         animationsEnabled: editor.animationsEnabled
                         onClicked: editor.appController.allOffDevice(editor.selectedDeviceIndex)
@@ -608,7 +613,7 @@ Item {
                     AppButton {
                         Layout.fillWidth: true
                         variant: "secondary"
-                        enabled: editor.selectedDeviceWriteConfirmed
+                        enabled: editor.selectedDeviceWriteConfirmed && !editor.daemonOperationPending
                         text: qsTr("Revoke Confirmation")
                         animationsEnabled: editor.animationsEnabled
                         onClicked: editor.appController.revokeDeviceWrites(editor.selectedDeviceIndex)
@@ -753,6 +758,7 @@ Item {
                         variant: "secondary"
                         text: qsTr("Decline")
                         animationsEnabled: editor.animationsEnabled
+                        enabled: !editor.daemonOperationPending
                         onClicked: editor.writeConfirmationOverlayDismissed = true
                     }
 
@@ -761,6 +767,7 @@ Item {
                         variant: "primary"
                         text: qsTr("Accept")
                         animationsEnabled: editor.animationsEnabled
+                        enabled: !editor.daemonOperationPending
                         onClicked: editor.confirmHardwareWrites()
                     }
                 }

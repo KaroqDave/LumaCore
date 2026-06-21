@@ -1,5 +1,6 @@
 #include "ui/AppController.h"
 
+#include "backends/daemon/DaemonBackend.h"
 #include "backends/daemon/DaemonRgbDevice.h"
 #include "core/ActivityLog.h"
 #include "core/RgbBackend.h"
@@ -8,6 +9,8 @@
 
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QPointer>
+#include <QTimer>
 #include <QtGlobal>
 
 #include <utility>
@@ -78,6 +81,19 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
         });
         connect(m_daemonClient.get(), &DaemonClient::daemonInfoChanged, this, [this]() {
             emit daemonInfoChanged();
+        });
+        connect(m_daemonClient.get(), &DaemonClient::reconnected, this, [this]() {
+            if (m_daemonRecoveryEnabled) {
+                QTimer::singleShot(0, this, [this] { refreshDaemonDevices(true); });
+            }
+        });
+        connect(m_daemonClient.get(), &DaemonClient::reconnectScheduled, this, [this](int attempt, int delayMs) {
+            emit daemonInfoChanged();
+            setStatusMessage(
+                delayMs > 0
+                    ? QStringLiteral("Daemon offline. Reconnect attempt %1 in %2 ms.").arg(attempt).arg(delayMs)
+                    : QStringLiteral("Retrying daemon connection.")
+            );
         });
     }
 
@@ -168,8 +184,21 @@ bool AppController::daemonConnected() const
 
 QString AppController::daemonState() const
 {
-    if (m_daemonClient == nullptr || !m_daemonClient->isConnected()) {
-        return QStringLiteral("Disconnected");
+    if (m_daemonRefreshInProgress) {
+        return QStringLiteral("Refreshing devices");
+    }
+    if (m_daemonClient == nullptr) {
+        return QStringLiteral("Offline");
+    }
+    if (m_daemonClient->isConnecting()) {
+        return m_daemonClient->reconnectAttempt() > 0
+            ? QStringLiteral("Reconnecting")
+            : QStringLiteral("Connecting");
+    }
+    if (!m_daemonClient->isConnected()) {
+        return m_daemonClient->isReconnectScheduled()
+            ? QStringLiteral("Reconnecting")
+            : QStringLiteral("Offline");
     }
     if (!m_daemonClient->protocolCompatible()) {
         return QStringLiteral("Incompatible daemon");
@@ -192,9 +221,21 @@ QString AppController::daemonLastError() const
     return m_daemonClient == nullptr ? QString() : m_daemonClient->lastError();
 }
 
+bool AppController::daemonRecoveryBusy() const
+{
+    return m_daemonRefreshInProgress
+        || (m_daemonClient != nullptr
+            && (m_daemonClient->isConnecting() || m_daemonClient->isReconnectScheduled()));
+}
+
 bool AppController::dryRunEnabled() const
 {
     return m_deviceManager != nullptr && m_deviceManager->dryRunEnabled();
+}
+
+int AppController::pendingDaemonOperations() const
+{
+    return m_pendingDaemonOperations;
 }
 
 void AppController::setDryRunEnabled(bool enabled)
@@ -230,6 +271,36 @@ bool AppController::applyEffect(int deviceIndex, int zoneIndex, int effectType, 
         speed,
         brightness
     );
+
+    if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(deviceAt(deviceIndex))) {
+        beginDaemonOperation();
+        setStatusMessage(QStringLiteral("Applying effect to selected zone."));
+        const QPointer<AppController> self(this);
+        const quint64 requestId = daemonDevice->applyZoneEffectAsync(
+            zoneIndex,
+            effect,
+            !dryRunEnabled(),
+            [self, deviceIndex, zoneIndex](bool success, const QString& error) {
+                if (self == nullptr) {
+                    return;
+                }
+                self->endDaemonOperation();
+                self->setStatusMessage(
+                    success
+                        ? QStringLiteral("Applied effect to selected zone.")
+                        : (error.isEmpty() ? QStringLiteral("Could not apply effect to selected zone.") : error)
+                );
+                emit self->zoneDataChanged(deviceIndex, zoneIndex);
+                self->refreshDaemonActivityLog();
+            }
+        );
+        if (requestId == 0) {
+            endDaemonOperation();
+            setStatusMessage(QStringLiteral("Could not queue effect for selected zone."));
+            return false;
+        }
+        return true;
+    }
 
     const bool changed = m_deviceManager->applyZoneEffect(deviceIndex, zoneIndex, effect);
     if (!changed) {
@@ -287,6 +358,45 @@ bool AppController::updateZone(int deviceIndex, int zoneIndex, const QString& na
 {
     if (m_deviceManager == nullptr) {
         return false;
+    }
+
+    if (name.trimmed().isEmpty()) {
+        setStatusMessage(QStringLiteral("Zone name cannot be empty."));
+        return false;
+    }
+    if (ledCount < 1) {
+        setStatusMessage(QStringLiteral("LED count must be at least 1."));
+        return false;
+    }
+
+    if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(deviceAt(deviceIndex))) {
+        beginDaemonOperation();
+        setStatusMessage(QStringLiteral("Updating selected zone."));
+        const QPointer<AppController> self(this);
+        const quint64 requestId = daemonDevice->updateZoneMetadataAsync(
+            zoneIndex,
+            name,
+            ledCount,
+            [self, deviceIndex, zoneIndex](bool success, const QString& error) {
+                if (self == nullptr) {
+                    return;
+                }
+                self->endDaemonOperation();
+                self->setStatusMessage(
+                    success
+                        ? QStringLiteral("Updated selected zone.")
+                        : (error.isEmpty() ? QStringLiteral("Could not update selected zone.") : error)
+                );
+                emit self->zoneDataChanged(deviceIndex, zoneIndex);
+                self->refreshDaemonActivityLog();
+            }
+        );
+        if (requestId == 0) {
+            endDaemonOperation();
+            setStatusMessage(QStringLiteral("Could not queue zone update."));
+            return false;
+        }
+        return true;
     }
 
     QString errorMessage;
@@ -419,19 +529,35 @@ bool AppController::confirmDeviceWrites(int deviceIndex)
         return false;
     }
 
-    const DaemonCallResult response = m_daemonClient->call(daemonMethodName(DaemonMethod::ConfirmWrites), {
-        {QStringLiteral("deviceIndex"), deviceIndex},
-    });
-    if (!response.ok || !response.result.value(QStringLiteral("success")).toBool(false)) {
-        setStatusMessage(response.ok ? QStringLiteral("Could not confirm hardware writes.") : response.error);
-        refreshDaemonActivityLog();
-        return false;
-    }
-
-    setStatusMessage(QStringLiteral("Hardware writes confirmed for this daemon session."));
-    setLocalDaemonWriteConfirmed(deviceIndex, response.result.value(QStringLiteral("writeConfirmed")).toBool(true));
-    refreshDaemonActivityLog();
-    emit backendInfoChanged();
+    beginDaemonOperation();
+    setStatusMessage(QStringLiteral("Confirming hardware writes."));
+    const QPointer<AppController> self(this);
+    const quint64 requestId = m_daemonClient->callAsync(
+        daemonMethodName(DaemonMethod::ConfirmWrites),
+        {{QStringLiteral("deviceIndex"), deviceIndex}},
+        [self, deviceIndex](DaemonCallResult response) {
+            if (self == nullptr) {
+                return;
+            }
+            self->endDaemonOperation();
+            const bool success =
+                response.ok && response.result.value(QStringLiteral("success")).toBool(false);
+            if (!success) {
+                self->setStatusMessage(
+                    response.ok ? QStringLiteral("Could not confirm hardware writes.") : response.error
+                );
+            } else {
+                self->setStatusMessage(QStringLiteral("Hardware writes confirmed for this daemon session."));
+                self->setLocalDaemonWriteConfirmed(
+                    deviceIndex,
+                    response.result.value(QStringLiteral("writeConfirmed")).toBool(true)
+                );
+                emit self->backendInfoChanged();
+            }
+            self->refreshDaemonActivityLog();
+        }
+    );
+    Q_UNUSED(requestId)
     return true;
 }
 
@@ -442,19 +568,35 @@ bool AppController::revokeDeviceWrites(int deviceIndex)
         return false;
     }
 
-    const DaemonCallResult response = m_daemonClient->call(daemonMethodName(DaemonMethod::RevokeWrites), {
-        {QStringLiteral("deviceIndex"), deviceIndex},
-    });
-    if (!response.ok || !response.result.value(QStringLiteral("success")).toBool(false)) {
-        setStatusMessage(response.ok ? QStringLiteral("Could not revoke hardware writes.") : response.error);
-        refreshDaemonActivityLog();
-        return false;
-    }
-
-    setStatusMessage(QStringLiteral("Hardware write confirmation revoked."));
-    setLocalDaemonWriteConfirmed(deviceIndex, response.result.value(QStringLiteral("writeConfirmed")).toBool(false));
-    refreshDaemonActivityLog();
-    emit backendInfoChanged();
+    beginDaemonOperation();
+    setStatusMessage(QStringLiteral("Revoking hardware write confirmation."));
+    const QPointer<AppController> self(this);
+    const quint64 requestId = m_daemonClient->callAsync(
+        daemonMethodName(DaemonMethod::RevokeWrites),
+        {{QStringLiteral("deviceIndex"), deviceIndex}},
+        [self, deviceIndex](DaemonCallResult response) {
+            if (self == nullptr) {
+                return;
+            }
+            self->endDaemonOperation();
+            const bool success =
+                response.ok && response.result.value(QStringLiteral("success")).toBool(false);
+            if (!success) {
+                self->setStatusMessage(
+                    response.ok ? QStringLiteral("Could not revoke hardware writes.") : response.error
+                );
+            } else {
+                self->setStatusMessage(QStringLiteral("Hardware write confirmation revoked."));
+                self->setLocalDaemonWriteConfirmed(
+                    deviceIndex,
+                    response.result.value(QStringLiteral("writeConfirmed")).toBool(false)
+                );
+                emit self->backendInfoChanged();
+            }
+            self->refreshDaemonActivityLog();
+        }
+    );
+    Q_UNUSED(requestId)
     return true;
 }
 
@@ -463,6 +605,34 @@ bool AppController::allOffDevice(int deviceIndex)
     if (m_deviceManager == nullptr) {
         setStatusMessage(QStringLiteral("Could not turn device off."));
         return false;
+    }
+
+    if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(deviceAt(deviceIndex))) {
+        beginDaemonOperation();
+        setStatusMessage(QStringLiteral("Turning off selected device."));
+        const QPointer<AppController> self(this);
+        const quint64 requestId = daemonDevice->applyAllOffAsync(
+            !dryRunEnabled(),
+            [self, deviceIndex](bool success, const QString& error) {
+                if (self == nullptr) {
+                    return;
+                }
+                self->endDaemonOperation();
+                self->setStatusMessage(
+                    success
+                        ? QStringLiteral("Sent all-off command to selected device.")
+                        : (error.isEmpty() ? QStringLiteral("Could not turn device off.") : error)
+                );
+                emit self->zoneDataChanged(deviceIndex, -1);
+                self->refreshDaemonActivityLog();
+            }
+        );
+        if (requestId == 0) {
+            endDaemonOperation();
+            setStatusMessage(QStringLiteral("Could not queue all-off command."));
+            return false;
+        }
+        return true;
     }
 
     QString error;
@@ -512,6 +682,42 @@ bool AppController::resetDeviceRgbControllerOverride(int deviceIndex)
     setStatusMessage(QStringLiteral("Reset RGB controller override for '%1'.").arg(deviceName(deviceIndex)));
     refreshDaemonActivityLog();
     return true;
+}
+
+QString AppController::deviceId(int deviceIndex) const
+{
+    const RgbDevice* device = deviceAt(deviceIndex);
+    return device == nullptr ? QString() : device->id();
+}
+
+int AppController::deviceIndexForId(const QString& deviceId) const
+{
+    if (m_deviceManager == nullptr || deviceId.isEmpty()) {
+        return -1;
+    }
+
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
+        if (device != nullptr && device->id() == deviceId) {
+            return deviceIndex;
+        }
+    }
+    return -1;
+}
+
+int AppController::zoneIndexForName(int deviceIndex, const QString& zoneName) const
+{
+    const RgbDevice* device = deviceAt(deviceIndex);
+    if (device == nullptr || zoneName.isEmpty()) {
+        return -1;
+    }
+
+    for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+        if (device->zones().at(zoneIndex).name() == zoneName) {
+            return zoneIndex;
+        }
+    }
+    return -1;
 }
 
 QString AppController::zoneName(int deviceIndex, int zoneIndex) const
@@ -687,6 +893,31 @@ QStringList AppController::profileNames() const
     return m_deviceManager == nullptr ? QStringList {} : m_deviceManager->profileNames();
 }
 
+bool AppController::retryDaemonConnection()
+{
+    if (m_daemonClient == nullptr) {
+        setStatusMessage(QStringLiteral("Daemon client is not available."));
+        return false;
+    }
+    if (m_daemonClient->isConnected()) {
+        return rescanDaemonDevices();
+    }
+
+    m_daemonClient->setAutomaticReconnectEnabled(true);
+    m_daemonClient->reconnectNow();
+    emit daemonInfoChanged();
+    return true;
+}
+
+bool AppController::rescanDaemonDevices()
+{
+    if (!daemonConnected()) {
+        setStatusMessage(QStringLiteral("Cannot rescan devices while the daemon is offline."));
+        return false;
+    }
+    return refreshDaemonDevices(false);
+}
+
 bool AppController::applyProfileOnLaunch(const QString& profileName)
 {
     const QString selectedProfile = profileName.trimmed();
@@ -701,6 +932,16 @@ bool AppController::applyProfileOnLaunch(const QString& profileName)
 
     setStatusMessage(QStringLiteral("Applied active profile '%1' on launch.").arg(selectedProfile));
     return true;
+}
+
+void AppController::enableDaemonRecovery()
+{
+    if (m_daemonClient == nullptr || m_daemonRecoveryEnabled) {
+        return;
+    }
+
+    m_daemonRecoveryEnabled = true;
+    m_daemonClient->setAutomaticReconnectEnabled(true);
 }
 
 void AppController::appendLog(const QString& message)
@@ -770,19 +1011,98 @@ void AppController::refreshDaemonActivityLog()
         return;
     }
 
-    const DaemonCallResult response =
-        m_daemonClient->call(daemonMethodName(DaemonMethod::ActivityLogSnapshot), {}, 1000);
-    if (!response.ok) {
+    const QPointer<AppController> self(this);
+    const quint64 requestId = m_daemonClient->callAsync(
+        daemonMethodName(DaemonMethod::ActivityLogSnapshot),
+        {},
+        [self](DaemonCallResult response) {
+            if (self == nullptr || !response.ok) {
+                return;
+            }
+            const QJsonArray lines = response.result.value(QStringLiteral("lines")).toArray();
+            for (const QJsonValue& line : lines) {
+                const QString text = line.toString();
+                if (!text.isEmpty() && !self->m_logLines.contains(text)) {
+                    self->appendLog(text);
+                }
+            }
+        },
+        1000
+    );
+    Q_UNUSED(requestId)
+}
+
+void AppController::beginDaemonOperation()
+{
+    ++m_pendingDaemonOperations;
+    emit pendingDaemonOperationsChanged();
+}
+
+void AppController::endDaemonOperation()
+{
+    if (m_pendingDaemonOperations <= 0) {
         return;
     }
+    --m_pendingDaemonOperations;
+    emit pendingDaemonOperationsChanged();
+}
 
-    const QJsonArray lines = response.result.value(QStringLiteral("lines")).toArray();
-    for (const QJsonValue& line : lines) {
-        const QString text = line.toString();
-        if (!text.isEmpty() && !m_logLines.contains(text)) {
-            appendLog(text);
-        }
+bool AppController::refreshDaemonDevices(bool recoveredConnection)
+{
+    if (m_daemonClient == nullptr || m_deviceManager == nullptr || m_daemonRefreshInProgress) {
+        return false;
     }
+
+    auto* daemonBackend =
+        dynamic_cast<DaemonBackend*>(m_deviceManager->backendRegistry().activeBackend());
+    if (daemonBackend == nullptr) {
+        return false;
+    }
+
+    m_daemonRefreshInProgress = true;
+    emit daemonInfoChanged();
+    setStatusMessage(
+        recoveredConnection
+            ? QStringLiteral("Reconnected to daemon. Refreshing devices.")
+            : QStringLiteral("Rescanning daemon devices.")
+    );
+    const QPointer<AppController> self(this);
+    const quint64 requestId = m_daemonClient->callAsync(
+        daemonMethodName(DaemonMethod::ListDevices),
+        {},
+        [self, daemonBackend, recoveredConnection](DaemonCallResult response) {
+            if (self == nullptr) {
+                return;
+            }
+            self->m_daemonRefreshInProgress = false;
+            emit self->daemonInfoChanged();
+            if (!response.ok) {
+                self->setStatusMessage(
+                    response.error.isEmpty()
+                        ? (recoveredConnection
+                            ? QStringLiteral("Reconnected, but device refresh failed.")
+                            : QStringLiteral("Device rescan failed."))
+                        : response.error
+                );
+                return;
+            }
+
+            self->m_deviceManager->replaceDevices(daemonBackend->devicesFromPayload(response.result));
+            self->setStatusMessage(
+                recoveredConnection
+                    ? QStringLiteral("Reconnected and refreshed %1 device(s).")
+                          .arg(self->m_deviceManager->deviceCount())
+                    : QStringLiteral("Rescan loaded %1 device(s).")
+                          .arg(self->m_deviceManager->deviceCount())
+            );
+            self->syncDaemonDryRun();
+            self->refreshBackendInfo();
+            emit self->daemonDevicesRefreshed();
+        },
+        3000
+    );
+    Q_UNUSED(requestId)
+    return true;
 }
 
 void AppController::syncDaemonDryRun()
@@ -791,13 +1111,18 @@ void AppController::syncDaemonDryRun()
         return;
     }
 
-    const DaemonCallResult response = m_daemonClient->call(daemonMethodName(DaemonMethod::SetDryRun), {
-        {QStringLiteral("enabled"), dryRunEnabled()},
-    });
-    if (response.ok) {
-        emit daemonInfoChanged();
-        refreshDaemonActivityLog();
-    }
+    const QPointer<AppController> self(this);
+    const quint64 requestId = m_daemonClient->callAsync(
+        daemonMethodName(DaemonMethod::SetDryRun),
+        {{QStringLiteral("enabled"), dryRunEnabled()}},
+        [self](DaemonCallResult response) {
+            if (self != nullptr && response.ok) {
+                emit self->daemonInfoChanged();
+                self->refreshDaemonActivityLog();
+            }
+        }
+    );
+    Q_UNUSED(requestId)
 }
 
 } // namespace lumacore

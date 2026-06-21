@@ -11,6 +11,10 @@ Rectangle {
     property string backendName: qsTr("Backend")
     property bool daemonConnected: controller ? controller.daemonConnected : false
     property string daemonState: controller ? controller.daemonState : qsTr("Disconnected")
+    readonly property bool recoveryBusy: controller ? controller.daemonRecoveryBusy : false
+    readonly property color stateColor: recoveryBusy
+        ? Theme.accent
+        : (daemonConnected ? Theme.success : Theme.warning)
 
     signal clicked()
 
@@ -38,7 +42,7 @@ Rectangle {
             width: 8
             height: 8
             radius: 4
-            color: chip.daemonConnected ? Theme.success : Theme.warning
+            color: chip.stateColor
         }
 
         Label {
@@ -76,9 +80,9 @@ Rectangle {
             width: daemonStateLabel.implicitWidth + 10
             height: 18
             radius: 999
-            color: chip.daemonConnected ? Theme.success : Theme.warning
+            color: chip.stateColor
             opacity: 0.18
-            border.color: chip.daemonConnected ? Theme.success : Theme.warning
+            border.color: chip.stateColor
             border.width: 1
 
             Label {
@@ -86,7 +90,7 @@ Rectangle {
 
                 anchors.centerIn: parent
                 text: chip.daemonState
-                color: chip.daemonConnected ? Theme.success : Theme.warning
+                color: chip.stateColor
                 font.pixelSize: 9
                 font.bold: true
             }

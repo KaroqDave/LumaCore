@@ -28,6 +28,9 @@ ApplicationWindow {
     property int currentPage: 0
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
+    property string selectedDeviceId: ""
+    property string selectedZoneName: ""
+    property int selectedZoneFallbackIndex: -1
     property real sidebarWidth: sidebarCollapsed ? 74 : 248
     readonly property var controller: root.appController
     readonly property var settings: root.settingsController
@@ -68,25 +71,77 @@ ApplicationWindow {
     }
 
     function selectDevice(deviceIndex) {
-        if (deviceIndex < 0) {
+        if (deviceIndex < 0 || deviceIndex >= controller.backendDeviceCount) {
             return
         }
 
         selectedDeviceIndex = deviceIndex
+        selectedDeviceId = controller.deviceId(deviceIndex)
         selectedZoneIndex = controller.zoneCount(deviceIndex) > 0 ? 0 : -1
+        selectedZoneFallbackIndex = selectedZoneIndex
+        selectedZoneName = selectedZoneIndex >= 0
+            ? controller.zoneName(deviceIndex, selectedZoneIndex)
+            : ""
         if (selectedZoneIndex >= 0) {
             selectedColor = controller.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex)
         }
     }
 
     function selectZone(deviceIndex, zoneIndex) {
-        if (deviceIndex < 0 || zoneIndex < 0) {
+        if (deviceIndex < 0
+                || deviceIndex >= controller.backendDeviceCount
+                || zoneIndex < 0
+                || zoneIndex >= controller.zoneCount(deviceIndex)) {
             return
         }
 
         selectedDeviceIndex = deviceIndex
         selectedZoneIndex = zoneIndex
+        selectedDeviceId = controller.deviceId(deviceIndex)
+        selectedZoneName = controller.zoneName(deviceIndex, zoneIndex)
+        selectedZoneFallbackIndex = zoneIndex
         selectedColor = controller.zoneEffectColor(deviceIndex, zoneIndex)
+    }
+
+    function restoreSelection() {
+        let deviceIndex = controller.deviceIndexForId(selectedDeviceId)
+        const restoredSameDevice = deviceIndex >= 0
+        if (deviceIndex < 0) {
+            deviceIndex = controller.backendDeviceCount > 0 ? 0 : -1
+        }
+
+        if (deviceIndex < 0) {
+            selectedDeviceIndex = -1
+            selectedZoneIndex = -1
+            selectedDeviceId = ""
+            selectedZoneName = ""
+            selectedZoneFallbackIndex = -1
+            return
+        }
+
+        selectedDeviceIndex = deviceIndex
+        selectedDeviceId = controller.deviceId(deviceIndex)
+
+        let zoneIndex = restoredSameDevice
+            ? controller.zoneIndexForName(deviceIndex, selectedZoneName)
+            : -1
+        const zoneCount = controller.zoneCount(deviceIndex)
+        if (restoredSameDevice
+                && zoneIndex < 0
+                && selectedZoneFallbackIndex >= 0
+                && selectedZoneFallbackIndex < zoneCount) {
+            zoneIndex = selectedZoneFallbackIndex
+        }
+        if (zoneIndex < 0 && zoneCount > 0) {
+            zoneIndex = 0
+        }
+
+        selectedZoneIndex = zoneIndex
+        selectedZoneFallbackIndex = zoneIndex
+        selectedZoneName = zoneIndex >= 0 ? controller.zoneName(deviceIndex, zoneIndex) : ""
+        if (zoneIndex >= 0) {
+            selectedColor = controller.zoneEffectColor(deviceIndex, zoneIndex)
+        }
     }
 
     Behavior on sidebarWidth {
@@ -201,7 +256,11 @@ ApplicationWindow {
                                 Layout.preferredWidth: 9
                                 Layout.preferredHeight: 9
                                 radius: 5
-                                color: root.controller && root.controller.daemonConnected ? Theme.success : Theme.warning
+                                color: root.controller && root.controller.daemonRecoveryBusy
+                                       ? Theme.accent
+                                       : (root.controller && root.controller.daemonConnected
+                                          ? Theme.success
+                                          : Theme.warning)
                             }
 
                             Label {
@@ -391,6 +450,9 @@ ApplicationWindow {
 
         function onZoneDataChanged(deviceIndex, zoneIndex) {
             if (deviceIndex === root.selectedDeviceIndex && zoneIndex === root.selectedZoneIndex) {
+                root.selectedDeviceId = root.controller.deviceId(deviceIndex)
+                root.selectedZoneName = root.controller.zoneName(deviceIndex, zoneIndex)
+                root.selectedZoneFallbackIndex = zoneIndex
                 // Static and Breathing use a base color. Rainbow and Color Cycle
                 // are generated effects, so following their frame color would fight the picker.
                 const effectType = root.controller.zoneEffectType(deviceIndex, zoneIndex)
@@ -398,6 +460,10 @@ ApplicationWindow {
                     root.selectedColor = root.controller.zoneEffectColor(deviceIndex, zoneIndex)
                 }
             }
+        }
+
+        function onDaemonDevicesRefreshed() {
+            root.restoreSelection()
         }
     }
 

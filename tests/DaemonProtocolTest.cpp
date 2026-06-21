@@ -1,3 +1,5 @@
+#include "backends/daemon/DaemonRgbDevice.h"
+#include "backends/daemon/DaemonBackend.h"
 #include "ipc/DaemonClient.h"
 #include "ipc/DaemonProtocol.h"
 #include "ipc/DaemonServer.h"
@@ -12,6 +14,7 @@
 #include <QLocalSocket>
 #include <QThread>
 
+#include <algorithm>
 #include <functional>
 #include <future>
 #include <thread>
@@ -455,6 +458,400 @@ int main(int argc, char* argv[])
             "client should flag a daemon advertising an incompatible protocol version"
         )) {
         return 1;
+    }
+
+    {
+        const QString asyncServerName = testSocketName(QStringLiteral("async-correlation"));
+        std::promise<bool> listeningPromise;
+        std::future<bool> listeningFuture = listeningPromise.get_future();
+        std::jthread asyncServerThread(
+            [asyncServerName, promise = std::move(listeningPromise)]() mutable {
+                QLocalServer::removeServer(asyncServerName);
+                QLocalServer localServer;
+                const bool listening = localServer.listen(asyncServerName);
+                promise.set_value(listening);
+                if (!listening || !localServer.waitForNewConnection(3000)) {
+                    return;
+                }
+
+                QLocalSocket* socket = localServer.nextPendingConnection();
+                if (socket == nullptr) {
+                    return;
+                }
+
+                QList<QJsonObject> requests;
+                QElapsedTimer requestTimer;
+                requestTimer.start();
+                while (requests.size() < 2 && requestTimer.elapsed() < 3000) {
+                    if (!socket->canReadLine()) {
+                        socket->waitForReadyRead(100);
+                    }
+                    while (socket->canReadLine()) {
+                        requests.append(QJsonDocument::fromJson(socket->readLine()).object());
+                    }
+                }
+
+                if (requests.size() == 2) {
+                    for (int index = 1; index >= 0; --index) {
+                        const QJsonObject& request = requests.at(index);
+                        socket->write(encodeDaemonMessage(makeDaemonResult(
+                            request.value(QStringLiteral("id")).toString().toULongLong(),
+                            {{QStringLiteral("method"), request.value(QStringLiteral("method")).toString()}}
+                        )));
+                    }
+                    socket->waitForBytesWritten(3000);
+                }
+                socket->disconnectFromServer();
+                socket->waitForDisconnected(3000);
+                delete socket;
+            }
+        );
+
+        if (!require(listeningFuture.get(), "asynchronous daemon test server should listen")) {
+            return 1;
+        }
+
+        DaemonClient asyncClient(asyncServerName);
+        bool firstFinished = false;
+        bool secondFinished = false;
+        QString firstMethod;
+        QString secondMethod;
+        QElapsedTimer callTimer;
+        callTimer.start();
+        const quint64 firstRequestId = asyncClient.callAsync(
+            QStringLiteral("first"),
+            {},
+            [&](DaemonCallResult result) {
+                firstFinished = result.ok;
+                firstMethod = result.result.value(QStringLiteral("method")).toString();
+            },
+            3000
+        );
+        const quint64 secondRequestId = asyncClient.callAsync(
+            QStringLiteral("second"),
+            {},
+            [&](DaemonCallResult result) {
+                secondFinished = result.ok;
+                secondMethod = result.result.value(QStringLiteral("method")).toString();
+            },
+            3000
+        );
+        const qint64 callDurationMs = callTimer.elapsed();
+
+        if (!require(firstRequestId != secondRequestId, "asynchronous requests should receive unique IDs")
+            || !require(callDurationMs < 100, "asynchronous calls should return without waiting for daemon responses")
+            || !require(
+                waitUntil([&] { return firstFinished && secondFinished; }),
+                "asynchronous requests should both complete"
+            )
+            || !require(
+                firstMethod == QStringLiteral("first") && secondMethod == QStringLiteral("second"),
+                "out-of-order daemon responses should reach their matching callbacks"
+            )) {
+            return 1;
+        }
+
+        asyncClient.disconnectFromDaemon();
+        asyncServerThread.join();
+    }
+
+    {
+        const QString timeoutServerName = testSocketName(QStringLiteral("async-timeout"));
+        std::promise<bool> listeningPromise;
+        std::future<bool> listeningFuture = listeningPromise.get_future();
+        std::jthread timeoutServerThread(
+            [timeoutServerName, promise = std::move(listeningPromise)]() mutable {
+                QLocalServer::removeServer(timeoutServerName);
+                QLocalServer localServer;
+                const bool listening = localServer.listen(timeoutServerName);
+                promise.set_value(listening);
+                if (!listening || !localServer.waitForNewConnection(3000)) {
+                    return;
+                }
+
+                QLocalSocket* socket = localServer.nextPendingConnection();
+                if (socket != nullptr) {
+                    socket->waitForReadyRead(3000);
+                    QThread::msleep(150);
+                    socket->disconnectFromServer();
+                    delete socket;
+                }
+            }
+        );
+
+        if (!require(listeningFuture.get(), "asynchronous timeout test server should listen")) {
+            return 1;
+        }
+
+        DaemonClient timeoutClient(timeoutServerName);
+        bool timeoutFinished = false;
+        QString timeoutError;
+        const quint64 timeoutRequestId = timeoutClient.callAsync(
+            QStringLiteral("noResponse"),
+            {},
+            [&](DaemonCallResult result) {
+                timeoutFinished = true;
+                timeoutError = result.error;
+            },
+            50
+        );
+        if (!require(timeoutRequestId > 0, "asynchronous timeout request should receive an ID")
+            || !require(waitUntil([&] { return timeoutFinished; }), "asynchronous request timeout should complete")
+            || !require(
+                timeoutError.contains(QStringLiteral("Timed out")),
+                "asynchronous timeout should report an actionable error"
+            )) {
+            return 1;
+        }
+
+        timeoutClient.disconnectFromDaemon();
+        timeoutServerThread.join();
+    }
+
+    {
+        DaemonClient cancellationClient(QStringLiteral("unused-cancellation-socket"));
+        bool cancellationFinished = false;
+        QString cancellationError;
+        const quint64 cancellationRequestId = cancellationClient.callAsync(
+            QStringLiteral("cancelled"),
+            {},
+            [&](DaemonCallResult result) {
+                cancellationFinished = true;
+                cancellationError = result.error;
+            }
+        );
+        if (!require(
+                cancellationClient.cancelCall(cancellationRequestId),
+                "pending asynchronous requests should be cancellable"
+            )
+            || !require(cancellationFinished, "cancelling a request should complete its callback")
+            || !require(
+                cancellationError.contains(QStringLiteral("cancelled")),
+                "cancelled requests should report their cancellation"
+            )
+            || !require(
+                !cancellationClient.cancelCall(cancellationRequestId),
+                "completed requests should not be cancellable twice"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        const QString reconnectServerName = testSocketName(QStringLiteral("automatic-reconnect"));
+        std::jthread reconnectServerThread([reconnectServerName] {
+            QThread::msleep(350);
+            QLocalServer::removeServer(reconnectServerName);
+            QLocalServer localServer;
+            if (!localServer.listen(reconnectServerName)
+                || !localServer.waitForNewConnection(3000)) {
+                return;
+            }
+
+            QLocalSocket* socket = localServer.nextPendingConnection();
+            if (socket != nullptr) {
+                socket->waitForDisconnected(3000);
+                delete socket;
+            }
+        });
+
+        DaemonClient reconnectClient(reconnectServerName);
+        QList<int> reconnectDelays;
+        bool reconnectSignalReceived = false;
+        QObject::connect(
+            &reconnectClient,
+            &DaemonClient::reconnectScheduled,
+            [&](int, int delayMs) { reconnectDelays.append(delayMs); }
+        );
+        QObject::connect(
+            &reconnectClient,
+            &DaemonClient::reconnected,
+            [&] { reconnectSignalReceived = true; }
+        );
+
+        if (!require(
+                !reconnectClient.connectToDaemon(50),
+                "automatic reconnect fixture should begin disconnected"
+            )) {
+            return 1;
+        }
+        reconnectClient.setAutomaticReconnectEnabled(true);
+        if (!require(
+                waitUntil([&] { return reconnectSignalReceived && reconnectClient.isConnected(); }, 4000),
+                "client should reconnect after the daemon becomes available"
+            )
+            || !require(
+                !reconnectDelays.isEmpty() && reconnectDelays.constFirst() == 250,
+                "automatic reconnect should start with a short bounded delay"
+            )
+            || !require(
+                std::all_of(
+                    reconnectDelays.cbegin(),
+                    reconnectDelays.cend(),
+                    [](int delayMs) { return delayMs <= 5000; }
+                ),
+                "automatic reconnect delay should remain capped"
+            )
+            || !require(
+                reconnectClient.reconnectAttempt() == 0,
+                "successful reconnect should reset the attempt counter"
+            )) {
+            return 1;
+        }
+
+        const int schedulesBeforeDisconnect = reconnectDelays.size();
+        reconnectClient.disconnectFromDaemon();
+        QElapsedTimer intentionalDisconnectTimer;
+        intentionalDisconnectTimer.start();
+        while (intentionalDisconnectTimer.elapsed() < 400) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+            QThread::msleep(1);
+        }
+        if (!require(
+                reconnectDelays.size() == schedulesBeforeDisconnect,
+                "intentional disconnect should suppress automatic reconnect"
+            )) {
+            return 1;
+        }
+        reconnectServerThread.join();
+    }
+
+    {
+        const QString deviceServerName = testSocketName(QStringLiteral("async-device"));
+        std::promise<bool> listeningPromise;
+        std::future<bool> listeningFuture = listeningPromise.get_future();
+        std::jthread deviceServerThread(
+            [deviceServerName, promise = std::move(listeningPromise)]() mutable {
+                QLocalServer::removeServer(deviceServerName);
+                QLocalServer localServer;
+                const bool listening = localServer.listen(deviceServerName);
+                promise.set_value(listening);
+                if (!listening || !localServer.waitForNewConnection(3000)) {
+                    return;
+                }
+
+                QLocalSocket* socket = localServer.nextPendingConnection();
+                if (socket == nullptr) {
+                    return;
+                }
+                while (!socket->canReadLine() && socket->waitForReadyRead(3000)) {
+                }
+                if (socket->canReadLine()) {
+                    const QJsonObject request = QJsonDocument::fromJson(socket->readLine()).object();
+                    QThread::msleep(100);
+                    socket->write(encodeDaemonMessage(makeDaemonResult(
+                        request.value(QStringLiteral("id")).toString().toULongLong(),
+                        {
+                            {QStringLiteral("success"), true},
+                            {QStringLiteral("hardwareStatus"), QStringLiteral("Applied by async fixture.")},
+                        }
+                    )));
+                    socket->waitForBytesWritten(3000);
+                }
+                socket->disconnectFromServer();
+                socket->waitForDisconnected(3000);
+                delete socket;
+            }
+        );
+
+        if (!require(listeningFuture.get(), "asynchronous device test server should listen")) {
+            return 1;
+        }
+
+        auto deviceClient = std::make_shared<DaemonClient>(deviceServerName);
+        const QJsonObject deviceSnapshot {
+            {QStringLiteral("index"), 0},
+            {QStringLiteral("id"), QStringLiteral("async-device")},
+            {QStringLiteral("name"), QStringLiteral("Async Device")},
+            {QStringLiteral("vendor"), QStringLiteral("LumaCore")},
+            {QStringLiteral("type"), QStringLiteral("Motherboard")},
+            {QStringLiteral("backendId"), QStringLiteral("mock")},
+            {QStringLiteral("capabilities"), QJsonArray {
+                backendCapabilityToString(BackendCapability::DiscoveryRead),
+                backendCapabilityToString(BackendCapability::ZoneColorWrite),
+            }},
+            {QStringLiteral("effectSupport"), QJsonArray {
+                QJsonObject {
+                    {QStringLiteral("effectType"), static_cast<int>(RgbEffectType::Static)},
+                    {QStringLiteral("supported"), true},
+                    {QStringLiteral("speed"), false},
+                    {QStringLiteral("brightness"), true},
+                },
+            }},
+            {QStringLiteral("zones"), QJsonArray {
+                QJsonObject {
+                    {QStringLiteral("name"), QStringLiteral("Zone 1")},
+                    {QStringLiteral("type"), QStringLiteral("Motherboard")},
+                    {QStringLiteral("ledCount"), 1},
+                    {QStringLiteral("color"), QStringLiteral("#000000")},
+                    {QStringLiteral("effect"), RgbEffect(
+                        RgbEffectType::Static,
+                        RgbColor(0, 0, 0)
+                    ).toJson()},
+                },
+            }},
+        };
+        DaemonRgbDevice asyncDevice(deviceSnapshot, deviceClient);
+        const RgbEffect requestedEffect(RgbEffectType::Static, RgbColor(17, 34, 51), 1.0, 75);
+        bool operationFinished = false;
+        bool operationSucceeded = false;
+        QElapsedTimer operationTimer;
+        operationTimer.start();
+        const quint64 operationId = asyncDevice.applyZoneEffectAsync(
+            0,
+            requestedEffect,
+            true,
+            [&](bool success, const QString&) {
+                operationFinished = true;
+                operationSucceeded = success;
+            }
+        );
+        const qint64 queueDurationMs = operationTimer.elapsed();
+
+        if (!require(operationId > 0, "asynchronous device operation should receive a request ID")
+            || !require(queueDurationMs < 100, "asynchronous device operation should not wait for hardware")
+            || !require(
+                asyncDevice.zoneEffect(0).color() == RgbColor(0, 0, 0),
+                "proxy state should not change before daemon success"
+            )
+            || !require(waitUntil([&] { return operationFinished; }), "asynchronous device operation should complete")
+            || !require(operationSucceeded, "asynchronous device operation should report success")
+            || !require(
+                asyncDevice.zoneEffect(0) == requestedEffect,
+                "proxy state should update after daemon success"
+            )
+            || !require(
+                asyncDevice.lastHardwareWriteStatus() == QStringLiteral("Applied by async fixture."),
+                "asynchronous device operation should preserve hardware status"
+            )) {
+            return 1;
+        }
+
+        deviceClient->disconnectFromDaemon();
+        deviceServerThread.join();
+
+        DaemonBackend snapshotBackend(deviceClient);
+        DeviceManager refreshedManager;
+        refreshedManager.replaceDevices(snapshotBackend.devicesFromPayload(QJsonObject {
+            {QStringLiteral("backend"), backendDescriptorToJson(BackendDescriptor {
+                QStringLiteral("mock"),
+                QStringLiteral("Mock Backend"),
+                QStringLiteral("Refresh fixture"),
+                BackendCapability::DiscoveryRead | BackendCapability::ZoneColorWrite,
+            })},
+            {QStringLiteral("devices"), QJsonArray {deviceSnapshot}},
+        }));
+        if (!require(
+                refreshedManager.deviceCount() == 1
+                    && refreshedManager.deviceAt(0)->id() == QStringLiteral("async-device"),
+                "fresh daemon snapshots should atomically replace proxy devices"
+            )
+            || !require(
+                snapshotBackend.descriptor().displayName == QStringLiteral("Daemon: Mock Backend"),
+                "fresh daemon snapshots should update the backend descriptor"
+            )) {
+            return 1;
+        }
     }
 
     const SnapshotDevice unverified(SnapshotDevice::Mode::UnverifiedAsus);

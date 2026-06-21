@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v0.7.0** - Linux-first RGB control with a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v0.8.0** - Linux-first RGB control with resilient asynchronous daemon communication and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
@@ -29,6 +29,7 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - Qt Quick desktop UI with a collapsible navigation rail, Devices, Profiles, Settings, Activities, backend status, and an About dialog.
 - In-memory RGB model for devices, zones, LEDs, profiles, static colors, rainbow, breathing, and color-cycle effects.
 - GUI-to-daemon boundary through `backends/daemon/`, `ipc/`, and `lumacore-daemon`.
+- Non-blocking interactive daemon requests with correlated responses, cancellation, bounded reconnect backoff, automatic device refresh, stable selection restoration, and manual Retry/Rescan controls.
 - Default daemon `auto` backend that prefers verified ASUS Aura HID control, adds read-only Linux discovery inventory when available, and falls back to the mock backend.
 - Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
 - Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata.
@@ -199,6 +200,7 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 ## Current Gaps
 
 - Automated coverage is still focused; broader mock-backend and end-to-end UI integration, sanitizers, and warning-policy work remains.
+- Bulk profile application still uses the synchronous compatibility path; direct interactive device operations are asynchronous.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation is documented.
 - Profile validation is minimal.
 - Native installers, Linux distribution packages, and full install targets are not implemented; Windows packaging currently produces a portable preview ZIP.

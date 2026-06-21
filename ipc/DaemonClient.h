@@ -4,8 +4,12 @@
 
 #include <QLocalSocket>
 #include <QObject>
+#include <QHash>
 #include <QJsonObject>
 #include <QString>
+#include <QTimer>
+
+#include <functional>
 
 namespace lumacore {
 
@@ -20,6 +24,8 @@ class DaemonClient final : public QObject
     Q_OBJECT
 
 public:
+    using CallHandler = std::function<void(DaemonCallResult)>;
+
     explicit DaemonClient(QString socketPath = defaultDaemonSocketPath(), QObject* parent = nullptr);
 
     [[nodiscard]] const QString& socketPath() const;
@@ -30,31 +36,66 @@ public:
     [[nodiscard]] int daemonProtocolVersion() const;
     [[nodiscard]] bool protocolCompatible() const;
     [[nodiscard]] QString lastError() const;
+    [[nodiscard]] bool automaticReconnectEnabled() const;
+    [[nodiscard]] int reconnectAttempt() const;
+    [[nodiscard]] bool isConnecting() const;
+    [[nodiscard]] bool isReconnectScheduled() const;
 
     [[nodiscard]] bool connectToDaemon(int timeoutMs = 1000);
     void disconnectFromDaemon();
+    void setAutomaticReconnectEnabled(bool enabled);
+    void reconnectNow();
     void reportConnectionError(const QString& message);
     [[nodiscard]] DaemonCallResult call(const QString& method, const QJsonObject& params = {}, int timeoutMs = 2000);
+    [[nodiscard]] quint64 callAsync(
+        const QString& method,
+        const QJsonObject& params,
+        CallHandler handler,
+        int timeoutMs = 2000
+    );
+    [[nodiscard]] bool cancelCall(quint64 requestId);
 
 signals:
     void connectionStateChanged();
     void lastErrorChanged();
     void daemonInfoChanged();
+    void reconnectScheduled(int attempt, int delayMs);
+    void reconnected();
 
 private:
+    struct PendingCall {
+        QByteArray payload;
+        CallHandler handler;
+        QTimer* timeoutTimer {nullptr};
+        bool written {false};
+    };
+
     void setLastError(const QString& message);
     void setDaemonVersion(const QString& version);
     void setDaemonProtocolVersion(int version);
+    void updateDaemonInfo(const DaemonCallResult& result);
     [[nodiscard]] bool ensureConnected(int timeoutMs);
-    [[nodiscard]] DaemonCallResult readResponse(quint64 requestId, int timeoutMs);
+    void startAsyncConnection();
+    void sendPendingCall(quint64 requestId);
+    void sendPendingCalls();
+    void readAsyncResponses();
+    void finishPendingCall(quint64 requestId, DaemonCallResult result);
+    void failPendingCalls(const QString& error);
+    void scheduleReconnect();
+    void resetReconnectState();
 
     QString m_socketPath;
     QLocalSocket m_socket;
     QByteArray m_buffer;
     quint64 m_nextRequestId {1};
+    QHash<quint64, PendingCall> m_pendingCalls;
     QString m_daemonVersion;
     int m_daemonProtocolVersion {0};
     QString m_lastError;
+    QTimer m_reconnectTimer;
+    int m_reconnectAttempt {0};
+    bool m_automaticReconnectEnabled {false};
+    bool m_manualDisconnect {false};
 };
 
 } // namespace lumacore

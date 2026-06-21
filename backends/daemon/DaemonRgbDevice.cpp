@@ -4,6 +4,7 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QPointer>
 
 #include <utility>
 
@@ -119,6 +120,55 @@ bool DaemonRgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
     return true;
 }
 
+quint64 DaemonRgbDevice::applyZoneEffectAsync(
+    int zoneIndex,
+    const RgbEffect& effect,
+    bool updateLocalState,
+    OperationHandler handler
+)
+{
+    m_lastHardwareWriteStatus.clear();
+    if (m_client == nullptr || zoneIndex < 0 || zoneIndex >= zones().size()) {
+        m_lastHardwareWriteStatus = QStringLiteral("Daemon write skipped: invalid proxy device or zone.");
+        if (handler) {
+            handler(false, m_lastHardwareWriteStatus);
+        }
+        return 0;
+    }
+
+    const QPointer<DaemonRgbDevice> self(this);
+    return m_client->callAsync(
+        daemonMethodName(DaemonMethod::ApplyEffect),
+        {
+            {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
+            {QStringLiteral("zoneIndex"), zoneIndex},
+            {QStringLiteral("effect"), effect.toJson()},
+        },
+        [self, zoneIndex, effect, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
+            const bool success = result.ok && result.result.value(QStringLiteral("success")).toBool(false);
+            QString error = result.ok
+                ? result.result.value(QStringLiteral("error")).toString()
+                : result.error;
+            if (self != nullptr) {
+                self->m_lastHardwareWriteStatus =
+                    result.result.value(QStringLiteral("hardwareStatus")).toString(error);
+                if (success && updateLocalState) {
+                    self->setZoneEffect(zoneIndex, effect);
+                    if (!effect.isAnimated()) {
+                        self->mutableZones()[zoneIndex].setColor(effect.color());
+                    }
+                    emit self->zoneChanged(zoneIndex);
+                } else if (error.isEmpty()) {
+                    error = self->m_lastHardwareWriteStatus;
+                }
+            }
+            if (handler) {
+                handler(success, error);
+            }
+        }
+    );
+}
+
 bool DaemonRgbDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors)
 {
     Q_UNUSED(zoneIndex)
@@ -153,6 +203,47 @@ bool DaemonRgbDevice::applyAllOff()
     return true;
 }
 
+quint64 DaemonRgbDevice::applyAllOffAsync(bool updateLocalState, OperationHandler handler)
+{
+    m_lastHardwareWriteStatus.clear();
+    if (m_client == nullptr || m_daemonDeviceIndex < 0) {
+        m_lastHardwareWriteStatus = QStringLiteral("Daemon all-off skipped: invalid proxy device.");
+        if (handler) {
+            handler(false, m_lastHardwareWriteStatus);
+        }
+        return 0;
+    }
+
+    const QPointer<DaemonRgbDevice> self(this);
+    return m_client->callAsync(
+        daemonMethodName(DaemonMethod::AllOff),
+        {{QStringLiteral("deviceIndex"), m_daemonDeviceIndex}},
+        [self, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
+            const bool success = result.ok && result.result.value(QStringLiteral("success")).toBool(false);
+            QString error = result.ok
+                ? result.result.value(QStringLiteral("error")).toString()
+                : result.error;
+            if (self != nullptr) {
+                self->m_lastHardwareWriteStatus =
+                    result.result.value(QStringLiteral("hardwareStatus")).toString(error);
+                if (success && updateLocalState) {
+                    const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
+                    for (int zoneIndex = 0; zoneIndex < self->zones().size(); ++zoneIndex) {
+                        self->setZoneEffect(zoneIndex, offEffect);
+                        self->mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
+                        emit self->zoneChanged(zoneIndex);
+                    }
+                } else if (error.isEmpty()) {
+                    error = self->m_lastHardwareWriteStatus;
+                }
+            }
+            if (handler) {
+                handler(success, error);
+            }
+        }
+    );
+}
+
 bool DaemonRgbDevice::updateZoneMetadata(int zoneIndex, const QString& name, int ledCount)
 {
     if (m_client == nullptr || zoneIndex < 0 || zoneIndex >= zones().size()) {
@@ -172,6 +263,49 @@ bool DaemonRgbDevice::updateZoneMetadata(int zoneIndex, const QString& name, int
     const bool changedName = setZoneName(zoneIndex, name);
     const bool changedLedCount = setZoneLedCount(zoneIndex, ledCount);
     return changedName || changedLedCount;
+}
+
+quint64 DaemonRgbDevice::updateZoneMetadataAsync(
+    int zoneIndex,
+    const QString& name,
+    int ledCount,
+    OperationHandler handler
+)
+{
+    if (m_client == nullptr || zoneIndex < 0 || zoneIndex >= zones().size()) {
+        if (handler) {
+            handler(false, QStringLiteral("Could not update selected zone."));
+        }
+        return 0;
+    }
+
+    const QString sanitizedName = name.trimmed();
+    const QPointer<DaemonRgbDevice> self(this);
+    return m_client->callAsync(
+        daemonMethodName(DaemonMethod::UpdateZone),
+        {
+            {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
+            {QStringLiteral("zoneIndex"), zoneIndex},
+            {QStringLiteral("name"), sanitizedName},
+            {QStringLiteral("ledCount"), ledCount},
+        },
+        [self, zoneIndex, sanitizedName, ledCount, handler = std::move(handler)](DaemonCallResult result) mutable {
+            const bool success = result.ok && result.result.value(QStringLiteral("success")).toBool(false);
+            QString error = result.ok
+                ? result.result.value(QStringLiteral("error")).toString()
+                : result.error;
+            if (success && self != nullptr) {
+                const bool changedName = self->setZoneName(zoneIndex, sanitizedName);
+                const bool changedLedCount = self->setZoneLedCount(zoneIndex, ledCount);
+                if (!changedName && !changedLedCount) {
+                    emit self->zoneChanged(zoneIndex);
+                }
+            }
+            if (handler) {
+                handler(success, error);
+            }
+        }
+    );
 }
 
 bool DaemonRgbDevice::usesLocalFrameRendering() const

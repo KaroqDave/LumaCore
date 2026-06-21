@@ -1,5 +1,6 @@
 #include "ipc/DaemonClient.h"
 
+#include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonParseError>
 
@@ -7,16 +8,64 @@
 
 namespace lumacore {
 
+namespace {
+
+constexpr int kInitialReconnectDelayMs = 250;
+constexpr int kMaximumReconnectDelayMs = 5000;
+
+int reconnectDelayMs(int attempt)
+{
+    const int exponent = qBound(0, attempt - 1, 5);
+    return qMin(kInitialReconnectDelayMs * (1 << exponent), kMaximumReconnectDelayMs);
+}
+
+} // namespace
+
 DaemonClient::DaemonClient(QString socketPath, QObject* parent)
     : QObject(parent)
     , m_socketPath(std::move(socketPath))
 {
     m_socket.setReadBufferSize(kDaemonMaxFrameBytes);
+    m_reconnectTimer.setSingleShot(true);
+    connect(&m_reconnectTimer, &QTimer::timeout, this, [this] {
+        if (!m_automaticReconnectEnabled || m_manualDisconnect || isConnected()) {
+            return;
+        }
+        startAsyncConnection();
+    });
+    connect(&m_socket, &QLocalSocket::connected, this, [this] {
+        const bool recovered = m_reconnectAttempt > 0;
+        resetReconnectState();
+        m_manualDisconnect = false;
+        setLastError(QString());
+        emit connectionStateChanged();
+        sendPendingCalls();
+        if (recovered) {
+            emit reconnected();
+        }
+    });
+    connect(&m_socket, &QLocalSocket::readyRead, this, [this] {
+        if (!m_pendingCalls.isEmpty()) {
+            readAsyncResponses();
+        }
+    });
     connect(&m_socket, &QLocalSocket::disconnected, this, [this] {
         emit connectionStateChanged();
+        if (!m_pendingCalls.isEmpty()) {
+            failPendingCalls(
+                m_lastError.isEmpty() ? QStringLiteral("LumaCore daemon disconnected.") : m_lastError
+            );
+        }
+        scheduleReconnect();
     });
     connect(&m_socket, &QLocalSocket::errorOccurred, this, [this](QLocalSocket::LocalSocketError) {
         setLastError(m_socket.errorString());
+        if (m_socket.state() == QLocalSocket::UnconnectedState && !m_pendingCalls.isEmpty()) {
+            failPendingCalls(m_lastError);
+        }
+        if (m_socket.state() == QLocalSocket::UnconnectedState) {
+            scheduleReconnect();
+        }
     });
 }
 
@@ -34,6 +83,10 @@ void DaemonClient::setSocketPath(QString socketPath)
     disconnectFromDaemon();
     m_socketPath = std::move(socketPath);
     emit daemonInfoChanged();
+    if (m_automaticReconnectEnabled) {
+        m_manualDisconnect = false;
+        scheduleReconnect();
+    }
 }
 
 bool DaemonClient::isConnected() const
@@ -63,13 +116,36 @@ QString DaemonClient::lastError() const
     return m_lastError;
 }
 
+bool DaemonClient::automaticReconnectEnabled() const
+{
+    return m_automaticReconnectEnabled;
+}
+
+int DaemonClient::reconnectAttempt() const
+{
+    return m_reconnectAttempt;
+}
+
+bool DaemonClient::isConnecting() const
+{
+    return m_socket.state() == QLocalSocket::ConnectingState;
+}
+
+bool DaemonClient::isReconnectScheduled() const
+{
+    return m_reconnectTimer.isActive();
+}
+
 bool DaemonClient::connectToDaemon(int timeoutMs)
 {
+    m_manualDisconnect = false;
     return ensureConnected(timeoutMs);
 }
 
 void DaemonClient::disconnectFromDaemon()
 {
+    m_manualDisconnect = true;
+    resetReconnectState();
     if (m_socket.state() == QLocalSocket::UnconnectedState) {
         return;
     }
@@ -82,6 +158,37 @@ void DaemonClient::disconnectFromDaemon()
     emit connectionStateChanged();
 }
 
+void DaemonClient::setAutomaticReconnectEnabled(bool enabled)
+{
+    if (m_automaticReconnectEnabled == enabled) {
+        return;
+    }
+
+    m_automaticReconnectEnabled = enabled;
+    if (!enabled) {
+        resetReconnectState();
+        return;
+    }
+
+    m_manualDisconnect = false;
+    if (!isConnected()) {
+        scheduleReconnect();
+    }
+}
+
+void DaemonClient::reconnectNow()
+{
+    m_manualDisconnect = false;
+    m_reconnectTimer.stop();
+    if (isConnected() || isConnecting()) {
+        return;
+    }
+
+    ++m_reconnectAttempt;
+    emit reconnectScheduled(m_reconnectAttempt, 0);
+    startAsyncConnection();
+}
+
 void DaemonClient::reportConnectionError(const QString& message)
 {
     setLastError(message);
@@ -89,33 +196,89 @@ void DaemonClient::reportConnectionError(const QString& message)
 
 DaemonCallResult DaemonClient::call(const QString& method, const QJsonObject& params, int timeoutMs)
 {
-    const quint64 requestId = m_nextRequestId++;
-    const QByteArray payload = encodeDaemonMessage(makeDaemonRequest(requestId, method, params));
-    if (payload.size() > kDaemonMaxFrameBytes) {
-        setLastError(QStringLiteral("LumaCore daemon request exceeds the maximum message size."));
-        return {false, {}, m_lastError};
-    }
-    if (!ensureConnected(timeoutMs)) {
-        return {false, {}, m_lastError};
-    }
-
-    if (m_socket.write(payload) != payload.size() || !m_socket.waitForBytesWritten(timeoutMs)) {
-        setLastError(QStringLiteral("Could not write to LumaCore daemon: %1").arg(m_socket.errorString()));
-        disconnectFromDaemon();
-        return {false, {}, m_lastError};
-    }
-
-    DaemonCallResult result = readResponse(requestId, timeoutMs);
-    if (result.ok && result.result.contains(QStringLiteral("daemonVersion"))) {
-        setDaemonVersion(result.result.value(QStringLiteral("daemonVersion")).toString());
-    }
-    if (result.ok && result.result.contains(QStringLiteral("protocolVersion"))) {
-        setDaemonProtocolVersion(result.result.value(QStringLiteral("protocolVersion")).toInt());
-    }
-    if (!result.ok) {
-        setLastError(result.error);
+    DaemonCallResult result;
+    bool finished = false;
+    QEventLoop waitLoop;
+    const quint64 requestId = callAsync(
+        method,
+        params,
+        [&](DaemonCallResult response) {
+            result = std::move(response);
+            finished = true;
+            waitLoop.quit();
+        },
+        timeoutMs
+    );
+    Q_UNUSED(requestId)
+    if (!finished) {
+        waitLoop.exec();
     }
     return result;
+}
+
+quint64 DaemonClient::callAsync(
+    const QString& method,
+    const QJsonObject& params,
+    CallHandler handler,
+    int timeoutMs
+)
+{
+    const quint64 requestId = m_nextRequestId++;
+    const QByteArray payload = encodeDaemonMessage(makeDaemonRequest(requestId, method, params));
+
+    if (payload.size() > kDaemonMaxFrameBytes) {
+        QTimer::singleShot(0, this, [this, handler = std::move(handler)]() mutable {
+            const QString error = QStringLiteral("LumaCore daemon request exceeds the maximum message size.");
+            setLastError(error);
+            if (handler) {
+                handler({false, {}, error});
+            }
+        });
+        return requestId;
+    }
+
+    auto* timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    connect(timeoutTimer, &QTimer::timeout, this, [this, requestId] {
+        finishPendingCall(
+            requestId,
+            {false, {}, QStringLiteral("Timed out waiting for LumaCore daemon response.")}
+        );
+    });
+
+    m_pendingCalls.insert(requestId, PendingCall {
+        .payload = payload,
+        .handler = std::move(handler),
+        .timeoutTimer = timeoutTimer,
+    });
+    timeoutTimer->start(qMax(1, timeoutMs));
+
+    // Defer transport work so callAsync() always returns before its handler can run,
+    // including immediate connection and write failures.
+    QTimer::singleShot(0, this, [this, requestId] {
+        if (!m_pendingCalls.contains(requestId)) {
+            return;
+        }
+        if (isConnected()) {
+            sendPendingCall(requestId);
+        } else {
+            startAsyncConnection();
+        }
+    });
+    return requestId;
+}
+
+bool DaemonClient::cancelCall(quint64 requestId)
+{
+    if (!m_pendingCalls.contains(requestId)) {
+        return false;
+    }
+
+    finishPendingCall(
+        requestId,
+        {false, {}, QStringLiteral("LumaCore daemon request was cancelled.")}
+    );
+    return true;
 }
 
 void DaemonClient::setLastError(const QString& message)
@@ -149,6 +312,16 @@ void DaemonClient::setDaemonProtocolVersion(int version)
     emit daemonInfoChanged();
 }
 
+void DaemonClient::updateDaemonInfo(const DaemonCallResult& result)
+{
+    if (result.ok && result.result.contains(QStringLiteral("daemonVersion"))) {
+        setDaemonVersion(result.result.value(QStringLiteral("daemonVersion")).toString());
+    }
+    if (result.ok && result.result.contains(QStringLiteral("protocolVersion"))) {
+        setDaemonProtocolVersion(result.result.value(QStringLiteral("protocolVersion")).toInt());
+    }
+}
+
 bool DaemonClient::ensureConnected(int timeoutMs)
 {
     if (isConnected()) {
@@ -169,52 +342,161 @@ bool DaemonClient::ensureConnected(int timeoutMs)
     return true;
 }
 
-DaemonCallResult DaemonClient::readResponse(quint64 requestId, int timeoutMs)
+void DaemonClient::startAsyncConnection()
 {
-    while (true) {
-        const qsizetype newlineIndex = m_buffer.indexOf('\n');
-        if (newlineIndex >= 0) {
-            if (newlineIndex > kDaemonMaxMessageBytes) {
-                disconnectFromDaemon();
-                return {false, {}, QStringLiteral("LumaCore daemon response exceeds the maximum message size.")};
-            }
+    if (m_socket.state() == QLocalSocket::ConnectedState) {
+        sendPendingCalls();
+        return;
+    }
+    if (m_socket.state() == QLocalSocket::ConnectingState) {
+        return;
+    }
 
-            const QByteArray line = m_buffer.left(newlineIndex);
-            m_buffer.remove(0, newlineIndex + 1);
-            if (line.trimmed().isEmpty()) {
-                continue;
-            }
+    m_buffer.clear();
+    m_manualDisconnect = false;
+    m_socket.abort();
+    m_socket.connectToServer(m_socketPath);
+}
 
-            QJsonParseError parseError;
-            const QJsonDocument document = QJsonDocument::fromJson(line, &parseError);
-            if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-                return {false, {}, QStringLiteral("Invalid daemon response: %1").arg(parseError.errorString())};
-            }
+void DaemonClient::sendPendingCall(quint64 requestId)
+{
+    auto pending = m_pendingCalls.find(requestId);
+    if (pending == m_pendingCalls.end() || pending->written || !isConnected()) {
+        return;
+    }
 
-            const QJsonObject object = document.object();
-            if (object.value(QStringLiteral("id")).toString().toULongLong() != requestId) {
-                continue;
-            }
+    if (m_socket.write(pending->payload) != pending->payload.size()) {
+        const QString error =
+            QStringLiteral("Could not write to LumaCore daemon: %1").arg(m_socket.errorString());
+        setLastError(error);
+        finishPendingCall(requestId, {false, {}, error});
+        return;
+    }
+    pending->written = true;
+}
 
-            if (!object.value(QStringLiteral("ok")).toBool(false)) {
-                return {false, {}, object.value(QStringLiteral("error")).toString(QStringLiteral("Daemon request failed."))};
-            }
+void DaemonClient::sendPendingCalls()
+{
+    const QList<quint64> requestIds = m_pendingCalls.keys();
+    for (const quint64 requestId : requestIds) {
+        sendPendingCall(requestId);
+    }
+}
 
-            return {true, object.value(QStringLiteral("result")).toObject(), {}};
-        }
-
-        if (m_buffer.size() > kDaemonMaxMessageBytes) {
-            disconnectFromDaemon();
-            return {false, {}, QStringLiteral("LumaCore daemon response exceeds the maximum message size.")};
-        }
-
-        if (!m_socket.waitForReadyRead(timeoutMs)) {
-            return {false, {}, QStringLiteral("Timed out waiting for LumaCore daemon response.")};
-        }
-        const qint64 remainingCapacity =
-            static_cast<qint64>(kDaemonMaxFrameBytes) - m_buffer.size();
+void DaemonClient::readAsyncResponses()
+{
+    const qint64 remainingCapacity = static_cast<qint64>(kDaemonMaxFrameBytes) - m_buffer.size();
+    if (remainingCapacity > 0) {
         m_buffer.append(m_socket.read(remainingCapacity));
     }
+
+    if (m_buffer.size() > kDaemonMaxMessageBytes && !m_buffer.contains('\n')) {
+        const QString error = QStringLiteral("LumaCore daemon response exceeds the maximum message size.");
+        setLastError(error);
+        failPendingCalls(error);
+        m_socket.abort();
+        return;
+    }
+
+    while (true) {
+        const qsizetype newlineIndex = m_buffer.indexOf('\n');
+        if (newlineIndex < 0) {
+            return;
+        }
+        if (newlineIndex > kDaemonMaxMessageBytes) {
+            const QString error = QStringLiteral("LumaCore daemon response exceeds the maximum message size.");
+            setLastError(error);
+            failPendingCalls(error);
+            m_socket.abort();
+            return;
+        }
+
+        const QByteArray line = m_buffer.left(newlineIndex);
+        m_buffer.remove(0, newlineIndex + 1);
+        if (line.trimmed().isEmpty()) {
+            continue;
+        }
+
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(line, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+            const QString error =
+                QStringLiteral("Invalid daemon response: %1").arg(parseError.errorString());
+            setLastError(error);
+            failPendingCalls(error);
+            m_socket.abort();
+            return;
+        }
+
+        const QJsonObject object = document.object();
+        const quint64 requestId = object.value(QStringLiteral("id")).toString().toULongLong();
+        if (!m_pendingCalls.contains(requestId)) {
+            continue;
+        }
+
+        DaemonCallResult result;
+        if (object.value(QStringLiteral("ok")).toBool(false)) {
+            result = {true, object.value(QStringLiteral("result")).toObject(), {}};
+        } else {
+            result = {
+                false,
+                {},
+                object.value(QStringLiteral("error")).toString(QStringLiteral("Daemon request failed.")),
+            };
+        }
+        finishPendingCall(requestId, std::move(result));
+    }
+}
+
+void DaemonClient::finishPendingCall(quint64 requestId, DaemonCallResult result)
+{
+    auto pending = m_pendingCalls.find(requestId);
+    if (pending == m_pendingCalls.end()) {
+        return;
+    }
+
+    PendingCall completed = std::move(pending.value());
+    m_pendingCalls.erase(pending);
+    if (completed.timeoutTimer != nullptr) {
+        completed.timeoutTimer->stop();
+        completed.timeoutTimer->deleteLater();
+    }
+
+    updateDaemonInfo(result);
+    if (result.ok) {
+        setLastError(QString());
+    } else {
+        setLastError(result.error);
+    }
+    if (completed.handler) {
+        completed.handler(std::move(result));
+    }
+}
+
+void DaemonClient::failPendingCalls(const QString& error)
+{
+    const QList<quint64> requestIds = m_pendingCalls.keys();
+    for (const quint64 requestId : requestIds) {
+        finishPendingCall(requestId, {false, {}, error});
+    }
+}
+
+void DaemonClient::scheduleReconnect()
+{
+    if (!m_automaticReconnectEnabled || m_manualDisconnect || isConnected() || m_reconnectTimer.isActive()) {
+        return;
+    }
+
+    ++m_reconnectAttempt;
+    const int delayMs = reconnectDelayMs(m_reconnectAttempt);
+    m_reconnectTimer.start(delayMs);
+    emit reconnectScheduled(m_reconnectAttempt, delayMs);
+}
+
+void DaemonClient::resetReconnectState()
+{
+    m_reconnectTimer.stop();
+    m_reconnectAttempt = 0;
 }
 
 } // namespace lumacore

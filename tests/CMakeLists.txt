@@ -28,6 +28,7 @@ target_link_libraries(lumacore_daemon_protocol_test
     PRIVATE
         lumacore_core
         lumacore_ipc
+        lumacore_daemon_backend
         Qt6::Core
 )
 

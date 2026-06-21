@@ -15,6 +15,7 @@ Dialog {
 
     property var controller
     property bool animationsEnabled: true
+    readonly property bool recoveryBusy: controller ? controller.daemonRecoveryBusy : false
 
     standardButtons: Dialog.NoButton
 
@@ -38,18 +39,46 @@ Dialog {
     }
 
     footer: Item {
-        implicitWidth: closeButton.implicitWidth
-        implicitHeight: closeButton.implicitHeight + 8
+        implicitWidth: footerButtons.implicitWidth
+        implicitHeight: footerButtons.implicitHeight + 8
 
-        AppButton {
-            id: closeButton
+        RowLayout {
+            id: footerButtons
 
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 160
-            variant: "primary"
-            text: qsTr("Close")
-            animationsEnabled: dialog.animationsEnabled
-            onClicked: dialog.close()
+            spacing: 10
+
+            AppButton {
+                visible: dialog.controller && !dialog.controller.daemonConnected
+                enabled: dialog.controller
+                    && dialog.controller.daemonState !== qsTr("Refreshing devices")
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Retry now")
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.controller.retryDaemonConnection()
+            }
+
+            AppButton {
+                enabled: dialog.controller
+                    && dialog.controller.daemonConnected
+                    && !dialog.recoveryBusy
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Rescan")
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.controller.rescanDaemonDevices()
+            }
+
+            AppButton {
+                id: closeButton
+
+                Layout.preferredWidth: 130
+                variant: "primary"
+                text: qsTr("Close")
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.close()
+            }
         }
     }
 
@@ -201,7 +230,9 @@ Dialog {
                 Label {
                     Layout.fillWidth: true
                     text: dialog.controller ? dialog.controller.daemonState : qsTr("Unknown")
-                    color: dialog.controller && dialog.controller.daemonConnected ? Theme.success : Theme.warning
+                    color: dialog.recoveryBusy
+                           ? Theme.accent
+                           : (dialog.controller && dialog.controller.daemonConnected ? Theme.success : Theme.warning)
                     font.pixelSize: 18
                     font.bold: true
                 }

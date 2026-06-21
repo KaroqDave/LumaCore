@@ -58,6 +58,7 @@ GuiApplication::GuiApplication(QGuiApplication& qtApplication, const GuiOptions&
 
 GuiApplication::~GuiApplication()
 {
+    m_backendContext.daemonClient->setAutomaticReconnectEnabled(false);
     m_backendContext.daemonClient->disconnectFromDaemon();
     if (m_daemonLauncher != nullptr) {
         const bool exited = m_daemonLauncher->waitForStartedDaemonExit(1000);
@@ -100,6 +101,7 @@ int GuiApplication::run()
             m_appController.applyProfileOnLaunch(m_settingsController.activeProfile());
         Q_UNUSED(profileApplied)
     }
+    m_appController.enableDaemonRecovery();
 
     const QmlBindings bindings {
         .deviceTreeModel = &m_deviceTreeModel,
