@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v0.6.1** - Linux-first RGB control with a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v0.7.0** - Linux-first RGB control with a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
@@ -33,8 +33,8 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
 - Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata.
 - ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native breathing/color-cycle/rainbow effects, and All Off.
-- Profile save, load, rename, and delete support with atomic JSON writes and legacy color-only profile compatibility.
-- Persistent Auto/Light/Dark themes, animation and dry-run preferences, start-minimized behavior, and an opt-in Windows VRR flicker workaround.
+- Profile save, load, rename, confirmed overwrite/delete, JSON import/export, compatibility reporting, partial-result summaries, and persisted active-profile selection with atomic writes and legacy color-only profile compatibility.
+- Persistent Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, and an opt-in Windows VRR flicker workaround.
 - Activity log with structured severity/category entries and console mirroring.
 - Backend capability dialog showing daemon connection/version details, active backend, dry-run state, and supported operations.
 
@@ -184,7 +184,7 @@ Aura HID configuration parser and protocol serializer.
 
 ## Profiles
 
-Profiles are JSON files stored in `./profiles` relative to the current working directory when `lumacore` starts. Running `./build/lumacore` from the repository root writes profiles to `profiles/`, which is gitignored. Saves use `QSaveFile` for atomic replacement.
+Profiles are JSON files stored in the platform application-data directory reported by the Profiles page. On first use, LumaCore migrates JSON profiles from the legacy `./profiles` directory when the new directory does not yet exist. Saves use `QSaveFile` for atomic replacement.
 
 Devices match by `id`; zones match by `name` with their stored index as a fallback. Profiles restore zone names, LED counts, colors, effect types, speed, and brightness. Legacy color-only zones still load. Unknown devices or zones are skipped, invalid colors are reported in the activity log, and a profile that matches no available zones is rejected.
 
@@ -201,7 +201,6 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 - Automated coverage is still focused; broader mock-backend and end-to-end UI integration, sanitizers, and warning-policy work remains.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation is documented.
 - Profile validation is minimal.
-- Applying a selected profile on launch is not implemented yet.
 - Native installers, Linux distribution packages, and full install targets are not implemented; Windows packaging currently produces a portable preview ZIP.
 
 ## License

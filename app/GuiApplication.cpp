@@ -95,6 +95,11 @@ int GuiApplication::run()
     if (!daemonAvailable && !m_daemonLauncher->lastError().isEmpty()) {
         m_backendContext.daemonClient->reportConnectionError(m_daemonLauncher->lastError());
     }
+    if (m_settingsController.applyOnLaunch()) {
+        const bool profileApplied =
+            m_appController.applyProfileOnLaunch(m_settingsController.activeProfile());
+        Q_UNUSED(profileApplied)
+    }
 
     const QmlBindings bindings {
         .deviceTreeModel = &m_deviceTreeModel,

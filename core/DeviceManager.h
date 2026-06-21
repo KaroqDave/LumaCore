@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QSet>
 #include <QStringList>
+#include <QVariantMap>
 #include <QVector>
 
 #include <memory>
@@ -23,7 +24,7 @@ class DeviceManager : public QObject
     Q_OBJECT
 
 public:
-    explicit DeviceManager(QObject* parent = nullptr);
+    explicit DeviceManager(QObject* parent = nullptr, QString profilesDirectory = {});
 
     void registerBackend(std::unique_ptr<RgbBackend> backend);
     [[nodiscard]] bool activateBackend(const QString& id);
@@ -50,8 +51,12 @@ public:
     void paintZoneFrame(int deviceIndex, int zoneIndex, const QVector<RgbColor>& colors);
     [[nodiscard]] bool saveProfile(const QString& profileName, QString* errorMessage = nullptr);
     [[nodiscard]] bool loadProfile(const QString& profileName, QString* errorMessage = nullptr);
+    [[nodiscard]] QVariantMap applyProfileWithReport(const QString& profileName);
     [[nodiscard]] bool deleteProfile(const QString& profileName, QString* errorMessage = nullptr);
     [[nodiscard]] bool renameProfile(const QString& oldProfileName, const QString& newProfileName, QString* errorMessage = nullptr);
+    [[nodiscard]] bool importProfile(const QString& sourcePath, QString* importedProfileName = nullptr, QString* errorMessage = nullptr);
+    [[nodiscard]] bool exportProfile(const QString& profileName, const QString& destinationPath, QString* errorMessage = nullptr);
+    [[nodiscard]] QVariantMap profileCompatibility(const QString& profileName) const;
     [[nodiscard]] QStringList profileNames() const;
     [[nodiscard]] QString profilesDirectoryPath() const;
     [[nodiscard]] ActivityLog& activityLog();

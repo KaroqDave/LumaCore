@@ -196,7 +196,7 @@ Item {
         SectionCard {
             Layout.fillWidth: true
             title: qsTr("Startup")
-            subtitle: qsTr("Stored now for later launch behavior")
+            subtitle: qsTr("Choose how LumaCore behaves when it starts")
             surfaceColor: Theme.surface
             animationsEnabled: page.animationsEnabled
 
@@ -241,7 +241,10 @@ Item {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Placeholder setting; profile selection will be connected later.")
+                        text: page.settingsController && page.settingsController.activeProfile.length > 0
+                              ? qsTr("Applies '%1' after discovery. Normal dry-run and write-confirmation rules still apply.")
+                                    .arg(page.settingsController.activeProfile)
+                              : qsTr("Choose an active profile on the Profiles page first.")
                         color: Theme.secondaryText
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
@@ -250,8 +253,14 @@ Item {
 
                 AppSwitch {
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    enabled: false
-                    checked: false
+                    enabled: page.settingsController
+                             && page.settingsController.activeProfile.length > 0
+                    checked: page.settingsController ? page.settingsController.applyOnLaunch : false
+                    onClicked: {
+                        if (page.settingsController) {
+                            page.settingsController.applyOnLaunch = checked
+                        }
+                    }
                 }
             }
         }

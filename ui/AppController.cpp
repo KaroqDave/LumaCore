@@ -6,6 +6,7 @@
 #include "core/RgbColor.h"
 #include "core/RgbEffect.h"
 
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QtGlobal>
 
@@ -562,19 +563,25 @@ bool AppController::saveProfile(const QString& profileName)
 
 bool AppController::loadProfile(const QString& profileName)
 {
+    return applyProfileWithReport(profileName).value(QStringLiteral("success")).toBool();
+}
+
+QVariantMap AppController::applyProfileWithReport(const QString& profileName)
+{
     if (m_deviceManager == nullptr) {
-        return false;
+        return {};
     }
 
-    QString errorMessage;
-    const bool loaded = m_deviceManager->loadProfile(profileName, &errorMessage);
-    if (!loaded && !errorMessage.isEmpty()) {
-        setStatusMessage(errorMessage);
-    } else if (loaded) {
-        refreshDaemonActivityLog();
+    const QVariantMap report = m_deviceManager->applyProfileWithReport(profileName);
+    const QString message = report.value(QStringLiteral("success")).toBool()
+        ? report.value(QStringLiteral("summary")).toString()
+        : report.value(QStringLiteral("error")).toString();
+    if (!message.isEmpty()) {
+        setStatusMessage(message);
     }
+    refreshDaemonActivityLog();
 
-    return loaded;
+    return report;
 }
 
 bool AppController::deleteProfile(const QString& profileName)
@@ -611,9 +618,89 @@ bool AppController::renameProfile(const QString& oldProfileName, const QString& 
     return renamed;
 }
 
+QString AppController::importProfile(const QUrl& sourceUrl)
+{
+    if (m_deviceManager == nullptr || !sourceUrl.isLocalFile()) {
+        setStatusMessage(QStringLiteral("Choose a local JSON file to import."));
+        return {};
+    }
+
+    QString importedProfileName;
+    QString errorMessage;
+    if (!m_deviceManager->importProfile(sourceUrl.toLocalFile(), &importedProfileName, &errorMessage)) {
+        setStatusMessage(errorMessage.isEmpty() ? QStringLiteral("Could not import profile.") : errorMessage);
+        return {};
+    }
+
+    setStatusMessage(QStringLiteral("Imported profile '%1'.").arg(importedProfileName));
+    emit profilesChanged();
+    return importedProfileName;
+}
+
+bool AppController::exportProfile(const QString& profileName, const QUrl& destinationUrl)
+{
+    if (m_deviceManager == nullptr || !destinationUrl.isLocalFile()) {
+        setStatusMessage(QStringLiteral("Choose a local destination for the profile export."));
+        return false;
+    }
+
+    QString destinationPath = destinationUrl.toLocalFile();
+    if (QFileInfo(destinationPath).suffix().isEmpty()) {
+        destinationPath.append(QStringLiteral(".json"));
+    }
+
+    QString errorMessage;
+    if (!m_deviceManager->exportProfile(profileName, destinationPath, &errorMessage)) {
+        setStatusMessage(errorMessage.isEmpty() ? QStringLiteral("Could not export profile.") : errorMessage);
+        return false;
+    }
+
+    setStatusMessage(QStringLiteral("Exported profile '%1'.").arg(profileName));
+    refreshDaemonActivityLog();
+    return true;
+}
+
+QVariantMap AppController::profileCompatibility(const QString& profileName)
+{
+    if (m_deviceManager == nullptr) {
+        return {};
+    }
+
+    const QVariantMap report = m_deviceManager->profileCompatibility(profileName);
+    if (!report.value(QStringLiteral("valid")).toBool()) {
+        setStatusMessage(report.value(QStringLiteral("error")).toString());
+    }
+    return report;
+}
+
+bool AppController::profileExists(const QString& profileName) const
+{
+    if (m_deviceManager == nullptr) {
+        return false;
+    }
+
+    return m_deviceManager->profileNames().contains(ProfileStore::normalizeName(profileName));
+}
+
 QStringList AppController::profileNames() const
 {
     return m_deviceManager == nullptr ? QStringList {} : m_deviceManager->profileNames();
+}
+
+bool AppController::applyProfileOnLaunch(const QString& profileName)
+{
+    const QString selectedProfile = profileName.trimmed();
+    if (selectedProfile.isEmpty()) {
+        setStatusMessage(QStringLiteral("No active profile is selected for launch."));
+        return false;
+    }
+
+    if (!loadProfile(selectedProfile)) {
+        return false;
+    }
+
+    setStatusMessage(QStringLiteral("Applied active profile '%1' on launch.").arg(selectedProfile));
+    return true;
 }
 
 void AppController::appendLog(const QString& message)

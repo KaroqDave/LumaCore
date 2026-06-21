@@ -63,12 +63,13 @@ bool SettingsController::applyOnLaunch() const
 
 void SettingsController::setApplyOnLaunch(bool enabled)
 {
-    if (m_applyOnLaunch == enabled) {
+    const bool sanitizedEnabled = enabled && !m_activeProfile.isEmpty();
+    if (m_applyOnLaunch == sanitizedEnabled) {
         return;
     }
 
-    m_applyOnLaunch = enabled;
-    m_settings.setValue(QStringLiteral("startup/applyOnLaunch"), enabled);
+    m_applyOnLaunch = sanitizedEnabled;
+    m_settings.setValue(QStringLiteral("startup/applyOnLaunch"), sanitizedEnabled);
     emit applyOnLaunchChanged();
 }
 
@@ -128,14 +129,38 @@ void SettingsController::setTheme(const QString& theme)
     emit themeChanged();
 }
 
+QString SettingsController::activeProfile() const
+{
+    return m_activeProfile;
+}
+
+void SettingsController::setActiveProfile(const QString& profileName)
+{
+    const QString sanitizedProfileName = profileName.trimmed();
+    if (m_activeProfile == sanitizedProfileName) {
+        return;
+    }
+
+    m_activeProfile = sanitizedProfileName;
+    if (m_activeProfile.isEmpty()) {
+        m_settings.remove(QStringLiteral("startup/activeProfile"));
+        setApplyOnLaunch(false);
+    } else {
+        m_settings.setValue(QStringLiteral("startup/activeProfile"), m_activeProfile);
+    }
+    emit activeProfileChanged();
+}
+
 void SettingsController::load()
 {
     m_animationsEnabled = m_settings.value(QStringLiteral("ui/animationsEnabled"), true).toBool();
     m_reduceVrrFlicker = m_settings.value(QStringLiteral("ui/reduceVrrFlicker"), false).toBool();
     m_startMinimized = m_settings.value(QStringLiteral("startup/startMinimized"), false).toBool();
-    m_applyOnLaunch = m_settings.value(QStringLiteral("startup/applyOnLaunch"), false).toBool();
     m_dryRunEnabled = m_settings.value(QStringLiteral("safety/dryRunEnabled"), false).toBool();
     m_theme = normalizeTheme(m_settings.value(QStringLiteral("ui/theme"), QStringLiteral("Dark")).toString());
+    m_activeProfile = m_settings.value(QStringLiteral("startup/activeProfile")).toString().trimmed();
+    m_applyOnLaunch = !m_activeProfile.isEmpty()
+        && m_settings.value(QStringLiteral("startup/applyOnLaunch"), false).toBool();
 }
 
 } // namespace lumacore

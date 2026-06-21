@@ -344,6 +344,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             appController: root.controller
+                            settingsController: root.settings
                             animationsEnabled: root.animationsEnabled
                         }
                     }

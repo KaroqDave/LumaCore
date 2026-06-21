@@ -15,6 +15,7 @@ class SettingsController final : public QObject
     Q_PROPERTY(bool applyOnLaunch READ applyOnLaunch WRITE setApplyOnLaunch NOTIFY applyOnLaunchChanged)
     Q_PROPERTY(bool dryRunEnabled READ dryRunEnabled WRITE setDryRunEnabled NOTIFY dryRunEnabledChanged)
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
+    Q_PROPERTY(QString activeProfile READ activeProfile WRITE setActiveProfile NOTIFY activeProfileChanged)
 
 public:
     explicit SettingsController(QObject* parent = nullptr);
@@ -37,6 +38,9 @@ public:
     [[nodiscard]] QString theme() const;
     void setTheme(const QString& theme);
 
+    [[nodiscard]] QString activeProfile() const;
+    void setActiveProfile(const QString& profileName);
+
 signals:
     void animationsEnabledChanged();
     void reduceVrrFlickerChanged();
@@ -44,6 +48,7 @@ signals:
     void applyOnLaunchChanged();
     void dryRunEnabledChanged();
     void themeChanged();
+    void activeProfileChanged();
 
 private:
     void load();
@@ -55,6 +60,7 @@ private:
     bool m_applyOnLaunch {false};
     bool m_dryRunEnabled {false};
     QString m_theme {QStringLiteral("Dark")};
+    QString m_activeProfile;
 };
 
 } // namespace lumacore

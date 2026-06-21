@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QObject>
 #include <QStringList>
+#include <QUrl>
 
 #include <memory>
 
@@ -78,9 +79,15 @@ public:
     Q_INVOKABLE QString zoneColorHex(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE bool saveProfile(const QString& profileName);
     Q_INVOKABLE bool loadProfile(const QString& profileName);
+    Q_INVOKABLE QVariantMap applyProfileWithReport(const QString& profileName);
     Q_INVOKABLE bool deleteProfile(const QString& profileName);
     Q_INVOKABLE bool renameProfile(const QString& oldProfileName, const QString& newProfileName);
+    Q_INVOKABLE QString importProfile(const QUrl& sourceUrl);
+    Q_INVOKABLE bool exportProfile(const QString& profileName, const QUrl& destinationUrl);
+    Q_INVOKABLE QVariantMap profileCompatibility(const QString& profileName);
+    Q_INVOKABLE bool profileExists(const QString& profileName) const;
     Q_INVOKABLE QStringList profileNames() const;
+    [[nodiscard]] bool applyProfileOnLaunch(const QString& profileName);
 
 signals:
     void statusMessageChanged();

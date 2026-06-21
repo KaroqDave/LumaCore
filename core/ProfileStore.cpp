@@ -7,6 +7,9 @@
 #include <QJsonParseError>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QStandardPaths>
+
+#include <utility>
 
 namespace lumacore {
 
@@ -21,9 +24,21 @@ void setError(QString* errorMessage, const QString& message)
 
 } // namespace
 
+ProfileStore::ProfileStore(QString directoryPath)
+    : m_directoryPath(std::move(directoryPath))
+{
+    if (m_directoryPath.trimmed().isEmpty()) {
+        m_directoryPath = QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+                              .filePath(QStringLiteral("profiles"));
+    }
+
+    m_directoryPath = QDir::cleanPath(QFileInfo(m_directoryPath).absoluteFilePath());
+    migrateLegacyProfilesIfNeeded();
+}
+
 QString ProfileStore::directoryPath() const
 {
-    return QDir::current().filePath(QStringLiteral("profiles"));
+    return m_directoryPath;
 }
 
 QString ProfileStore::filePath(const QString& profileName) const
@@ -151,6 +166,75 @@ bool ProfileStore::rename(
     return true;
 }
 
+bool ProfileStore::importFile(
+    const QString& sourcePath,
+    QString* importedProfileName,
+    QString* errorMessage
+) const
+{
+    QFile sourceFile(sourcePath);
+    if (!sourceFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        setError(errorMessage, QStringLiteral("Could not open profile import: %1").arg(sourceFile.errorString()));
+        return false;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(sourceFile.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        setError(errorMessage, QStringLiteral("Invalid profile JSON: %1").arg(parseError.errorString()));
+        return false;
+    }
+
+    QJsonObject profile = document.object();
+    if (!profile.value(QStringLiteral("devices")).isArray()) {
+        setError(errorMessage, QStringLiteral("Invalid LumaCore profile: missing devices array."));
+        return false;
+    }
+
+    const QFileInfo sourceInfo(sourcePath);
+    const QString requestedName = profile.value(QStringLiteral("profileName")).toString(sourceInfo.completeBaseName());
+    const QString normalizedName = normalizeName(requestedName);
+    if (QFile::exists(filePath(normalizedName))) {
+        setError(errorMessage, QStringLiteral("Profile '%1' already exists.").arg(normalizedName));
+        return false;
+    }
+
+    profile.insert(QStringLiteral("profileName"), normalizedName);
+    if (!save(normalizedName, profile, errorMessage)) {
+        return false;
+    }
+
+    if (importedProfileName != nullptr) {
+        *importedProfileName = normalizedName;
+    }
+    return true;
+}
+
+bool ProfileStore::exportFile(
+    const QString& profileName,
+    const QString& destinationPath,
+    QString* errorMessage
+) const
+{
+    QJsonObject profile;
+    if (!load(profileName, &profile, errorMessage)) {
+        return false;
+    }
+
+    QSaveFile destinationFile(destinationPath);
+    if (!destinationFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        setError(errorMessage, QStringLiteral("Could not export profile: %1").arg(destinationFile.errorString()));
+        return false;
+    }
+
+    destinationFile.write(QJsonDocument(profile).toJson(QJsonDocument::Indented));
+    if (!destinationFile.commit()) {
+        setError(errorMessage, QStringLiteral("Could not commit profile export: %1").arg(destinationFile.errorString()));
+        return false;
+    }
+    return true;
+}
+
 QString ProfileStore::normalizeName(const QString& profileName)
 {
     QString normalized = profileName.trimmed();
@@ -160,6 +244,37 @@ QString ProfileStore::normalizeName(const QString& profileName)
 
     normalized.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]+")), QStringLiteral("_"));
     return normalized;
+}
+
+void ProfileStore::migrateLegacyProfilesIfNeeded()
+{
+    const QDir destinationDirectory(m_directoryPath);
+    if (destinationDirectory.exists()) {
+        return;
+    }
+
+    const QDir legacyDirectory(QDir::current().filePath(QStringLiteral("profiles")));
+    if (!legacyDirectory.exists()
+        || QDir::cleanPath(legacyDirectory.absolutePath()) == QDir::cleanPath(destinationDirectory.absolutePath())) {
+        return;
+    }
+
+    const QFileInfoList legacyProfiles =
+        legacyDirectory.entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    if (legacyProfiles.isEmpty()) {
+        return;
+    }
+
+    if (!QDir().mkpath(m_directoryPath)) {
+        return;
+    }
+
+    for (const QFileInfo& legacyProfile : legacyProfiles) {
+        const QString destinationPath = destinationDirectory.filePath(legacyProfile.fileName());
+        if (!QFile::exists(destinationPath)) {
+            QFile::copy(legacyProfile.absoluteFilePath(), destinationPath);
+        }
+    }
 }
 
 } // namespace lumacore
