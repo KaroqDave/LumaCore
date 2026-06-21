@@ -61,7 +61,6 @@ if(LUMACORE_ENABLE_ASUS_AURA_HID
         asus/AsusAuraHidDevice.h
         ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.h
-        ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidConfig.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/HidDeviceWriter.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/HidDeviceWriter.h
     )
