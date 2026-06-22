@@ -78,10 +78,11 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
 #ifdef Q_OS_WIN
     m_server.setSocketOptions(QLocalServer::UserAccessOption);
 #else
+    // The daemon socket is the privilege boundary for hardware writes; Linux
+    // packages grant GUI access by adding users to the configured service group.
     m_server.setSocketOptions(
         QLocalServer::UserAccessOption
         | QLocalServer::GroupAccessOption
-        | QLocalServer::OtherAccessOption
     );
 #endif
     if (!m_server.listen(m_socketPath)) {

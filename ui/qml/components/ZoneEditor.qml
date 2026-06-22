@@ -46,20 +46,20 @@ Item {
         : false
     readonly property var disabledEffectSegments: appController && hasSelection
         ? [
-            !appController.deviceSupportsEffect(selectedDeviceIndex, 0),
-            !appController.deviceSupportsEffect(selectedDeviceIndex, 1),
-            !appController.deviceSupportsEffect(selectedDeviceIndex, 2),
-            !appController.deviceSupportsEffect(selectedDeviceIndex, 3)
+            !appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, 0),
+            !appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, 1),
+            !appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, 2),
+            !appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, 3)
         ]
         : [true, true, true, true]
     readonly property bool selectedEffectSupported: appController && hasSelection
-        ? appController.deviceSupportsEffect(selectedDeviceIndex, effectType)
+        ? appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, effectType)
         : false
     readonly property bool selectedEffectSpeedSupported: appController && hasSelection
-        ? appController.deviceSupportsEffectSpeed(selectedDeviceIndex, effectType)
+        ? appController.zoneSupportsEffectSpeed(selectedDeviceIndex, selectedZoneIndex, effectType)
         : false
     readonly property bool selectedEffectBrightnessSupported: appController && hasSelection
-        ? appController.deviceSupportsEffectBrightness(selectedDeviceIndex, effectType)
+        ? appController.zoneSupportsEffectBrightness(selectedDeviceIndex, selectedZoneIndex, effectType)
         : false
     readonly property bool writeConfirmationNeeded: appController
         && hasSelection
@@ -107,7 +107,7 @@ Item {
             return 0
         }
         for (let index = 0; index < 4; ++index) {
-            if (appController.deviceSupportsEffect(selectedDeviceIndex, index)) {
+            if (appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, index)) {
                 return index
             }
         }
@@ -125,7 +125,7 @@ Item {
         ledSpin.value = Math.max(1, appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex))
 
         editor.effectType = appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex)
-        if (!appController.deviceSupportsEffect(selectedDeviceIndex, editor.effectType)) {
+        if (!appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, editor.effectType)) {
             editor.effectType = firstSupportedEffectType()
         }
         editor.effectSpeed = appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex)
@@ -313,7 +313,7 @@ Item {
                     currentIndex: editor.effectType
                     animationsEnabled: editor.animationsEnabled
                     onSelected: function(index) {
-                        if (editor.appController.deviceSupportsEffect(editor.selectedDeviceIndex, index)) {
+                        if (editor.appController.zoneSupportsEffect(editor.selectedDeviceIndex, editor.selectedZoneIndex, index)) {
                             editor.effectType = index
                         }
                     }

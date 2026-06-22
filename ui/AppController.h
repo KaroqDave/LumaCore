@@ -70,6 +70,9 @@ public:
     Q_INVOKABLE bool deviceSupportsEffect(int deviceIndex, int effectType) const;
     Q_INVOKABLE bool deviceSupportsEffectSpeed(int deviceIndex, int effectType) const;
     Q_INVOKABLE bool deviceSupportsEffectBrightness(int deviceIndex, int effectType) const;
+    Q_INVOKABLE bool zoneSupportsEffect(int deviceIndex, int zoneIndex, int effectType) const;
+    Q_INVOKABLE bool zoneSupportsEffectSpeed(int deviceIndex, int zoneIndex, int effectType) const;
+    Q_INVOKABLE bool zoneSupportsEffectBrightness(int deviceIndex, int zoneIndex, int effectType) const;
     Q_INVOKABLE bool deviceRequiresConfirmation(int deviceIndex) const;
     Q_INVOKABLE bool deviceWriteConfirmed(int deviceIndex) const;
     Q_INVOKABLE bool confirmDeviceWrites(int deviceIndex);

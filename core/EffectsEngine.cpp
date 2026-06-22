@@ -74,7 +74,12 @@ void EffectsEngine::tick()
 
     const double elapsedSeconds = static_cast<double>(m_clock.elapsed()) / 1000.0;
 
-    for (const QPair<int, int>& zoneKey : m_activeZones) {
+    const QSet<QPair<int, int>> activeZones = m_activeZones;
+    for (const QPair<int, int>& zoneKey : activeZones) {
+        if (!m_activeZones.contains(zoneKey)) {
+            continue;
+        }
+
         const RgbDevice* device = m_deviceManager->deviceAt(zoneKey.first);
         if (device == nullptr || zoneKey.second < 0 || zoneKey.second >= device->zones().size()) {
             continue;

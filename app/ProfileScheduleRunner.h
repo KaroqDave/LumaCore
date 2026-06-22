@@ -39,6 +39,7 @@ private:
     AppController* m_appController {nullptr};
     QTimer m_timer;
     QDate m_lastAttemptDate;
+    bool m_skipMissedRun {true};
 };
 
 } // namespace lumacore

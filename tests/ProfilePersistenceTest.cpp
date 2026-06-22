@@ -198,6 +198,14 @@ int main(int argc, char* argv[])
                             {QStringLiteral("color"), QStringLiteral("#778899")},
                         }},
                     },
+                    QJsonObject {
+                        {QStringLiteral("index"), 2},
+                        {QStringLiteral("name"), manager.deviceAt(0)->zones().at(2).name()},
+                        {QStringLiteral("effect"), QJsonObject {
+                            {QStringLiteral("type"), QStringLiteral("Static")},
+                            {QStringLiteral("color"), QStringLiteral("not-a-color")},
+                        }},
+                    },
                 }},
             },
             QJsonObject {
@@ -225,11 +233,12 @@ int main(int argc, char* argv[])
     const QVariantMap compatibility = manager.profileCompatibility(QStringLiteral("compatibility"));
     if (!require(compatibility.value(QStringLiteral("valid")).toBool(), "compatibility report should be valid")
         || !require(compatibility.value(QStringLiteral("canApply")).toBool(), "one compatible zone should be applicable")
-        || !require(compatibility.value(QStringLiteral("totalZones")).toInt() == 4, "report should count stored zones")
-        || !require(compatibility.value(QStringLiteral("matchedZones")).toInt() == 2, "report should count matched zones")
+        || !require(compatibility.value(QStringLiteral("totalZones")).toInt() == 5, "report should count stored zones")
+        || !require(compatibility.value(QStringLiteral("matchedZones")).toInt() == 3, "report should count matched zones")
         || !require(compatibility.value(QStringLiteral("applicableZones")).toInt() == 1, "report should count applicable zones")
         || !require(compatibility.value(QStringLiteral("missingDevices")).toInt() == 1, "report should count missing devices")
         || !require(compatibility.value(QStringLiteral("missingZones")).toInt() == 2, "report should count missing zones")
+        || !require(compatibility.value(QStringLiteral("invalidZones")).toInt() == 1, "report should count invalid effect payloads")
         || !require(
             compatibility.value(QStringLiteral("unsupportedEffects")).toInt() == 1,
             "report should count unsupported effects"
@@ -241,13 +250,13 @@ int main(int argc, char* argv[])
     if (!require(applyReport.value(QStringLiteral("success")).toBool(), "partial application should report success")
         || !require(applyReport.value(QStringLiteral("partial")).toBool(), "skipped zones should mark the result partial")
         || !require(applyReport.value(QStringLiteral("appliedZones")).toInt() == 1, "one zone should apply")
-        || !require(applyReport.value(QStringLiteral("skippedZones")).toInt() == 3, "three zones should be skipped")
+        || !require(applyReport.value(QStringLiteral("skippedZones")).toInt() == 4, "four zones should be skipped")
         || !require(
             applyReport.value(QStringLiteral("missingDeviceZones")).toInt() == 1,
             "result should count zones on missing devices"
         )
         || !require(applyReport.value(QStringLiteral("missingZones")).toInt() == 1, "result should count missing zones")
-        || !require(applyReport.value(QStringLiteral("invalidZones")).toInt() == 1, "result should count unknown effects")
+        || !require(applyReport.value(QStringLiteral("invalidZones")).toInt() == 2, "result should count invalid effects and colors")
         || !require(applyReport.value(QStringLiteral("failedZones")).toInt() == 0, "compatible mock writes should succeed")) {
         return 1;
     }
@@ -300,7 +309,7 @@ int main(int argc, char* argv[])
         )
         || !require(!manager.loadProfile(QStringLiteral("unmatched"), &errorMessage), "unmatched profile should be rejected")
         || !require(
-            errorMessage.contains(QStringLiteral("did not match any available mock zones")),
+            errorMessage.contains(QStringLiteral("did not match any available device zones")),
             "unmatched profile should explain that no zones matched"
         )) {
         return 1;

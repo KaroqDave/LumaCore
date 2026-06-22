@@ -51,7 +51,7 @@ enum class DaemonMethod {
 
 [[nodiscard]] QJsonObject backendDescriptorToJson(const BackendDescriptor& descriptor);
 [[nodiscard]] BackendDescriptor backendDescriptorFromJson(const QJsonObject& object);
-[[nodiscard]] QJsonObject zoneToJson(const RgbZone& zone);
+[[nodiscard]] QJsonObject zoneToJson(const RgbDevice& device, int zoneIndex);
 [[nodiscard]] QJsonObject permissionResultsToJson(const RgbDevice& device);
 [[nodiscard]] QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed = false);
 [[nodiscard]] RgbEffect effectFromJson(const QJsonObject& object);

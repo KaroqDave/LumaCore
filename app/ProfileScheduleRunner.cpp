@@ -91,10 +91,13 @@ void ProfileScheduleRunner::evaluateNow()
     const QTime scheduledTime = parseScheduledTime(m_settingsController->scheduledProfileTime());
     if (now.time() >= scheduledTime && m_lastAttemptDate != now.date()) {
         m_lastAttemptDate = now.date();
-        const bool applied =
-            m_appController->applyScheduledProfile(m_settingsController->scheduledProfile());
-        Q_UNUSED(applied)
+        if (!m_skipMissedRun) {
+            const bool applied =
+                m_appController->applyScheduledProfile(m_settingsController->scheduledProfile());
+            Q_UNUSED(applied)
+        }
     }
+    m_skipMissedRun = false;
 
     scheduleNextCheck();
 }
@@ -102,6 +105,7 @@ void ProfileScheduleRunner::evaluateNow()
 void ProfileScheduleRunner::resetAndSchedule()
 {
     m_lastAttemptDate = {};
+    m_skipMissedRun = true;
     QTimer::singleShot(0, this, &ProfileScheduleRunner::evaluateNow);
 }
 

@@ -34,7 +34,7 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - Default daemon `auto` backend that prefers verified ASUS Aura HID control, adds read-only Linux discovery inventory when available, and falls back to the mock backend.
 - Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
 - Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata.
-- ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native breathing/color-cycle/rainbow effects, and All Off.
+- ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native color-cycle/rainbow effects on addressable headers, and All Off.
 - Profile save, load, rename, confirmed overwrite/delete, JSON import/export, compatibility reporting, partial-result summaries, and persisted active-profile selection with atomic writes and legacy color-only profile compatibility.
 - Persistent Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, daily in-app profile scheduling, opt-in close-to-tray behavior, and an opt-in Windows VRR flicker workaround.
 - Activity log with structured severity/category entries and console mirroring.

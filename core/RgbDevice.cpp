@@ -265,4 +265,19 @@ bool RgbDevice::supportsEffectBrightness(int effectType) const
     return supportsEffect(effectType);
 }
 
+bool RgbDevice::supportsZoneEffect(int zoneIndex, int effectType) const
+{
+    return zoneIndex >= 0 && zoneIndex < m_zones.size() && supportsEffect(effectType);
+}
+
+bool RgbDevice::supportsZoneEffectSpeed(int zoneIndex, int effectType) const
+{
+    return zoneIndex >= 0 && zoneIndex < m_zones.size() && supportsEffectSpeed(effectType);
+}
+
+bool RgbDevice::supportsZoneEffectBrightness(int zoneIndex, int effectType) const
+{
+    return zoneIndex >= 0 && zoneIndex < m_zones.size() && supportsEffectBrightness(effectType);
+}
+
 } // namespace lumacore

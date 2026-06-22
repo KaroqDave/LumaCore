@@ -41,6 +41,9 @@ public:
     [[nodiscard]] bool supportsEffect(int effectType) const override;
     [[nodiscard]] bool supportsEffectSpeed(int effectType) const override;
     [[nodiscard]] bool supportsEffectBrightness(int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffect(int zoneIndex, int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffectSpeed(int zoneIndex, int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffectBrightness(int zoneIndex, int effectType) const override;
     void setWriteConfirmed(bool confirmed);
     [[nodiscard]] quint64 applyZoneEffectAsync(
         int zoneIndex,
@@ -62,6 +65,7 @@ private:
     PermissionResult m_permission {PermissionStatus::Denied, QStringLiteral("Daemon permission snapshot unavailable.")};
     QHash<QString, PermissionResult> m_permissions;
     QHash<int, EffectSupport> m_effectSupport;
+    QVector<QHash<int, EffectSupport>> m_zoneEffectSupport;
     bool m_writeConfirmed {false};
     QString m_lastHardwareWriteStatus;
     std::shared_ptr<DaemonClient> m_client;

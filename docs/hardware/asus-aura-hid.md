@@ -47,9 +47,9 @@ Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research
 - Dry-run must be off and the UI must confirm writes for the current daemon session.
 - Confirmation is held in memory by the daemon and is cleared when the daemon restarts or the backend is reinitialized.
 - Approved packets use 65-byte reports based on GPL-compatible OpenRGB protocol references. The sequence starts with the OpenRGB mainboard `EC52 53 00 01` setup packet.
-- Fixed RGB headers are targeted from the parsed config table with `EC35` static mode plus `EC36` color data at the computed RGB-header LED offset.
+- Fixed RGB headers are targeted from the parsed config table with `EC35` static mode plus `EC36` color data at the computed RGB-header LED offset, and are advertised as static-only.
 - Addressable headers are targeted from the parsed config table with `EC35` direct mode plus chunked `EC40` direct color packets, with the apply bit set only on the final chunk.
-- Native effects on individual fixed RGB headers are blocked because those headers share one channel-wide `EC35` effect channel. Color-bearing native effects on addressable headers are also blocked until the EC36 addressable color mapping is captured and tested.
+- Native effects on individual fixed RGB headers are blocked because those headers share one channel-wide `EC35` effect channel. Addressable headers advertise native color cycle and rainbow only; color-bearing native effects such as breathing remain blocked until the EC36 addressable color mapping is captured and tested.
 - Color cycle uses native ASUS spectrum-cycle mode `0x04`.
 - Rainbow uses native ASUS mode `0x05`.
 - Native mode brightness is accepted only as `0` (off) or `100`; intermediate values are rejected until a hardware brightness field is verified.

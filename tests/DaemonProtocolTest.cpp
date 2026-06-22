@@ -186,6 +186,80 @@ private:
     Mode m_mode {Mode::UnverifiedAsus};
 };
 
+class ZoneSupportSnapshotDevice final : public lumacore::RgbDevice
+{
+public:
+    ZoneSupportSnapshotDevice()
+        : RgbDevice(
+              QStringLiteral("zone-support-device"),
+              QStringLiteral("Zone Support Device"),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Fixed Header"),
+            lumacore::RgbZoneType::Motherboard,
+            1
+        ));
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Addressable Header"),
+            lumacore::RgbZoneType::AddressableHeader,
+            1
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        Q_UNUSED(zoneIndex)
+        Q_UNUSED(color)
+        return false;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneColorWrite
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capabilities().testFlag(capability)) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+        return {lumacore::PermissionStatus::Denied, QStringLiteral("Unsupported test capability.")};
+    }
+
+    [[nodiscard]] bool supportsEffect(int effectType) const override
+    {
+        return effectType == static_cast<int>(lumacore::RgbEffectType::Static)
+            || effectType == static_cast<int>(lumacore::RgbEffectType::Rainbow);
+    }
+
+    [[nodiscard]] bool supportsZoneEffect(int zoneIndex, int effectType) const override
+    {
+        if (zoneIndex == 0) {
+            return effectType == static_cast<int>(lumacore::RgbEffectType::Static);
+        }
+        if (zoneIndex == 1) {
+            return supportsEffect(effectType);
+        }
+        return false;
+    }
+
+    [[nodiscard]] bool supportsZoneEffectSpeed(int zoneIndex, int effectType) const override
+    {
+        return zoneIndex == 1 && effectType == static_cast<int>(lumacore::RgbEffectType::Rainbow);
+    }
+
+    [[nodiscard]] bool supportsZoneEffectBrightness(int zoneIndex, int effectType) const override
+    {
+        return supportsZoneEffect(zoneIndex, effectType)
+            && effectType == static_cast<int>(lumacore::RgbEffectType::Static);
+    }
+};
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -890,6 +964,33 @@ int main(int argc, char* argv[])
     if (!require(
             !confirmedJson.value(QStringLiteral("writeRequiresConfirmation")).toBool(true),
             "confirmed daemon snapshots should not still request confirmation"
+        )) {
+        return 1;
+    }
+
+    const ZoneSupportSnapshotDevice zoneSupportDevice;
+    const QJsonObject zoneSupportJson = deviceToJson(zoneSupportDevice, 2, false);
+    auto zoneSupportClient = std::make_shared<DaemonClient>(QStringLiteral("unused-zone-support"));
+    DaemonRgbDevice zoneSupportProxy(zoneSupportJson, zoneSupportClient);
+    if (!require(
+            zoneSupportProxy.supportsEffect(static_cast<int>(RgbEffectType::Rainbow)),
+            "top-level daemon snapshots should still advertise device-wide effect support"
+        )
+        || !require(
+            !zoneSupportProxy.supportsZoneEffect(0, static_cast<int>(RgbEffectType::Rainbow)),
+            "daemon snapshots should preserve unsupported effects on fixed zones"
+        )
+        || !require(
+            zoneSupportProxy.supportsZoneEffect(1, static_cast<int>(RgbEffectType::Rainbow)),
+            "daemon snapshots should preserve supported effects on addressable zones"
+        )
+        || !require(
+            zoneSupportProxy.supportsZoneEffectSpeed(1, static_cast<int>(RgbEffectType::Rainbow)),
+            "daemon snapshots should preserve per-zone speed support"
+        )
+        || !require(
+            !zoneSupportProxy.supportsZoneEffectBrightness(1, static_cast<int>(RgbEffectType::Rainbow)),
+            "daemon snapshots should preserve per-zone brightness limits"
         )) {
         return 1;
     }

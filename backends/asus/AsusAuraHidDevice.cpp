@@ -291,4 +291,88 @@ PermissionResult AsusAuraHidDevice::checkRuntimePermission(BackendCapability cap
     };
 }
 
+bool AsusAuraHidDevice::supportsEffect(int effectType) const
+{
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        if (supportsZoneEffect(zoneIndex, effectType)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsEffectSpeed(int effectType) const
+{
+    Q_UNUSED(effectType)
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsEffectBrightness(int effectType) const
+{
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        if (supportsZoneEffectBrightness(zoneIndex, effectType)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsZoneEffect(int zoneIndex, int effectType) const
+{
+    if (zoneIndex < 0 || zoneIndex >= zones().size()) {
+        return false;
+    }
+
+    if (effectType == static_cast<int>(RgbEffectType::Static)) {
+        return capabilities().testFlag(BackendCapability::ZoneColorWrite);
+    }
+
+    if (!capabilities().testFlag(BackendCapability::ZoneEffectWrite)) {
+        return false;
+    }
+
+    if (effectType == static_cast<int>(RgbEffectType::Rainbow)
+        || effectType == static_cast<int>(RgbEffectType::ColorCycle)) {
+        return isAddressableZone(zoneIndex);
+    }
+
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsZoneEffectSpeed(int zoneIndex, int effectType) const
+{
+    Q_UNUSED(zoneIndex)
+    Q_UNUSED(effectType)
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsZoneEffectBrightness(int zoneIndex, int effectType) const
+{
+    return supportsZoneEffect(zoneIndex, effectType)
+        && effectType == static_cast<int>(RgbEffectType::Static);
+}
+
+int AsusAuraHidDevice::fixedZoneCount() const
+{
+    if (!m_configTableVerified || !m_configTable.valid) {
+        return 0;
+    }
+
+    int count = 0;
+    for (const hardware::linux::AsusAuraConfigChannel& channel : m_configTable.channels) {
+        if (channel.type == hardware::linux::AsusAuraChannelType::Fixed) {
+            count += qBound(0, channel.headerCount, hardware::linux::kAsusAuraHeaderCount);
+        }
+    }
+    return count;
+}
+
+bool AsusAuraHidDevice::isAddressableZone(int zoneIndex) const
+{
+    return m_configTableVerified
+        && m_configTable.valid
+        && zoneIndex >= fixedZoneCount()
+        && zoneIndex < zones().size();
+}
+
 } // namespace lumacore

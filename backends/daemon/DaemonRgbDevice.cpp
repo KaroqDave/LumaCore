@@ -18,6 +18,23 @@ QString deviceString(const QJsonObject& snapshot, const QString& key, const QStr
     return value.isEmpty() ? fallback : value;
 }
 
+QHash<int, DaemonRgbDevice::EffectSupport> effectSupportFromJson(const QJsonArray& effectSupport)
+{
+    QHash<int, DaemonRgbDevice::EffectSupport> supportByType;
+    for (const QJsonValue& supportValue : effectSupport) {
+        const QJsonObject supportObject = supportValue.toObject();
+        supportByType.insert(
+            supportObject.value(QStringLiteral("effectType")).toInt(-1),
+            {
+                supportObject.value(QStringLiteral("supported")).toBool(false),
+                supportObject.value(QStringLiteral("speed")).toBool(false),
+                supportObject.value(QStringLiteral("brightness")).toBool(false),
+            }
+        );
+    }
+    return supportByType;
+}
+
 } // namespace
 
 DaemonRgbDevice::DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonClient> client, QObject* parent)
@@ -50,20 +67,10 @@ DaemonRgbDevice::DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonCli
         m_permissions.insert(backendCapabilityToString(BackendCapability::ZoneEffectWrite), m_permission);
     }
 
-    const QJsonArray effectSupport = snapshot.value(QStringLiteral("effectSupport")).toArray();
-    for (const QJsonValue& supportValue : effectSupport) {
-        const QJsonObject supportObject = supportValue.toObject();
-        m_effectSupport.insert(
-            supportObject.value(QStringLiteral("effectType")).toInt(-1),
-            {
-                supportObject.value(QStringLiteral("supported")).toBool(false),
-                supportObject.value(QStringLiteral("speed")).toBool(false),
-                supportObject.value(QStringLiteral("brightness")).toBool(false),
-            }
-        );
-    }
+    m_effectSupport = effectSupportFromJson(snapshot.value(QStringLiteral("effectSupport")).toArray());
 
     const QJsonArray zones = snapshot.value(QStringLiteral("zones")).toArray();
+    m_zoneEffectSupport.reserve(zones.size());
     for (const QJsonValue& zoneValue : zones) {
         const QJsonObject zone = zoneValue.toObject();
         bool colorOk = false;
@@ -76,6 +83,7 @@ DaemonRgbDevice::DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonCli
         );
         rgbZone.setEffect(effectFromJson(zone.value(QStringLiteral("effect")).toObject()));
         mutableZones().append(rgbZone);
+        m_zoneEffectSupport.append(effectSupportFromJson(zone.value(QStringLiteral("effectSupport")).toArray()));
     }
 }
 
@@ -360,6 +368,39 @@ bool DaemonRgbDevice::supportsEffectSpeed(int effectType) const
 bool DaemonRgbDevice::supportsEffectBrightness(int effectType) const
 {
     return m_effectSupport.value(effectType).brightness;
+}
+
+bool DaemonRgbDevice::supportsZoneEffect(int zoneIndex, int effectType) const
+{
+    if (zoneIndex < 0 || zoneIndex >= zones().size()) {
+        return false;
+    }
+    if (zoneIndex < m_zoneEffectSupport.size() && !m_zoneEffectSupport.at(zoneIndex).isEmpty()) {
+        return m_zoneEffectSupport.at(zoneIndex).value(effectType).supported;
+    }
+    return supportsEffect(effectType);
+}
+
+bool DaemonRgbDevice::supportsZoneEffectSpeed(int zoneIndex, int effectType) const
+{
+    if (!supportsZoneEffect(zoneIndex, effectType)) {
+        return false;
+    }
+    if (zoneIndex < m_zoneEffectSupport.size() && !m_zoneEffectSupport.at(zoneIndex).isEmpty()) {
+        return m_zoneEffectSupport.at(zoneIndex).value(effectType).speed;
+    }
+    return supportsEffectSpeed(effectType);
+}
+
+bool DaemonRgbDevice::supportsZoneEffectBrightness(int zoneIndex, int effectType) const
+{
+    if (!supportsZoneEffect(zoneIndex, effectType)) {
+        return false;
+    }
+    if (zoneIndex < m_zoneEffectSupport.size() && !m_zoneEffectSupport.at(zoneIndex).isEmpty()) {
+        return m_zoneEffectSupport.at(zoneIndex).value(effectType).brightness;
+    }
+    return supportsEffectBrightness(effectType);
 }
 
 void DaemonRgbDevice::setWriteConfirmed(bool confirmed)

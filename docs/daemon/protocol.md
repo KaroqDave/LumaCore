@@ -34,3 +34,15 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 - `activityLogSnapshot` returns formatted activity log lines for the GUI.
 
 Hardware writes are not exposed as raw packet methods. Backends must build approved packets internally and pass the existing permission/write gates.
+
+## Device Snapshots
+
+`listDevices` returns device snapshots with capability, permission, write-confirmation, and zone data. Device-level `effectSupport` summarizes whether any zone can use each known effect type. Each zone also includes its own `effectSupport` array so the GUI can disable effects, speed controls, and brightness controls that are not valid for that specific header.
+
+Effect support entries use:
+
+```json
+{"effectType":1,"name":"Rainbow","supported":true,"speed":false,"brightness":false}
+```
+
+The per-zone fields are additive protocol-version-1 fields; older snapshots without zone-level support fall back to the device-level support in the daemon proxy.

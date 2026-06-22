@@ -147,6 +147,13 @@ int main(int argc, char* argv[])
           "effect writes should apply after confirmation")) {
         return 1;
     }
+    manager.paintZoneFrame(0, 0, {lumacore::RgbColor(9, 8, 7)});
+    if (!require(
+            manager.deviceAt(0)->zones().at(0).currentColor() == lumacore::RgbColor(9, 8, 7),
+            "confirmed local animation frames should remain allowed"
+        )) {
+        return 1;
+    }
 
     return 0;
 }

@@ -335,16 +335,18 @@ bool AppController::applyEffect(int deviceIndex, int zoneIndex, int effectType, 
         return false;
     }
 
-    if (!deviceSupportsEffect(deviceIndex, effectType)) {
-        setStatusMessage(QStringLiteral("Selected device does not support this effect."));
+    if (!zoneSupportsEffect(deviceIndex, zoneIndex, effectType)) {
+        setStatusMessage(QStringLiteral("Selected zone does not support this effect."));
         return false;
     }
 
+    const bool speedSupported = zoneSupportsEffectSpeed(deviceIndex, zoneIndex, effectType);
+    const bool brightnessSupported = zoneSupportsEffectBrightness(deviceIndex, zoneIndex, effectType);
     const RgbEffect effect(
         static_cast<RgbEffectType>(effectType),
         RgbColor::fromQColor(color),
-        speed,
-        brightness
+        speedSupported ? speed : 1.0,
+        brightnessSupported ? brightness : 100
     );
 
     if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(deviceAt(deviceIndex))) {
@@ -571,6 +573,36 @@ bool AppController::deviceSupportsEffectBrightness(int deviceIndex, int effectTy
     }
 
     return device->supportsEffectBrightness(effectType);
+}
+
+bool AppController::zoneSupportsEffect(int deviceIndex, int zoneIndex, int effectType) const
+{
+    if (!isValidEffectType(effectType)) {
+        return false;
+    }
+
+    const RgbDevice* device = deviceAt(deviceIndex);
+    return device != nullptr && device->supportsZoneEffect(zoneIndex, effectType);
+}
+
+bool AppController::zoneSupportsEffectSpeed(int deviceIndex, int zoneIndex, int effectType) const
+{
+    if (!zoneSupportsEffect(deviceIndex, zoneIndex, effectType) || !isAnimatedEffect(effectType)) {
+        return false;
+    }
+
+    const RgbDevice* device = deviceAt(deviceIndex);
+    return device != nullptr && device->supportsZoneEffectSpeed(zoneIndex, effectType);
+}
+
+bool AppController::zoneSupportsEffectBrightness(int deviceIndex, int zoneIndex, int effectType) const
+{
+    if (!zoneSupportsEffect(deviceIndex, zoneIndex, effectType)) {
+        return false;
+    }
+
+    const RgbDevice* device = deviceAt(deviceIndex);
+    return device != nullptr && device->supportsZoneEffectBrightness(zoneIndex, effectType);
 }
 
 bool AppController::deviceRequiresConfirmation(int deviceIndex) const
@@ -812,7 +844,8 @@ bool AppController::applyGlobalEffectInternal(
                 effect.setBrightness(boundedBrightness);
             }
 
-            if (!deviceSupportsEffect(deviceIndex, static_cast<int>(effect.type()))) {
+            const int currentEffectType = static_cast<int>(effect.type());
+            if (!zoneSupportsEffect(deviceIndex, zoneIndex, currentEffectType)) {
                 ++state->skipped;
                 state->details.append(
                     QStringLiteral("%1 / %2: effect is not supported.")
@@ -821,13 +854,21 @@ bool AppController::applyGlobalEffectInternal(
                 continue;
             }
             if (preserveCurrentEffect
-                && !deviceSupportsEffectBrightness(deviceIndex, static_cast<int>(effect.type()))) {
+                && !zoneSupportsEffectBrightness(deviceIndex, zoneIndex, currentEffectType)) {
                 ++state->skipped;
                 state->details.append(
                     QStringLiteral("%1 / %2: brightness control is not supported.")
                         .arg(device->name(), device->zones().at(zoneIndex).name())
                 );
                 continue;
+            }
+            if (!preserveCurrentEffect) {
+                if (!zoneSupportsEffectSpeed(deviceIndex, zoneIndex, currentEffectType)) {
+                    effect.setSpeed(1.0);
+                }
+                if (!zoneSupportsEffectBrightness(deviceIndex, zoneIndex, currentEffectType)) {
+                    effect.setBrightness(100);
+                }
             }
             if (!dryRunEnabled()
                 && deviceRequiresConfirmation(deviceIndex)
@@ -1283,21 +1324,33 @@ QVariantMap AppController::diagnosticsReport() const
             },
         };
 
-        QVariantList effects;
-        for (const RgbEffectType effectType : {
-                 RgbEffectType::Static,
-                 RgbEffectType::Rainbow,
-                 RgbEffectType::Breathing,
-                 RgbEffectType::ColorCycle,
-             }) {
-            const int effectTypeValue = static_cast<int>(effectType);
-            effects.append(QVariantMap {
-                {QStringLiteral("type"), rgbEffectTypeToString(effectType)},
-                {QStringLiteral("supported"), device->supportsEffect(effectTypeValue)},
-                {QStringLiteral("speed"), device->supportsEffectSpeed(effectTypeValue)},
-                {QStringLiteral("brightness"), device->supportsEffectBrightness(effectTypeValue)},
-            });
-        }
+        const auto supportedEffects = [device](int zoneIndex) {
+            QVariantList effects;
+            for (const RgbEffectType effectType : {
+                     RgbEffectType::Static,
+                     RgbEffectType::Rainbow,
+                     RgbEffectType::Breathing,
+                     RgbEffectType::ColorCycle,
+                 }) {
+                const int effectTypeValue = static_cast<int>(effectType);
+                const bool zoneScoped = zoneIndex >= 0;
+                effects.append(QVariantMap {
+                    {QStringLiteral("type"), rgbEffectTypeToString(effectType)},
+                    {QStringLiteral("supported"), zoneScoped
+                         ? device->supportsZoneEffect(zoneIndex, effectTypeValue)
+                         : device->supportsEffect(effectTypeValue)},
+                    {QStringLiteral("speed"), zoneScoped
+                         ? device->supportsZoneEffectSpeed(zoneIndex, effectTypeValue)
+                         : device->supportsEffectSpeed(effectTypeValue)},
+                    {QStringLiteral("brightness"), zoneScoped
+                         ? device->supportsZoneEffectBrightness(zoneIndex, effectTypeValue)
+                         : device->supportsEffectBrightness(effectTypeValue)},
+                });
+            }
+            return effects;
+        };
+
+        const QVariantList effects = supportedEffects(-1);
 
         QVariantList zones;
         const QVector<RgbZone>& deviceZones = device->zones();
@@ -1310,6 +1363,7 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("ledCount"), zone.ledCount()},
                 {QStringLiteral("currentColor"), zone.currentColor().toHexString()},
                 {QStringLiteral("effect"), effectToDiagnostics(zone.effect())},
+                {QStringLiteral("supportedEffects"), supportedEffects(zoneIndex)},
             });
         }
 

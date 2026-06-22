@@ -484,7 +484,7 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: page.settingsController && page.settingsController.scheduledProfile.length > 0
-                              ? qsTr("Runs once per day in this app session, including after resume or a late app start.")
+                              ? qsTr("Runs once per day while LumaCore is open; missed earlier runs are skipped on startup.")
                               : qsTr("A scheduled profile is required before this can be enabled.")
                         color: Theme.secondaryText
                         font.pixelSize: 11

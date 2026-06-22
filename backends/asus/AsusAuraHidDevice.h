@@ -31,10 +31,18 @@ public:
     [[nodiscard]] QString lastHardwareWriteStatus() const override;
     [[nodiscard]] BackendCapabilities capabilities() const override;
     [[nodiscard]] PermissionResult checkRuntimePermission(BackendCapability capability) const override;
+    [[nodiscard]] bool supportsEffect(int effectType) const override;
+    [[nodiscard]] bool supportsEffectSpeed(int effectType) const override;
+    [[nodiscard]] bool supportsEffectBrightness(int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffect(int zoneIndex, int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffectSpeed(int zoneIndex, int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffectBrightness(int zoneIndex, int effectType) const override;
 
 private:
     void initializeZones();
     [[nodiscard]] QString writeDisabledReason() const;
+    [[nodiscard]] int fixedZoneCount() const;
+    [[nodiscard]] bool isAddressableZone(int zoneIndex) const;
 
     hardware::linux::ProbeDevice m_device;
     bool m_configTableVerified {false};

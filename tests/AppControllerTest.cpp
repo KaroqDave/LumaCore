@@ -232,6 +232,9 @@ int main(int argc, char* argv[])
 
     const QVariantMap diagnostics = controller.diagnosticsReport();
     const QVariantList diagnosticDevices = diagnostics.value(QStringLiteral("devices")).toList();
+    const QVariantList diagnosticZones = diagnosticDevices.isEmpty()
+        ? QVariantList {}
+        : diagnosticDevices.first().toMap().value(QStringLiteral("zones")).toList();
     if (!require(
             diagnostics.value(QStringLiteral("schemaVersion")).toInt() == 1,
             "diagnostics should expose a stable schema version"
@@ -243,9 +246,16 @@ int main(int argc, char* argv[])
         )
         || !require(!diagnosticDevices.isEmpty(), "diagnostics should include device summaries")
         || !require(
-            diagnosticDevices.first().toMap().value(QStringLiteral("zones")).toList().size()
-                == controller.zoneCount(0),
+            diagnosticZones.size() == controller.zoneCount(0),
             "diagnostics should include zone summaries"
+        )
+        || !require(
+            diagnosticDevices.first().toMap().value(QStringLiteral("supportedEffects")).toList().size() == 4,
+            "diagnostics should include device-level effect support"
+        )
+        || !require(
+            diagnosticZones.first().toMap().value(QStringLiteral("supportedEffects")).toList().size() == 4,
+            "diagnostics should include zone-level effect support"
         )
         || !require(
             diagnostics.value(QStringLiteral("activity")).toList().size() > 0,

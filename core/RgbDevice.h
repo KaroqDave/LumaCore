@@ -61,6 +61,9 @@ public:
     [[nodiscard]] virtual bool supportsEffect(int effectType) const;
     [[nodiscard]] virtual bool supportsEffectSpeed(int effectType) const;
     [[nodiscard]] virtual bool supportsEffectBrightness(int effectType) const;
+    [[nodiscard]] virtual bool supportsZoneEffect(int zoneIndex, int effectType) const;
+    [[nodiscard]] virtual bool supportsZoneEffectSpeed(int zoneIndex, int effectType) const;
+    [[nodiscard]] virtual bool supportsZoneEffectBrightness(int zoneIndex, int effectType) const;
 
     void setZoneEffect(int zoneIndex, const RgbEffect& effect);
     [[nodiscard]] RgbEffect zoneEffect(int zoneIndex) const;
