@@ -219,6 +219,7 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 - `docs/daemon/protocol.md` documents the newline-delimited JSON socket protocol.
 - `docs/architecture.md` documents runtime boundaries and stable APIs.
 - `docs/refactor-parity.md` is the behavior-preservation checklist for structural changes.
+- `docs/release-verification.md` documents repeatable build, test, lint, sanitizer, install-staging, and Windows preview checks.
 - `docs/hardware/asus-aura-hid.md` documents the guarded ASUS Aura HID support and protocol research boundaries.
 - `docs/hardware/contributing-hardware.md` documents the staged workflow and PR checklist for new hardware support.
 - `docs/packaging/systemd.md` documents Linux install staging, the systemd service, and backend overrides.
@@ -226,7 +227,7 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 ## Current Gaps
 
 - Automated coverage is still focused; broader mock-backend and end-to-end UI integration work remains beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
-- Bulk profile application still uses the synchronous compatibility path; direct interactive device operations are asynchronous.
+- Startup and scheduled profile application still use the synchronous compatibility path; direct interactive device operations and GUI profile loads are asynchronous.
 - Profile scheduling currently runs inside the GUI session; daemon/systemd background scheduling is not implemented.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation follows the hardware contribution workflow.
 - Profile validation is minimal.

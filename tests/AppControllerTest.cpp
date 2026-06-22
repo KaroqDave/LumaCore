@@ -1,9 +1,12 @@
 #include "backends/mock/MockBackend.h"
+#include "backends/daemon/DaemonRgbDevice.h"
 #include "core/DeviceManager.h"
+#include "core/ProfileStore.h"
 #include "ui/AppController.h"
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -13,12 +16,14 @@
 
 #include <utility>
 #include <vector>
+#include <cstdio>
 
 namespace {
 
 bool require(bool condition, const char* message)
 {
     if (!condition) {
+        std::fprintf(stderr, "%s\n", message);
         qCritical().noquote() << message;
     }
     return condition;
@@ -50,7 +55,67 @@ public:
         mutableZones()[zoneIndex].setColor(color);
         return true;
     }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead | lumacore::BackendCapability::ZoneColorWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capabilities().testFlag(capability)) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+
+        return {
+            lumacore::PermissionStatus::Denied,
+            QStringLiteral("Test device does not support %1.").arg(lumacore::backendCapabilityToString(capability)),
+        };
+    }
 };
+
+bool saveProfileFixture(
+    const QString& profilesDirectory,
+    const QString& profileName,
+    const QJsonArray& devices
+)
+{
+    const QString normalizedName = lumacore::ProfileStore::normalizeName(profileName);
+    return lumacore::ProfileStore(profilesDirectory).save(
+        normalizedName,
+        QJsonObject {
+            {QStringLiteral("formatVersion"), 1},
+            {QStringLiteral("application"), QStringLiteral("LumaCore")},
+            {QStringLiteral("profileName"), normalizedName},
+            {QStringLiteral("devices"), devices},
+        }
+    );
+}
+
+QJsonObject profileZone(
+    int index,
+    const QString& name,
+    const QString& color,
+    const QString& effectType = QStringLiteral("Static")
+)
+{
+    return QJsonObject {
+        {QStringLiteral("index"), index},
+        {QStringLiteral("name"), name},
+        {QStringLiteral("type"), QStringLiteral("AddressableHeader")},
+        {QStringLiteral("ledCount"), 1},
+        {QStringLiteral("color"), color},
+        {
+            QStringLiteral("effect"),
+            QJsonObject {
+                {QStringLiteral("type"), effectType},
+                {QStringLiteral("color"), color},
+                {QStringLiteral("speed"), 1.0},
+                {QStringLiteral("brightness"), 100},
+            },
+        },
+    };
+}
 
 } // namespace
 
@@ -346,6 +411,262 @@ int main(int argc, char* argv[])
             "fully compatible profiles should not report a partial result"
         )) {
         return 1;
+    }
+
+    QVariantMap asyncProfileResult;
+    QObject::connect(
+        &controller,
+        &lumacore::AppController::profileApplyFinished,
+        &controller,
+        [&asyncProfileResult](const QVariantMap& result) { asyncProfileResult = result; }
+    );
+    if (!require(
+            controller.applyEffect(0, 0, 0, changedColor, 1.0, 100),
+            "changed async profile color should apply"
+        )
+        || !require(
+            controller.applyProfileAsync(QStringLiteral("Evening")),
+            "async profile apply should start for compatible mock profiles"
+        )
+        || !require(
+            !controller.profileApplyInProgress(),
+            "local async profile fallback should finish immediately"
+        )
+        || !require(
+            asyncProfileResult.value(QStringLiteral("success")).toBool(),
+            "async profile apply should report success"
+        )
+        || !require(
+            !asyncProfileResult.value(QStringLiteral("partial")).toBool(),
+            "fully compatible async profile apply should not report partial"
+        )
+        || !require(
+            controller.zoneEffectColor(0, 0) == savedColor,
+            "async profile apply should restore the saved zone color"
+        )) {
+        return 1;
+    }
+
+    {
+        const QString profilePath = profileDirectory.filePath(QStringLiteral("async-partial-profiles"));
+        lumacore::DeviceManager asyncManager(nullptr, profilePath);
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
+        devices.push_back(std::make_unique<StableIdDevice>(
+            QStringLiteral("profile-device"),
+            QStringLiteral("Zone A")
+        ));
+        asyncManager.replaceDevices(std::move(devices));
+        lumacore::AppController asyncController(&asyncManager);
+
+        QVariantMap partialResult;
+        QObject::connect(
+            &asyncController,
+            &lumacore::AppController::profileApplyFinished,
+            &asyncController,
+            [&partialResult](const QVariantMap& result) { partialResult = result; }
+        );
+
+        const QJsonArray partialDevices {
+            QJsonObject {
+                {QStringLiteral("id"), QStringLiteral("profile-device")},
+                {QStringLiteral("name"), QStringLiteral("Profile Device")},
+                {
+                    QStringLiteral("zones"),
+                    QJsonArray {
+                        profileZone(0, QStringLiteral("Zone A"), QStringLiteral("#102030")),
+                        profileZone(9, QStringLiteral("Missing Zone"), QStringLiteral("#203040")),
+                        profileZone(0, QStringLiteral("Zone A"), QStringLiteral("not-a-color")),
+                        profileZone(0, QStringLiteral("Zone A"), QStringLiteral("#405060"), QStringLiteral("Rainbow")),
+                    },
+                },
+            },
+            QJsonObject {
+                {QStringLiteral("id"), QStringLiteral("missing-device")},
+                {QStringLiteral("name"), QStringLiteral("Missing Device")},
+                {
+                    QStringLiteral("zones"),
+                    QJsonArray {
+                        profileZone(0, QStringLiteral("Zone A"), QStringLiteral("#506070")),
+                    },
+                },
+            },
+        };
+
+        if (!require(
+                saveProfileFixture(profilePath, QStringLiteral("partial"), partialDevices),
+                "partial async profile fixture should save"
+            )
+            || !require(
+                asyncController.applyProfileAsync(QStringLiteral("partial")),
+                "partial async profile should start"
+            )
+            || !require(
+                partialResult.value(QStringLiteral("success")).toBool(),
+                "partial async profile should report success when one zone applies"
+            )
+            || !require(
+                partialResult.value(QStringLiteral("partial")).toBool(),
+                "partial async profile should report partial"
+            )
+            || !require(
+                partialResult.value(QStringLiteral("appliedZones")).toInt() == 1,
+                "partial async profile should count applied zones"
+            )
+            || !require(
+                partialResult.value(QStringLiteral("missingDeviceZones")).toInt() == 1,
+                "partial async profile should count missing-device zones"
+            )
+            || !require(
+                partialResult.value(QStringLiteral("missingZones")).toInt() == 1,
+                "partial async profile should count missing zones"
+            )
+            || !require(
+                partialResult.value(QStringLiteral("invalidZones")).toInt() == 1,
+                "partial async profile should count invalid zones"
+            )
+            || !require(
+                partialResult.value(QStringLiteral("unsupportedZones")).toInt() == 1,
+                "partial async profile should count unsupported zones"
+            )
+            || !require(
+                asyncController.zoneEffectColor(0, 0) == QColor(QStringLiteral("#102030")),
+                "partial async profile should apply the compatible zone"
+            )) {
+            return 1;
+        }
+
+        QVariantMap noMatchResult;
+        QObject::connect(
+            &asyncController,
+            &lumacore::AppController::profileApplyFinished,
+            &asyncController,
+            [&noMatchResult](const QVariantMap& result) { noMatchResult = result; }
+        );
+        const QJsonArray noMatchDevices {
+            QJsonObject {
+                {QStringLiteral("id"), QStringLiteral("missing-device")},
+                {QStringLiteral("name"), QStringLiteral("Missing Device")},
+                {
+                    QStringLiteral("zones"),
+                    QJsonArray {
+                        profileZone(0, QStringLiteral("Zone A"), QStringLiteral("#506070")),
+                    },
+                },
+            },
+        };
+        if (!require(
+                saveProfileFixture(profilePath, QStringLiteral("no-match"), noMatchDevices),
+                "no-match async profile fixture should save"
+            )
+            || !require(
+                asyncController.applyProfileAsync(QStringLiteral("no-match")),
+                "no-match async profile should start and finish with a report"
+            )
+            || !require(
+                !noMatchResult.value(QStringLiteral("success")).toBool(),
+                "no-match async profile should report failure"
+            )
+            || !require(
+                noMatchResult.value(QStringLiteral("missingDeviceZones")).toInt() == 1,
+                "no-match async profile should count missing-device zones"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        const QString daemonProfilePath = profileDirectory.filePath(QStringLiteral("async-daemon-profiles"));
+        lumacore::DeviceManager daemonManager(nullptr, daemonProfilePath);
+        auto daemonClient = std::make_shared<lumacore::DaemonClient>(
+            QStringLiteral("lumacore-app-controller-async-profile-%1").arg(QCoreApplication::applicationPid())
+        );
+        QJsonObject daemonSnapshot {
+            {QStringLiteral("index"), 0},
+            {QStringLiteral("id"), QStringLiteral("daemon-device")},
+            {QStringLiteral("name"), QStringLiteral("Daemon Device")},
+            {QStringLiteral("vendor"), QStringLiteral("LumaCore")},
+            {QStringLiteral("type"), QStringLiteral("Controller")},
+            {
+                QStringLiteral("capabilities"),
+                QJsonArray {
+                    QStringLiteral("DiscoveryRead"),
+                    QStringLiteral("ZoneColorWrite"),
+                    QStringLiteral("ZoneEffectWrite"),
+                },
+            },
+            {
+                QStringLiteral("zones"),
+                QJsonArray {
+                    QJsonObject {
+                        {QStringLiteral("name"), QStringLiteral("Zone A")},
+                        {QStringLiteral("type"), QStringLiteral("AddressableHeader")},
+                        {QStringLiteral("ledCount"), 1},
+                        {QStringLiteral("color"), QStringLiteral("#000000")},
+                        {
+                            QStringLiteral("effectSupport"),
+                            QJsonArray {
+                                QJsonObject {
+                                    {QStringLiteral("effectType"), 0},
+                                    {QStringLiteral("supported"), true},
+                                    {QStringLiteral("speed"), false},
+                                    {QStringLiteral("brightness"), true},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> daemonDevices;
+        daemonDevices.push_back(std::make_unique<lumacore::DaemonRgbDevice>(
+            daemonSnapshot,
+            daemonClient
+        ));
+        daemonManager.replaceDevices(std::move(daemonDevices));
+        lumacore::AppController daemonController(&daemonManager, daemonClient);
+        if (!require(
+                saveProfileFixture(
+                    daemonProfilePath,
+                    QStringLiteral("daemon-pending"),
+                    QJsonArray {
+                        QJsonObject {
+                            {QStringLiteral("id"), QStringLiteral("daemon-device")},
+                            {QStringLiteral("name"), QStringLiteral("Daemon Device")},
+                            {
+                                QStringLiteral("zones"),
+                                QJsonArray {
+                                    profileZone(0, QStringLiteral("Zone A"), QStringLiteral("#123456")),
+                                },
+                            },
+                        },
+                    }
+                ),
+                "daemon async profile fixture should save"
+            )) {
+            return 1;
+        }
+
+        QElapsedTimer elapsed;
+        elapsed.start();
+        if (!require(
+                daemonController.applyProfileAsync(QStringLiteral("daemon-pending")),
+                "daemon async profile should start without a connected daemon"
+            )
+            || !require(
+                elapsed.elapsed() < 500,
+                "daemon async profile should not block on the synchronous daemon call path"
+            )
+            || !require(
+                daemonController.profileApplyInProgress(),
+                "daemon async profile should remain in progress while daemon requests are pending"
+            )
+            || !require(
+                !daemonController.applyProfileAsync(QStringLiteral("daemon-pending")),
+                "duplicate async profile applies should be rejected while one is pending"
+            )) {
+            return 1;
+        }
+        daemonClient->disconnectFromDaemon();
     }
 
     return 0;

@@ -31,6 +31,7 @@ class AppController final : public QObject
     Q_PROPERTY(bool daemonRecoveryBusy READ daemonRecoveryBusy NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool dryRunEnabled READ dryRunEnabled WRITE setDryRunEnabled NOTIFY dryRunEnabledChanged)
     Q_PROPERTY(int pendingDaemonOperations READ pendingDaemonOperations NOTIFY pendingDaemonOperationsChanged)
+    Q_PROPERTY(bool profileApplyInProgress READ profileApplyInProgress NOTIFY profileApplyInProgressChanged)
 
 public:
     explicit AppController(
@@ -55,6 +56,7 @@ public:
     [[nodiscard]] bool daemonRecoveryBusy() const;
     [[nodiscard]] bool dryRunEnabled() const;
     [[nodiscard]] int pendingDaemonOperations() const;
+    [[nodiscard]] bool profileApplyInProgress() const;
     void setDryRunEnabled(bool enabled);
 
     Q_INVOKABLE bool applyEffect(int deviceIndex, int zoneIndex, int effectType, const QColor& color, double speed, int brightness);
@@ -93,6 +95,7 @@ public:
     Q_INVOKABLE bool saveProfile(const QString& profileName);
     Q_INVOKABLE bool loadProfile(const QString& profileName);
     Q_INVOKABLE QVariantMap applyProfileWithReport(const QString& profileName);
+    Q_INVOKABLE bool applyProfileAsync(const QString& profileName);
     Q_INVOKABLE bool deleteProfile(const QString& profileName);
     Q_INVOKABLE bool renameProfile(const QString& oldProfileName, const QString& newProfileName);
     Q_INVOKABLE QString importProfile(const QUrl& sourceUrl);
@@ -118,8 +121,10 @@ signals:
     void writeConfirmationChanged(int deviceIndex);
     void dryRunEnabledChanged();
     void pendingDaemonOperationsChanged();
+    void profileApplyInProgressChanged();
     void daemonDevicesRefreshed();
     void globalOperationFinished(QVariantMap result);
+    void profileApplyFinished(QVariantMap result);
 
 private:
     [[nodiscard]] RgbDevice* deviceAt(int deviceIndex);
@@ -150,6 +155,7 @@ private:
     int m_pendingDaemonOperations {0};
     bool m_daemonRecoveryEnabled {false};
     bool m_daemonRefreshInProgress {false};
+    bool m_profileApplyInProgress {false};
 };
 
 } // namespace lumacore

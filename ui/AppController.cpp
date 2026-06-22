@@ -3,6 +3,7 @@
 #include "backends/daemon/DaemonBackend.h"
 #include "backends/daemon/DaemonRgbDevice.h"
 #include "core/ActivityLog.h"
+#include "core/ProfileStore.h"
 #include "core/RgbBackend.h"
 #include "core/RgbColor.h"
 #include "core/RgbEffect.h"
@@ -104,6 +105,132 @@ struct GlobalOperationState {
     bool dispatching {true};
     QStringList details;
 };
+
+int storedEffectType(const QJsonObject& zoneObject)
+{
+    const QJsonObject effectObject = zoneObject.value(QStringLiteral("effect")).toObject();
+    if (effectObject.isEmpty()) {
+        return static_cast<int>(RgbEffectType::Static);
+    }
+
+    const QString effectName = effectObject.value(QStringLiteral("type")).toString();
+    const QStringList knownEffects {
+        QStringLiteral("Static"),
+        QStringLiteral("Rainbow"),
+        QStringLiteral("Breathing"),
+        QStringLiteral("ColorCycle"),
+    };
+    for (int index = 0; index < knownEffects.size(); ++index) {
+        if (effectName.compare(knownEffects.at(index), Qt::CaseInsensitive) == 0) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+bool storedZoneEffect(const QJsonObject& zoneObject, RgbEffect* effect, int* effectType = nullptr)
+{
+    const int typeValue = storedEffectType(zoneObject);
+    if (effectType != nullptr) {
+        *effectType = typeValue;
+    }
+    if (typeValue < 0) {
+        return false;
+    }
+
+    if (!zoneObject.contains(QStringLiteral("effect"))) {
+        bool colorOk = false;
+        const RgbColor color = RgbColor::fromHexString(zoneObject.value(QStringLiteral("color")).toString(), &colorOk);
+        if (!colorOk) {
+            return false;
+        }
+        if (effect != nullptr) {
+            *effect = RgbEffect(RgbEffectType::Static, color);
+        }
+        return true;
+    }
+
+    const QJsonValue effectValue = zoneObject.value(QStringLiteral("effect"));
+    if (!effectValue.isObject()) {
+        return false;
+    }
+
+    const QJsonObject effectObject = effectValue.toObject();
+    bool colorOk = false;
+    const RgbColor color = RgbColor::fromHexString(effectObject.value(QStringLiteral("color")).toString(), &colorOk);
+    if (!colorOk) {
+        return false;
+    }
+
+    if (effect != nullptr) {
+        *effect = RgbEffect(
+            static_cast<RgbEffectType>(typeValue),
+            color,
+            effectObject.value(QStringLiteral("speed")).toDouble(1.0),
+            effectObject.value(QStringLiteral("brightness")).toInt(100)
+        );
+    }
+    return true;
+}
+
+struct ProfileApplyTarget {
+    int deviceIndex {-1};
+    int zoneIndex {-1};
+    QString deviceName;
+    QString zoneName;
+    int ledCount {1};
+    RgbEffect effect;
+};
+
+struct ProfileApplyState {
+    QString profileName;
+    int totalZones {0};
+    int appliedZones {0};
+    int skippedMissingDeviceZones {0};
+    int skippedMissingZones {0};
+    int skippedInvalidZones {0};
+    int skippedUnsupportedZones {0};
+    int failedZones {0};
+    int pending {0};
+    bool dispatching {true};
+    QStringList details;
+};
+
+QVariantMap profileApplyReport(const ProfileApplyState& state)
+{
+    const int skippedZones = state.skippedMissingDeviceZones
+        + state.skippedMissingZones
+        + state.skippedInvalidZones
+        + state.skippedUnsupportedZones
+        + state.failedZones;
+    const bool success = state.appliedZones > 0;
+    const QString summary = success
+        ? QStringLiteral("Applied %1 of %2 zone(s); skipped or failed %3.")
+              .arg(state.appliedZones)
+              .arg(state.totalZones)
+              .arg(skippedZones)
+        : QStringLiteral("Applied 0 of %1 zone(s).").arg(state.totalZones);
+
+    return {
+        {QStringLiteral("success"), success},
+        {QStringLiteral("partial"), success && skippedZones > 0},
+        {QStringLiteral("profileName"), state.profileName},
+        {QStringLiteral("totalZones"), state.totalZones},
+        {QStringLiteral("appliedZones"), state.appliedZones},
+        {QStringLiteral("skippedZones"), skippedZones},
+        {QStringLiteral("missingDeviceZones"), state.skippedMissingDeviceZones},
+        {QStringLiteral("missingZones"), state.skippedMissingZones},
+        {QStringLiteral("invalidZones"), state.skippedInvalidZones},
+        {QStringLiteral("unsupportedZones"), state.skippedUnsupportedZones},
+        {QStringLiteral("failedZones"), state.failedZones},
+        {QStringLiteral("summary"), summary},
+        {
+            QStringLiteral("error"),
+            success ? QString() : QStringLiteral("Profile did not match any available device zones."),
+        },
+        {QStringLiteral("details"), state.details},
+    };
+}
 
 } // namespace
 
@@ -311,6 +438,11 @@ bool AppController::dryRunEnabled() const
 int AppController::pendingDaemonOperations() const
 {
     return m_pendingDaemonOperations;
+}
+
+bool AppController::profileApplyInProgress() const
+{
+    return m_profileApplyInProgress;
 }
 
 void AppController::setDryRunEnabled(bool enabled)
@@ -1185,6 +1317,251 @@ QVariantMap AppController::applyProfileWithReport(const QString& profileName)
     refreshDaemonActivityLog();
 
     return report;
+}
+
+bool AppController::applyProfileAsync(const QString& profileName)
+{
+    if (m_deviceManager == nullptr) {
+        return false;
+    }
+    if (m_profileApplyInProgress) {
+        setStatusMessage(QStringLiteral("A profile is already being applied."));
+        return false;
+    }
+
+    const QString normalizedName = ProfileStore::normalizeName(profileName);
+    ProfileStore profileStore(m_deviceManager->profilesDirectoryPath());
+    QJsonObject profile;
+    QString storeError;
+    if (!profileStore.load(normalizedName, &profile, &storeError)) {
+        m_deviceManager->activityLog().error(LogCategory::Profile, storeError);
+        setStatusMessage(storeError);
+        emit profileApplyFinished(QVariantMap {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("partial"), false},
+            {QStringLiteral("profileName"), normalizedName},
+            {QStringLiteral("error"), storeError},
+        });
+        return false;
+    }
+
+    auto state = std::make_shared<ProfileApplyState>();
+    state->profileName = normalizedName;
+    QVector<ProfileApplyTarget> targets;
+
+    const QJsonArray devicesJson = profile.value(QStringLiteral("devices")).toArray();
+    for (const QJsonValue& deviceValue : devicesJson) {
+        const QJsonObject deviceObject = deviceValue.toObject();
+        const QString deviceId = deviceObject.value(QStringLiteral("id")).toString();
+        const QString storedDeviceName = deviceObject.value(QStringLiteral("name")).toString(deviceId);
+        const QJsonArray zonesJson = deviceObject.value(QStringLiteral("zones")).toArray();
+        state->totalZones += zonesJson.size();
+
+        int deviceIndex = -1;
+        for (int candidateIndex = 0; candidateIndex < m_deviceManager->deviceCount(); ++candidateIndex) {
+            const RgbDevice* candidate = deviceAt(candidateIndex);
+            if (candidate != nullptr && candidate->id() == deviceId) {
+                deviceIndex = candidateIndex;
+                break;
+            }
+        }
+
+        if (deviceIndex < 0) {
+            state->skippedMissingDeviceZones += zonesJson.size();
+            state->details.append(
+                QStringLiteral("Skipped missing device: %1 (%2 zone(s))").arg(storedDeviceName).arg(zonesJson.size())
+            );
+            continue;
+        }
+
+        RgbDevice* device = deviceAt(deviceIndex);
+        if (device == nullptr) {
+            state->skippedMissingDeviceZones += zonesJson.size();
+            state->details.append(
+                QStringLiteral("Skipped missing device: %1 (%2 zone(s))").arg(storedDeviceName).arg(zonesJson.size())
+            );
+            continue;
+        }
+
+        for (const QJsonValue& zoneValue : zonesJson) {
+            const QJsonObject zoneObject = zoneValue.toObject();
+            const QString zoneName = zoneObject.value(QStringLiteral("name")).toString();
+            int effectType = -1;
+            RgbEffect effect;
+            if (!storedZoneEffect(zoneObject, &effect, &effectType)) {
+                ++state->skippedInvalidZones;
+                state->details.append(QStringLiteral("Skipped invalid zone: %1 / %2").arg(storedDeviceName, zoneName));
+                continue;
+            }
+
+            int matchedZoneIndex = -1;
+            for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+                if (device->zones().at(zoneIndex).name() == zoneName) {
+                    matchedZoneIndex = zoneIndex;
+                    break;
+                }
+            }
+            if (matchedZoneIndex < 0) {
+                const int storedZoneIndex = zoneObject.value(QStringLiteral("index")).toInt(-1);
+                if (storedZoneIndex >= 0 && storedZoneIndex < device->zones().size()) {
+                    matchedZoneIndex = storedZoneIndex;
+                }
+            }
+            if (matchedZoneIndex < 0) {
+                ++state->skippedMissingZones;
+                state->details.append(QStringLiteral("Skipped missing zone: %1 / %2").arg(storedDeviceName, zoneName));
+                continue;
+            }
+            if (!device->supportsZoneEffect(matchedZoneIndex, effectType)) {
+                ++state->skippedUnsupportedZones;
+                state->details.append(QStringLiteral("Skipped unsupported effect: %1 / %2").arg(storedDeviceName, zoneName));
+                continue;
+            }
+
+            targets.append(ProfileApplyTarget {
+                deviceIndex,
+                matchedZoneIndex,
+                storedDeviceName,
+                zoneName,
+                qMax(1, zoneObject.value(QStringLiteral("ledCount")).toInt(device->zones().at(matchedZoneIndex).ledCount())),
+                effect,
+            });
+        }
+    }
+
+    m_profileApplyInProgress = true;
+    emit profileApplyInProgressChanged();
+    setStatusMessage(QStringLiteral("Applying profile '%1'.").arg(normalizedName));
+
+    const QPointer<AppController> self(this);
+    const auto finish = std::make_shared<std::function<void()>>();
+    *finish = [self, state]() {
+        if (self == nullptr || state->dispatching || state->pending > 0) {
+            return;
+        }
+
+        const QVariantMap report = profileApplyReport(*state);
+        const bool success = report.value(QStringLiteral("success")).toBool();
+        if (success) {
+            self->m_deviceManager->activityLog().info(
+                LogCategory::Profile,
+                QStringLiteral("Loaded profile '%1'. %2")
+                    .arg(state->profileName, report.value(QStringLiteral("summary")).toString())
+            );
+        } else {
+            self->m_deviceManager->activityLog().error(
+                LogCategory::Profile,
+                report.value(QStringLiteral("summary")).toString()
+            );
+        }
+
+        self->m_profileApplyInProgress = false;
+        emit self->profileApplyInProgressChanged();
+        self->setStatusMessage(
+            success
+                ? report.value(QStringLiteral("summary")).toString()
+                : report.value(QStringLiteral("error")).toString()
+        );
+        self->refreshDaemonActivityLog();
+        emit self->profileApplyFinished(report);
+    };
+
+    for (const ProfileApplyTarget& target : targets) {
+        RgbDevice* device = deviceAt(target.deviceIndex);
+        if (device == nullptr) {
+            ++state->failedZones;
+            state->details.append(QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName));
+            continue;
+        }
+
+        if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(device)) {
+            const QPointer<DaemonRgbDevice> daemonDevicePointer(daemonDevice);
+            ++state->pending;
+            beginDaemonOperation();
+            const quint64 metadataRequestId = daemonDevice->updateZoneMetadataAsync(
+                target.zoneIndex,
+                target.zoneName,
+                target.ledCount,
+                [self, state, finish, target, daemonDevicePointer](bool metadataSuccess, const QString& metadataError) {
+                    if (self == nullptr) {
+                        return;
+                    }
+                    self->endDaemonOperation();
+                    if (!metadataSuccess) {
+                        ++state->failedZones;
+                        state->details.append(
+                            metadataError.isEmpty()
+                                ? QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName)
+                                : metadataError
+                        );
+                        --state->pending;
+                        (*finish)();
+                        return;
+                    }
+                    if (daemonDevicePointer == nullptr) {
+                        ++state->failedZones;
+                        state->details.append(QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName));
+                        --state->pending;
+                        (*finish)();
+                        return;
+                    }
+
+                    self->beginDaemonOperation();
+                    const quint64 effectRequestId = daemonDevicePointer->applyZoneEffectAsync(
+                        target.zoneIndex,
+                        target.effect,
+                        !self->dryRunEnabled(),
+                        [self, state, finish, target](bool effectSuccess, const QString& effectError) {
+                            if (self == nullptr) {
+                                return;
+                            }
+                            self->endDaemonOperation();
+                            --state->pending;
+                            if (effectSuccess) {
+                                ++state->appliedZones;
+                            } else {
+                                ++state->failedZones;
+                                state->details.append(
+                                    effectError.isEmpty()
+                                        ? QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName)
+                                        : effectError
+                                );
+                            }
+                            emit self->zoneDataChanged(target.deviceIndex, target.zoneIndex);
+                            (*finish)();
+                        }
+                    );
+                    if (effectRequestId == 0) {
+                        self->endDaemonOperation();
+                        ++state->failedZones;
+                        state->details.append(QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName));
+                        --state->pending;
+                        (*finish)();
+                    }
+                }
+            );
+            if (metadataRequestId == 0) {
+                endDaemonOperation();
+                ++state->failedZones;
+                state->details.append(QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName));
+                --state->pending;
+                (*finish)();
+            }
+            continue;
+        }
+
+        if (!m_deviceManager->updateZone(target.deviceIndex, target.zoneIndex, target.zoneName, target.ledCount)
+            || !m_deviceManager->applyZoneEffect(target.deviceIndex, target.zoneIndex, target.effect)) {
+            ++state->failedZones;
+            state->details.append(QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName));
+            continue;
+        }
+        ++state->appliedZones;
+    }
+
+    state->dispatching = false;
+    (*finish)();
+    return true;
 }
 
 bool AppController::deleteProfile(const QString& profileName)

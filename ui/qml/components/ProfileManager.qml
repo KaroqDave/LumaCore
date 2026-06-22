@@ -15,6 +15,7 @@ Item {
     property string pendingProfile: ""
     property string pendingSaveProfile: ""
     property string pendingDeleteProfile: ""
+    property bool profileBusy: appController ? appController.profileApplyInProgress : false
 
     function refreshProfiles(preferredProfile) {
         if (!appController) {
@@ -145,20 +146,19 @@ Item {
             AppButton {
                 variant: "secondary"
                 text: qsTr("Cancel")
+                enabled: !manager.profileBusy
                 animationsEnabled: manager.animationsEnabled
                 onClicked: compatibilityDialog.close()
             }
 
             AppButton {
                 variant: "primary"
-                enabled: manager.compatibilityReport.canApply === true
-                text: qsTr("Apply Profile")
+                enabled: manager.compatibilityReport.canApply === true && !manager.profileBusy
+                text: manager.profileBusy ? qsTr("Applying...") : qsTr("Apply Profile")
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     compatibilityDialog.close()
-                    manager.applyResultReport =
-                        manager.appController.applyProfileWithReport(manager.pendingProfile)
-                    applyResultDialog.open()
+                    manager.appController.applyProfileAsync(manager.pendingProfile)
                 }
             }
         }
@@ -499,8 +499,8 @@ Item {
             AppButton {
                 Layout.fillWidth: true
                 variant: "primary"
-                enabled: profileBox.currentText.length > 0
-                text: qsTr("Load")
+                enabled: profileBox.currentText.length > 0 && !manager.profileBusy
+                text: manager.profileBusy ? qsTr("Loading...") : qsTr("Load")
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     const report = manager.appController.profileCompatibility(profileBox.currentText)
@@ -596,6 +596,11 @@ Item {
 
         function onProfilesChanged() {
             manager.refreshProfiles()
+        }
+
+        function onProfileApplyFinished(result) {
+            manager.applyResultReport = result
+            applyResultDialog.open()
         }
     }
 
