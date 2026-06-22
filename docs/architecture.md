@@ -56,3 +56,7 @@ The following should not be bundled into structural refactors:
 - framework, compiler, CMake, or dependency upgrades;
 - new hardware IDs, packet formats, or write capability;
 - replacing the daemon/backend architecture.
+
+New hardware work must follow `docs/hardware/contributing-hardware.md`. Read-only discovery,
+dry-run previews, and guarded write enablement are separate review stages; write-capable devices
+must remain allowlisted, confirmation-gated, and daemon-owned.

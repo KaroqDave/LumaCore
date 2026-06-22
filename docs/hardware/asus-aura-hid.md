@@ -2,6 +2,8 @@
 
 LumaCore supports an allowlisted ASUS Aura USB HID controller through the privileged daemon. The path is standard when the daemon runs with the default `--backend auto`, but real hardware writes remain gated by device allowlisting, config-table verification, dry-run state, approved packet builders, and per-session UI confirmation.
 
+Broader ASUS or non-ASUS hardware support must follow the staged workflow in `docs/hardware/contributing-hardware.md`. Research notes, read-only discovery, dry-run previews, and guarded write enablement are separate milestones.
+
 ## Candidate
 
 - Transport: USB HID via hidapi.

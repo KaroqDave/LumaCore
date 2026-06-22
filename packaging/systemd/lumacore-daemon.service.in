@@ -1,0 +1,16 @@
+[Unit]
+Description=LumaCore RGB backend daemon
+After=local-fs.target
+
+[Service]
+Type=simple
+Group=lumacore
+UMask=0007
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/lumacore-daemon --socket /run/lumacore/lumacore.sock
+RuntimeDirectory=lumacore
+RuntimeDirectoryMode=0775
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

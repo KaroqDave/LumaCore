@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 0.9.0
+    VERSION 1.0.0
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
+
+include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,10 +33,64 @@ option(LUMACORE_ENABLE_HIDAPI "Enable read-only hidapi discovery when available"
 option(LUMACORE_ENABLE_LIBUSB "Enable read-only libusb discovery when available" ON)
 option(LUMACORE_ENABLE_I2C_DEV "Enable optional read-only i2c-dev adapter metadata discovery" OFF)
 option(LUMACORE_ENABLE_ASUS_AURA_HID "Build ASUS Aura USB HID backend with config-verified confirmation-gated writes" ${LUMACORE_LINUX_DEFAULT})
+option(LUMACORE_ENABLE_WARNINGS "Enable project compiler warnings for first-party targets" ON)
+option(LUMACORE_WARNINGS_AS_ERRORS "Treat project compiler warnings as errors" OFF)
+option(LUMACORE_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer for supported Linux compiler builds" OFF)
+option(LUMACORE_INSTALL_SYSTEMD_UNIT "Install the lumacore-daemon systemd unit on Linux" ${LUMACORE_LINUX_DEFAULT})
+set(
+    LUMACORE_SYSTEMD_UNIT_DIR
+    "lib/systemd/system"
+    CACHE STRING
+    "Install destination for the lumacore-daemon systemd unit. Relative paths are resolved under the install prefix."
+)
 
 set(LUMACORE_HAS_HIDAPI OFF)
 set(LUMACORE_HAS_LIBUSB OFF)
 set(LUMACORE_HAS_I2C_DEV OFF)
+
+add_library(lumacore_project_options INTERFACE)
+
+if(LUMACORE_ENABLE_WARNINGS)
+    target_compile_options(lumacore_project_options
+        INTERFACE
+            $<$<CXX_COMPILER_ID:MSVC>:/W4>
+            $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall>
+            $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wextra>
+            $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wpedantic>
+    )
+endif()
+
+if(LUMACORE_WARNINGS_AS_ERRORS)
+    target_compile_options(lumacore_project_options
+        INTERFACE
+            $<$<CXX_COMPILER_ID:MSVC>:/WX>
+            $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
+    )
+endif()
+
+if(LUMACORE_ENABLE_SANITIZERS)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(lumacore_project_options
+            INTERFACE
+                -fsanitize=address,undefined
+                -fno-omit-frame-pointer
+        )
+        target_link_options(lumacore_project_options
+            INTERFACE
+                -fsanitize=address,undefined
+        )
+    else()
+        message(WARNING "LUMACORE_ENABLE_SANITIZERS is only supported for GNU/Clang Linux builds.")
+    endif()
+endif()
+
+function(lumacore_apply_project_options)
+    foreach(_lumacore_target IN LISTS ARGN)
+        if(TARGET "${_lumacore_target}")
+            target_link_libraries("${_lumacore_target}" PRIVATE lumacore_project_options)
+        endif()
+    endforeach()
+endfunction()
 
 if(LUMACORE_ENABLE_LINUX_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(LUMACORE_ENABLE_HIDAPI AND PkgConfig_FOUND)
@@ -122,3 +178,73 @@ message(STATUS "LumaCore ASUS Aura HID backend: ${LUMACORE_ENABLE_ASUS_AURA_HID}
 
 qt_finalize_executable(lumacore)
 qt_finalize_executable(lumacore-daemon)
+
+lumacore_apply_project_options(
+    lumacore
+    lumacore-daemon
+    lumacore_core
+    lumacore_ipc
+    lumacore_daemon_backend
+    lumacore_linux_backend
+    lumacore_asus_aura_backend
+    lumacore_ui
+    lumacore_device_manager_write_gate_test
+    lumacore_profile_persistence_test
+    lumacore_auto_backend_test
+    lumacore_daemon_protocol_test
+    lumacore_option_parsing_test
+    lumacore_settings_controller_test
+    lumacore_profile_schedule_runner_test
+    lumacore_app_controller_test
+    lumacore_daemon_launch_exit_fixture
+    lumacore_daemon_launch_sleep_fixture
+    lumacore_daemon_launcher_test
+    lumacore_asus_aura_protocol_test
+)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(LUMACORE_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/packaging/linux/lumacore.desktop")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/lumacore.desktop.in"
+        "${LUMACORE_DESKTOP_FILE}"
+        @ONLY
+    )
+
+    set(LUMACORE_SYSTEMD_SERVICE_FILE "${CMAKE_CURRENT_BINARY_DIR}/packaging/systemd/lumacore-daemon.service")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/systemd/lumacore-daemon.service.in"
+        "${LUMACORE_SYSTEMD_SERVICE_FILE}"
+        @ONLY
+    )
+
+    install(
+        TARGETS lumacore lumacore-daemon
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    )
+
+    install(
+        FILES "${LUMACORE_DESKTOP_FILE}"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
+    )
+
+    install(
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/lumacore.svg"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps"
+        RENAME "lumacore.svg"
+    )
+
+    foreach(_lumacore_icon_size IN ITEMS 16 32 48 64 128 256)
+        install(
+            FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/lumacore-${_lumacore_icon_size}.png"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/${_lumacore_icon_size}x${_lumacore_icon_size}/apps"
+            RENAME "lumacore.png"
+        )
+    endforeach()
+
+    if(LUMACORE_INSTALL_SYSTEMD_UNIT)
+        install(
+            FILES "${LUMACORE_SYSTEMD_SERVICE_FILE}"
+            DESTINATION "${LUMACORE_SYSTEMD_UNIT_DIR}"
+        )
+    endif()
+endif()
