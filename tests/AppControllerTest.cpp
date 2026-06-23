@@ -456,19 +456,30 @@ int main(int argc, char* argv[])
             controller.importProfile(QUrl::fromLocalFile(exportPath)) == QStringLiteral("Evening"),
             "controller should import and return the profile name"
         )
-        || !require(
-            controller.profileCompatibility(QStringLiteral("Evening"))
-                .value(QStringLiteral("applicableZones"))
-                .toInt() > 0,
-            "controller should expose compatibility before applying a profile"
-        )
         || !require(controller.profileExists(QStringLiteral("Evening")), "saved profile should be reported as existing")
         || !require(
             controller.profileExists(QStringLiteral(" Evening ")),
             "profile existence checks should normalize names"
         )
-        || !require(!controller.profileExists(QStringLiteral("Missing")), "missing profile should not exist")
+        || !require(!controller.profileExists(QStringLiteral("Missing")), "missing profile should not exist")) {
+        return 1;
+    }
+
+    const QVariantMap eveningPreview = controller.profileCompatibility(QStringLiteral("Evening"));
+    const QVariantList eveningPreviewItems = eveningPreview.value(QStringLiteral("previewItems")).toList();
+    if (!require(
+            eveningPreview.value(QStringLiteral("applicableZones")).toInt() > 0,
+            "controller should expose compatibility before applying a profile"
+        )
+        || !require(!eveningPreviewItems.isEmpty(), "controller should expose profile apply preview rows")
         || !require(
+            eveningPreviewItems.first().toMap().contains(QStringLiteral("targetEffect")),
+            "profile apply preview rows should expose target effects"
+        )) {
+        return 1;
+    }
+
+    if (!require(
             !controller.applyProfileWithReport(QStringLiteral("Evening"))
                  .value(QStringLiteral("partial"))
                  .toBool(),

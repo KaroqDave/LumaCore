@@ -230,7 +230,15 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (!require(manager.setZoneStaticColor(0, 0, changedColor), "compatibility preview should start from a changed color")) {
+        return 1;
+    }
+
     const QVariantMap compatibility = manager.profileCompatibility(QStringLiteral("compatibility"));
+    const QVariantList previewItems = compatibility.value(QStringLiteral("previewItems")).toList();
+    const QVariantMap firstPreviewItem = previewItems.isEmpty()
+        ? QVariantMap {}
+        : previewItems.first().toMap();
     if (!require(compatibility.value(QStringLiteral("valid")).toBool(), "compatibility report should be valid")
         || !require(compatibility.value(QStringLiteral("canApply")).toBool(), "one compatible zone should be applicable")
         || !require(compatibility.value(QStringLiteral("totalZones")).toInt() == 5, "report should count stored zones")
@@ -242,6 +250,28 @@ int main(int argc, char* argv[])
         || !require(
             compatibility.value(QStringLiteral("unsupportedEffects")).toInt() == 1,
             "report should count unsupported effects"
+        )
+        || !require(compatibility.value(QStringLiteral("changedZones")).toInt() == 1, "preview should count changed zones")
+        || !require(compatibility.value(QStringLiteral("unchangedZones")).toInt() == 0, "preview should count unchanged zones")
+        || !require(compatibility.value(QStringLiteral("skippedZones")).toInt() == 4, "preview should count skipped zones")
+        || !require(previewItems.size() == 5, "preview should include one row per stored zone")
+        || !require(
+            firstPreviewItem.value(QStringLiteral("status")).toString() == QStringLiteral("changed"),
+            "preview should mark the applicable changed zone"
+        )
+        || !require(
+            firstPreviewItem.value(QStringLiteral("currentEffect")).toMap().value(QStringLiteral("color")).toString()
+                == QStringLiteral("#AABBCC"),
+            "preview should expose the current zone color"
+        )
+        || !require(
+            firstPreviewItem.value(QStringLiteral("targetEffect")).toMap().value(QStringLiteral("color")).toString()
+                == QStringLiteral("#112233"),
+            "preview should expose the target profile color"
+        )
+        || !require(
+            firstPreviewItem.value(QStringLiteral("changeSummary")).toString().contains(QStringLiteral("Color")),
+            "preview should describe the changed fields"
         )) {
         return 1;
     }

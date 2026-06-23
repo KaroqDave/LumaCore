@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
@@ -38,6 +39,33 @@ Item {
         return normalized.length > 0 ? normalized : "default"
     }
 
+    function previewItems() {
+        return compatibilityReport.previewItems || []
+    }
+
+    function previewStatusColor(status) {
+        if (status === "changed") {
+            return Theme.accent
+        }
+        if (status === "unchanged") {
+            return Theme.success
+        }
+        if (status === "invalid" || status === "unsupported") {
+            return Theme.warning
+        }
+        return Theme.secondaryText
+    }
+
+    function previewStatusBackground(status) {
+        if (status === "changed" || status === "unchanged") {
+            return Theme.elevated
+        }
+        if (status === "invalid" || status === "unsupported") {
+            return Theme.warningBg
+        }
+        return Theme.inputBg
+    }
+
     implicitHeight: content.implicitHeight
 
     FileDialog {
@@ -70,9 +98,9 @@ Item {
 
         parent: Overlay.overlay
         anchors.centerIn: parent
-        width: Math.min(600, parent ? parent.width - 48 : 600)
+        width: Math.min(720, parent ? parent.width - 48 : 720)
         modal: true
-        title: qsTr("Profile Compatibility")
+        title: qsTr("Profile Apply Preview")
         standardButtons: Dialog.NoButton
 
         contentItem: ColumnLayout {
@@ -91,10 +119,191 @@ Item {
 
             Label {
                 Layout.fillWidth: true
-                text: manager.compatibilityReport.summary || qsTr("Compatibility information is unavailable.")
+                text: manager.compatibilityReport.summary || qsTr("Preview information is unavailable.")
                 color: Theme.primaryText
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 4
+                columnSpacing: 8
+                rowSpacing: 8
+
+                Repeater {
+                    model: [
+                        {
+                            label: qsTr("Will change"),
+                            value: manager.compatibilityReport.changedZones || 0,
+                            color: Theme.accent
+                        },
+                        {
+                            label: qsTr("Already matches"),
+                            value: manager.compatibilityReport.unchangedZones || 0,
+                            color: Theme.success
+                        },
+                        {
+                            label: qsTr("Skipped"),
+                            value: manager.compatibilityReport.skippedZones || 0,
+                            color: Theme.warning
+                        },
+                        {
+                            label: qsTr("Total"),
+                            value: manager.compatibilityReport.totalZones || 0,
+                            color: Theme.secondaryText
+                        }
+                    ]
+
+                    delegate: Rectangle {
+                        id: countItem
+
+                        required property var modelData
+
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 54
+                        radius: 10
+                        color: Theme.elevated
+                        border.color: Theme.border
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 2
+
+                            Label {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: countItem.modelData.value
+                                color: countItem.modelData.color
+                                font.pixelSize: 16
+                                font.bold: true
+                            }
+
+                            Label {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: countItem.modelData.label
+                                color: Theme.secondaryText
+                                font.pixelSize: 10
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: manager.previewItems().length > 0
+                Layout.fillWidth: true
+                Layout.preferredHeight: visible ? Math.min(previewColumn.implicitHeight + 20, 260) : 0
+                radius: 10
+                color: Theme.inputBg
+                border.color: Theme.border
+
+                ScrollView {
+                    id: previewScroll
+
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    clip: true
+
+                    ColumnLayout {
+                        id: previewColumn
+
+                        width: previewScroll.availableWidth
+                        spacing: 8
+
+                        Repeater {
+                            model: manager.previewItems()
+
+                            delegate: Rectangle {
+                                id: previewItem
+
+                                required property var modelData
+
+                                Layout.fillWidth: true
+                                implicitHeight: previewRow.implicitHeight + 18
+                                radius: 8
+                                color: manager.previewStatusBackground(previewItem.modelData.status)
+                                border.color: manager.previewStatusColor(previewItem.modelData.status)
+                                border.width: 1
+
+                                RowLayout {
+                                    id: previewRow
+
+                                    anchors.fill: parent
+                                    anchors.margins: 9
+                                    spacing: 10
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 8
+                                        Layout.preferredHeight: 8
+                                        Layout.alignment: Qt.AlignTop
+                                        radius: 4
+                                        color: manager.previewStatusColor(previewItem.modelData.status)
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 4
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+
+                                            Label {
+                                                Layout.fillWidth: true
+                                                text: qsTr("%1 / %2")
+                                                    .arg(previewItem.modelData.deviceName)
+                                                    .arg(previewItem.modelData.zoneName)
+                                                color: Theme.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Label {
+                                                text: previewItem.modelData.statusText
+                                                color: manager.previewStatusColor(previewItem.modelData.status)
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                            }
+                                        }
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            visible: previewItem.modelData.status === "changed"
+                                                || previewItem.modelData.status === "unchanged"
+                                            text: qsTr("%1 -> %2")
+                                                .arg(previewItem.modelData.currentSummary)
+                                                .arg(previewItem.modelData.targetSummary)
+                                            color: Theme.secondaryText
+                                            font.pixelSize: 11
+                                            wrapMode: Text.WordWrap
+                                        }
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            visible: previewItem.modelData.changeSummary
+                                                && previewItem.modelData.changeSummary.length > 0
+                                            text: previewItem.modelData.changeSummary
+                                            color: previewItem.modelData.changed ? Theme.primaryText : Theme.secondaryText
+                                            font.pixelSize: 11
+                                            wrapMode: Text.WordWrap
+                                        }
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            visible: previewItem.modelData.reason
+                                                && previewItem.modelData.reason.length > 0
+                                            text: previewItem.modelData.reason
+                                            color: Theme.secondaryText
+                                            font.pixelSize: 11
+                                            wrapMode: Text.WordWrap
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
