@@ -27,6 +27,13 @@ public:
     DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonClient> client, QObject* parent = nullptr);
 
     [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const RgbColor& color) override;
+    [[nodiscard]] QString discoveryIdentity() const override;
+    [[nodiscard]] QString discoverySupportStage() const override;
+    [[nodiscard]] QString discoverySupportStatus() const override;
+    [[nodiscard]] QString discoverySupportFamily() const override;
+    [[nodiscard]] QString discoverySupportNotes() const override;
+    [[nodiscard]] bool discoveryCataloged() const override;
+    [[nodiscard]] bool discoveryWriteCapableBackend() const override;
     [[nodiscard]] bool applyZoneEffect(int zoneIndex, const RgbEffect& effect) override;
     [[nodiscard]] bool applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors) override;
     [[nodiscard]] bool applyAllOff() override;
@@ -61,6 +68,13 @@ public:
 
 private:
     int m_daemonDeviceIndex {-1};
+    QString m_discoveryIdentity;
+    QString m_discoverySupportStage;
+    QString m_discoverySupportStatus;
+    QString m_discoverySupportFamily;
+    QString m_discoverySupportNotes;
+    bool m_discoveryCataloged {false};
+    bool m_discoveryWriteCapableBackend {false};
     BackendCapabilities m_capabilities {BackendCapability::None};
     PermissionResult m_permission {PermissionStatus::Denied, QStringLiteral("Daemon permission snapshot unavailable.")};
     QHash<QString, PermissionResult> m_permissions;

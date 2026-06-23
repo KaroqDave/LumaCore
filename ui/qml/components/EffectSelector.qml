@@ -11,12 +11,13 @@ Item {
     property var disabledSegments: []
     property int currentIndex: 0
     property bool animationsEnabled: true
+    property bool compact: false
     property real gap: 4
 
     signal selected(int index)
 
     implicitWidth: 240
-    implicitHeight: 40
+    implicitHeight: compact ? 34 : 40
 
     readonly property real segmentWidth: segments.length > 0 ? (width - gap * 2) / segments.length : 0
 
@@ -29,7 +30,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: 12
+        radius: 8
         color: Theme.inputBg
         border.color: Theme.border
         border.width: 1
@@ -42,7 +43,7 @@ Item {
         height: parent.height - control.gap * 2
         y: control.gap
         x: control.gap + control.currentIndex * control.segmentWidth
-        radius: 9
+        radius: 6
         color: Theme.accent
         opacity: control.segmentEnabled(control.currentIndex) ? 1 : 0
 
@@ -73,7 +74,7 @@ Item {
                 Label {
                     anchors.centerIn: parent
                     text: segment.modelData
-                    font.pixelSize: 12
+                    font.pixelSize: control.compact ? 11 : 12
                     font.bold: true
                     color: !control.segmentEnabled(segment.index) ? Theme.secondaryText
                         : control.currentIndex === segment.index ? "#FFFFFF"

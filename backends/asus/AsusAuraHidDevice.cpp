@@ -29,8 +29,9 @@ AsusAuraHidDevice::AsusAuraHidDevice(
           device.vendor.isEmpty() ? QStringLiteral("ASUS") : device.vendor,
           RgbDeviceType::Motherboard,
           parent
-      )
+    )
     , m_device(std::move(device))
+    , m_support(hardware::linux::discoverySupportInfo(m_device))
     , m_configTableVerified(configTableVerified)
     , m_configTable(std::move(configTable))
     , m_configSummary(std::move(configSummary))
@@ -44,6 +45,36 @@ AsusAuraHidDevice::AsusAuraHidDevice(
 QString AsusAuraHidDevice::discoveryIdentity() const
 {
     return hardware::linux::usbVidPidKey(m_device);
+}
+
+QString AsusAuraHidDevice::discoverySupportStage() const
+{
+    return m_support.stage;
+}
+
+QString AsusAuraHidDevice::discoverySupportStatus() const
+{
+    return m_support.status;
+}
+
+QString AsusAuraHidDevice::discoverySupportFamily() const
+{
+    return m_support.family;
+}
+
+QString AsusAuraHidDevice::discoverySupportNotes() const
+{
+    return m_support.notes;
+}
+
+bool AsusAuraHidDevice::discoveryCataloged() const
+{
+    return m_support.cataloged;
+}
+
+bool AsusAuraHidDevice::discoveryWriteCapableBackend() const
+{
+    return m_support.writeCapableBackend;
 }
 
 void AsusAuraHidDevice::initializeZones()

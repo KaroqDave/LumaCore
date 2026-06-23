@@ -21,6 +21,12 @@ public:
     );
 
     [[nodiscard]] QString discoveryIdentity() const override;
+    [[nodiscard]] QString discoverySupportStage() const override;
+    [[nodiscard]] QString discoverySupportStatus() const override;
+    [[nodiscard]] QString discoverySupportFamily() const override;
+    [[nodiscard]] QString discoverySupportNotes() const override;
+    [[nodiscard]] bool discoveryCataloged() const override;
+    [[nodiscard]] bool discoveryWriteCapableBackend() const override;
     [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const RgbColor& color) override;
     [[nodiscard]] bool applyZoneEffect(int zoneIndex, const RgbEffect& effect) override;
     [[nodiscard]] bool applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors) override;
@@ -45,6 +51,7 @@ private:
     [[nodiscard]] bool isAddressableZone(int zoneIndex) const;
 
     hardware::linux::ProbeDevice m_device;
+    hardware::linux::DiscoverySupportInfo m_support;
     bool m_configTableVerified {false};
     hardware::linux::AsusAuraConfigTable m_configTable;
     QString m_configSummary;

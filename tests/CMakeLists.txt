@@ -21,6 +21,14 @@ lumacore_add_test_executable(lumacore_auto_backend_test auto_backend
 target_include_directories(lumacore_auto_backend_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_auto_backend_test PRIVATE lumacore_core Qt6::Core)
 
+lumacore_add_test_executable(lumacore_probe_result_test probe_result
+    ProbeResultTest.cpp
+    ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.cpp
+    ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.h
+)
+target_include_directories(lumacore_probe_result_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(lumacore_probe_result_test PRIVATE lumacore_core Qt6::Core)
+
 lumacore_add_test_executable(lumacore_daemon_protocol_test daemon_protocol
     DaemonProtocolTest.cpp
 )
@@ -89,6 +97,7 @@ if(WIN32)
             device_manager_write_gate
             profile_persistence
             auto_backend
+            probe_result
             daemon_protocol
             option_parsing
             settings_controller

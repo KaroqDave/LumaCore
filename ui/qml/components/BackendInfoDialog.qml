@@ -12,7 +12,7 @@ Dialog {
     title: qsTr("Active Backend")
     modal: true
     anchors.centerIn: parent
-    padding: 24
+    padding: 18
 
     property var controller
     property bool animationsEnabled: true
@@ -41,7 +41,7 @@ Dialog {
 
     background: Rectangle {
         color: Theme.surface
-        radius: 18
+        radius: 8
         border.color: Theme.border
         border.width: 1
     }
@@ -51,10 +51,10 @@ Dialog {
         color: Theme.primaryText
         font.pixelSize: 17
         font.bold: true
-        padding: 18
-        leftPadding: 24
-        rightPadding: 24
-        topPadding: 20
+        padding: 14
+        leftPadding: 18
+        rightPadding: 18
+        topPadding: 16
         bottomPadding: 0
     }
 
@@ -77,6 +77,7 @@ Dialog {
                 Layout.preferredWidth: 130
                 variant: "secondary"
                 text: qsTr("Retry now")
+                compact: true
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: dialog.controller.retryDaemonConnection()
             }
@@ -88,6 +89,7 @@ Dialog {
                 Layout.preferredWidth: 130
                 variant: "secondary"
                 text: qsTr("Rescan")
+                compact: true
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: dialog.controller.rescanDaemonDevices()
             }
@@ -97,6 +99,7 @@ Dialog {
                 Layout.preferredWidth: 130
                 variant: "secondary"
                 text: qsTr("Export")
+                compact: true
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: diagnosticsDialog.open()
             }
@@ -106,6 +109,7 @@ Dialog {
                 Layout.preferredWidth: 130
                 variant: "secondary"
                 text: qsTr("Copy Summary")
+                compact: true
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: dialog.controller.copyDiagnosticsSummary()
             }
@@ -116,6 +120,7 @@ Dialog {
                 Layout.preferredWidth: 130
                 variant: "primary"
                 text: qsTr("Close")
+                compact: true
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: dialog.close()
             }
@@ -123,7 +128,7 @@ Dialog {
     }
 
     contentItem: ColumnLayout {
-        spacing: 16
+        spacing: 12
         width: 460
 
         ColumnLayout {
@@ -134,7 +139,7 @@ Dialog {
                 Layout.fillWidth: true
                 text: dialog.controller ? dialog.controller.backendDisplayName : qsTr("Unknown backend")
                 color: Theme.primaryText
-                font.pixelSize: 22
+                font.pixelSize: 20
                 font.bold: true
                 wrapMode: Text.WordWrap
             }
@@ -162,7 +167,7 @@ Dialog {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: setupStatusColumn.implicitHeight + 20
-            radius: 12
+            radius: 8
             color: dialog.setupStatusBackground
             border.color: dialog.setupStatusColor
             border.width: 1
@@ -347,7 +352,7 @@ Dialog {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: noteLabel.implicitHeight + 16
-            radius: 12
+            radius: 8
             color: Theme.inputBg
             border.color: Theme.border
 

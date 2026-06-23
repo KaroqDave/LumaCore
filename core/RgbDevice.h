@@ -35,6 +35,12 @@ public:
     [[nodiscard]] const QString& backendId() const;
     void setBackendId(const QString& backendId);
     [[nodiscard]] virtual QString discoveryIdentity() const;
+    [[nodiscard]] virtual QString discoverySupportStage() const;
+    [[nodiscard]] virtual QString discoverySupportStatus() const;
+    [[nodiscard]] virtual QString discoverySupportFamily() const;
+    [[nodiscard]] virtual QString discoverySupportNotes() const;
+    [[nodiscard]] virtual bool discoveryCataloged() const;
+    [[nodiscard]] virtual bool discoveryWriteCapableBackend() const;
     [[nodiscard]] RgbDeviceType type() const;
     [[nodiscard]] QString typeName() const;
     [[nodiscard]] const QVector<RgbZone>& zones() const;

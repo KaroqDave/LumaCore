@@ -73,7 +73,7 @@ Item {
         id: content
 
         anchors.fill: parent
-        spacing: 12
+        spacing: 9
 
         SectionCard {
             Layout.fillWidth: true
@@ -81,10 +81,11 @@ Item {
             subtitle: qsTr("Visual preferences for the app shell")
             surfaceColor: Theme.surface
             animationsEnabled: page.animationsEnabled
+            compact: true
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -94,7 +95,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("Close to system tray")
                         color: Theme.primaryText
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.bold: true
                     }
 
@@ -104,7 +105,7 @@ Item {
                               ? qsTr("Keeps LumaCore running when its window is closed. Use the tray menu to reopen or quit.")
                               : qsTr("A system tray is not available in this desktop session.")
                         color: Theme.secondaryText
-                        font.pixelSize: 11
+                        font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -123,7 +124,7 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -133,7 +134,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("UI animations")
                         color: Theme.primaryText
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.bold: true
                     }
 
@@ -141,7 +142,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("Controls sidebar motion, hover transitions, and color fades.")
                         color: Theme.secondaryText
-                        font.pixelSize: 11
+                        font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -160,7 +161,7 @@ Item {
             RowLayout {
                 visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -176,7 +177,7 @@ Item {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Keeps the window drawing at a steady rate so G-Sync/FreeSync displays don't flicker. Enable only if you notice VRR flicker, as this increases GPU and power usage.")
+                        text: qsTr("Keeps the window drawing at a steady rate so G-Sync/FreeSync displays do not flicker. Disable if you prefer lower GPU and power usage.")
                         color: Theme.secondaryText
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
@@ -185,7 +186,7 @@ Item {
 
                 AppSwitch {
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    checked: page.settingsController ? page.settingsController.reduceVrrFlicker : false
+                    checked: page.settingsController ? page.settingsController.reduceVrrFlicker : true
                     onClicked: {
                         if (page.settingsController) {
                             page.settingsController.reduceVrrFlicker = checked
@@ -196,7 +197,7 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -239,6 +240,7 @@ Item {
             subtitle: qsTr("Preview write intent without applying changes")
             surfaceColor: Theme.surface
             animationsEnabled: page.animationsEnabled
+            compact: true
 
             RowLayout {
                 Layout.fillWidth: true
@@ -286,6 +288,7 @@ Item {
             subtitle: qsTr("Choose how LumaCore behaves when it starts")
             surfaceColor: Theme.surface
             animationsEnabled: page.animationsEnabled
+            compact: true
 
             RowLayout {
                 Layout.fillWidth: true
@@ -295,7 +298,7 @@ Item {
                     Layout.fillWidth: true
                     text: qsTr("Start minimized")
                     color: Theme.primaryText
-                    font.pixelSize: 13
+                    font.pixelSize: 12
                     font.bold: true
                 }
 
@@ -322,7 +325,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("Apply profile on launch")
                         color: Theme.primaryText
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.bold: true
                     }
 
@@ -333,7 +336,7 @@ Item {
                                     .arg(page.settingsController.activeProfile)
                               : qsTr("Choose an active profile on the Profiles page first.")
                         color: Theme.secondaryText
-                        font.pixelSize: 11
+                        font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -358,10 +361,11 @@ Item {
             subtitle: qsTr("Apply one profile automatically each day while LumaCore is running")
             surfaceColor: Theme.surface
             animationsEnabled: page.animationsEnabled
+            compact: true
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -371,7 +375,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("Scheduled profile")
                         color: Theme.primaryText
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.bold: true
                     }
 
@@ -381,7 +385,7 @@ Item {
                               ? qsTr("Uses the normal dry-run, compatibility, and hardware-confirmation rules.")
                               : qsTr("Create or import a profile before enabling a daily schedule.")
                         color: Theme.secondaryText
-                        font.pixelSize: 11
+                        font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -404,7 +408,7 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -414,7 +418,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("Daily time")
                         color: Theme.primaryText
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.bold: true
                     }
 
@@ -426,7 +430,7 @@ Item {
                                     .arg(page.settingsController.scheduledProfileTime)
                               : qsTr("Select a profile to choose when it should run.")
                         color: Theme.secondaryText
-                        font.pixelSize: 11
+                        font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -467,7 +471,7 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 10
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -477,7 +481,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("Enable daily schedule")
                         color: Theme.primaryText
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.bold: true
                     }
 
@@ -487,7 +491,7 @@ Item {
                               ? qsTr("Runs once per day while LumaCore is open; missed earlier runs are skipped on startup.")
                               : qsTr("A scheduled profile is required before this can be enabled.")
                         color: Theme.secondaryText
-                        font.pixelSize: 11
+                        font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
                 }

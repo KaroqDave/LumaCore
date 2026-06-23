@@ -8,8 +8,9 @@ LinuxDiscoveredDevice::LinuxDiscoveredDevice(const hardware::linux::ProbeDevice&
     , m_source(device.source)
     , m_path(device.path)
     , m_details(device.details)
+    , m_support(hardware::linux::discoverySupportInfo(device))
 {
-    setLikelyRgbController(hardware::linux::isLikelyRgbController(device));
+    setLikelyRgbController(m_support.likelyRgbController);
     mutableZones().append(RgbZone(QStringLiteral("Read-only discovery"), RgbZoneType::Unknown, 1, RgbColor(96, 96, 96)));
     mutableZones()[0].setEffect(RgbEffect(RgbEffectType::Static, RgbColor(96, 96, 96)));
 }
@@ -17,6 +18,36 @@ LinuxDiscoveredDevice::LinuxDiscoveredDevice(const hardware::linux::ProbeDevice&
 QString LinuxDiscoveredDevice::discoveryIdentity() const
 {
     return m_discoveryIdentity;
+}
+
+QString LinuxDiscoveredDevice::discoverySupportStage() const
+{
+    return m_support.stage;
+}
+
+QString LinuxDiscoveredDevice::discoverySupportStatus() const
+{
+    return m_support.status;
+}
+
+QString LinuxDiscoveredDevice::discoverySupportFamily() const
+{
+    return m_support.family;
+}
+
+QString LinuxDiscoveredDevice::discoverySupportNotes() const
+{
+    return m_support.notes;
+}
+
+bool LinuxDiscoveredDevice::discoveryCataloged() const
+{
+    return m_support.cataloged;
+}
+
+bool LinuxDiscoveredDevice::discoveryWriteCapableBackend() const
+{
+    return m_support.writeCapableBackend;
 }
 
 const QString& LinuxDiscoveredDevice::source() const
@@ -81,8 +112,8 @@ PermissionResult LinuxDiscoveredDevice::checkRuntimePermission(BackendCapability
 
     return {
         PermissionStatus::Denied,
-        QStringLiteral("%1 is a read-only discovery candidate from %2. Writes are disabled in this phase.")
-            .arg(name(), m_source),
+        QStringLiteral("%1 is a read-only discovery candidate from %2. %3")
+            .arg(name(), m_source, m_support.summary),
     };
 }
 

@@ -1,5 +1,7 @@
 #include "core/ProfileStore.h"
 
+#include "core/PortablePaths.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -7,7 +9,6 @@
 #include <QJsonParseError>
 #include <QRegularExpression>
 #include <QSaveFile>
-#include <QStandardPaths>
 
 #include <utility>
 
@@ -28,8 +29,7 @@ ProfileStore::ProfileStore(QString directoryPath)
     : m_directoryPath(std::move(directoryPath))
 {
     if (m_directoryPath.trimmed().isEmpty()) {
-        m_directoryPath = QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
-                              .filePath(QStringLiteral("profiles"));
+        m_directoryPath = portableProfilesDirectory();
     }
 
     m_directoryPath = QDir::cleanPath(QFileInfo(m_directoryPath).absoluteFilePath());

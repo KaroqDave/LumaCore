@@ -77,6 +77,8 @@ public:
     Q_INVOKABLE QColor zoneEffectColor(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE double zoneEffectSpeed(int deviceIndex, int zoneIndex) const;
     Q_INVOKABLE int zoneEffectBrightness(int deviceIndex, int zoneIndex) const;
+    Q_INVOKABLE bool zoneEffectsPanelEnabled(int deviceIndex, int zoneIndex) const;
+    Q_INVOKABLE void setZoneEffectsPanelEnabled(int deviceIndex, int zoneIndex, bool enabled);
     Q_INVOKABLE bool updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount);
     Q_INVOKABLE int zoneCount(int deviceIndex) const;
     Q_INVOKABLE bool deviceWritable(int deviceIndex) const;
@@ -88,6 +90,9 @@ public:
     Q_INVOKABLE bool zoneSupportsEffect(int deviceIndex, int zoneIndex, int effectType) const;
     Q_INVOKABLE bool zoneSupportsEffectSpeed(int deviceIndex, int zoneIndex, int effectType) const;
     Q_INVOKABLE bool zoneSupportsEffectBrightness(int deviceIndex, int zoneIndex, int effectType) const;
+    Q_INVOKABLE bool globalTargetSupportsEffect(const QString& groupName, int effectType) const;
+    Q_INVOKABLE bool globalTargetSupportsEffectSpeed(const QString& groupName, int effectType) const;
+    Q_INVOKABLE bool globalTargetSupportsEffectBrightness(const QString& groupName, int effectType) const;
     Q_INVOKABLE bool deviceRequiresConfirmation(int deviceIndex) const;
     Q_INVOKABLE bool deviceWriteConfirmed(int deviceIndex) const;
     Q_INVOKABLE bool confirmDeviceWrites(int deviceIndex);
@@ -95,6 +100,7 @@ public:
     Q_INVOKABLE bool allOffDevice(int deviceIndex);
     Q_INVOKABLE bool applyEffectGlobally(int effectType, const QColor& color, double speed, int brightness);
     Q_INVOKABLE bool applyEffectToDeviceGroup(const QString& groupName, int effectType, const QColor& color, double speed, int brightness);
+    Q_INVOKABLE bool setZoneBrightness(int deviceIndex, int zoneIndex, int brightness);
     Q_INVOKABLE bool setGlobalBrightness(int brightness);
     Q_INVOKABLE bool setDeviceGroupBrightness(const QString& groupName, int brightness);
     Q_INVOKABLE bool allOffAllDevices();
@@ -108,6 +114,7 @@ public:
     Q_INVOKABLE bool removeDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool resetDeviceRgbControllerOverride(int deviceIndex);
     Q_INVOKABLE QString deviceId(int deviceIndex) const;
+    Q_INVOKABLE QString deviceName(int deviceIndex) const;
     Q_INVOKABLE int deviceIndexForId(const QString& deviceId) const;
     Q_INVOKABLE int zoneIndexForName(int deviceIndex, const QString& zoneName) const;
     Q_INVOKABLE QString zoneName(int deviceIndex, int zoneIndex) const;
@@ -155,7 +162,6 @@ private:
     [[nodiscard]] RgbDevice* deviceAt(int deviceIndex);
     [[nodiscard]] const RgbDevice* deviceAt(int deviceIndex) const;
     [[nodiscard]] const RgbZone* zoneAt(int deviceIndex, int zoneIndex) const;
-    [[nodiscard]] QString deviceName(int deviceIndex) const;
     void appendLog(const QString& message);
     void setStatusMessage(const QString& message);
     void setLocalDaemonWriteConfirmed(int deviceIndex, bool confirmed);

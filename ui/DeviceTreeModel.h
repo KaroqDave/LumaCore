@@ -40,7 +40,13 @@ public:
         IsZoneRole,
         IsRgbControllerRole,
         HasRgbControllerOverrideRole,
-        RgbControllerOverrideRole
+        RgbControllerOverrideRole,
+        DeviceWritableRole,
+        DeviceBadgeTextRole,
+        DeviceBadgeLevelRole,
+        DiscoverySupportStageRole,
+        DiscoverySupportStatusRole,
+        DiscoverySupportFamilyRole
     };
 
     explicit DeviceTreeModel(DeviceManager* deviceManager, QObject* parent = nullptr);

@@ -1,9 +1,10 @@
 #include "ipc/DaemonProtocol.h"
 
+#include "core/PortablePaths.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QJsonDocument>
-#include <QStandardPaths>
 #include <QtGlobal>
 
 namespace lumacore {
@@ -66,10 +67,7 @@ DaemonMethod daemonMethodFromName(const QString& name)
 QString defaultDaemonSocketPath()
 {
 #ifdef Q_OS_WIN
-    QString userScope = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    if (userScope.isEmpty()) {
-        userScope = QDir::homePath();
-    }
+    const QString userScope = portableDataRoot();
     const QByteArray userHash = QCryptographicHash::hash(
         QDir::cleanPath(userScope).toLower().toUtf8(),
         QCryptographicHash::Sha256
@@ -318,6 +316,13 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
         {QStringLiteral("type"), device.typeName()},
         {QStringLiteral("backendId"), device.backendId()},
         {QStringLiteral("realBackendId"), device.backendId()},
+        {QStringLiteral("discoveryIdentity"), device.discoveryIdentity()},
+        {QStringLiteral("discoverySupportStage"), device.discoverySupportStage()},
+        {QStringLiteral("discoverySupportStatus"), device.discoverySupportStatus()},
+        {QStringLiteral("discoverySupportFamily"), device.discoverySupportFamily()},
+        {QStringLiteral("discoverySupportNotes"), device.discoverySupportNotes()},
+        {QStringLiteral("discoveryCataloged"), device.discoveryCataloged()},
+        {QStringLiteral("discoveryWriteCapableBackend"), device.discoveryWriteCapableBackend()},
         {QStringLiteral("capabilities"), capabilitiesToJson(capabilities)},
         {QStringLiteral("permission"), permissionResultToJson(colorPermission)},
         {QStringLiteral("permissions"), permissions},

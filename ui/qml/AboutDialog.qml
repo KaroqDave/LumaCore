@@ -9,7 +9,7 @@ Dialog {
     title: qsTr("About LumaCore")
     modal: true
     anchors.centerIn: parent
-    padding: 24
+    padding: 18
 
     property bool animationsEnabled: true
     property var controller
@@ -18,7 +18,7 @@ Dialog {
 
     background: Rectangle {
         color: Theme.surface
-        radius: 18
+        radius: 8
         border.color: Theme.border
         border.width: 1
     }
@@ -28,10 +28,10 @@ Dialog {
         color: Theme.primaryText
         font.pixelSize: 17
         font.bold: true
-        padding: 18
-        leftPadding: 24
-        rightPadding: 24
-        topPadding: 20
+        padding: 14
+        leftPadding: 18
+        rightPadding: 18
+        topPadding: 16
         bottomPadding: 0
     }
 
@@ -46,23 +46,24 @@ Dialog {
             width: 160
             variant: "primary"
             text: qsTr("Close")
+            compact: true
             animationsEnabled: dialog.animationsEnabled
             onClicked: dialog.close()
         }
     }
 
     contentItem: ColumnLayout {
-        spacing: 18
+        spacing: 12
         width: 440
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 18
+            spacing: 12
 
             Rectangle {
-                Layout.preferredWidth: 72
-                Layout.preferredHeight: 72
-                radius: 18
+                Layout.preferredWidth: 60
+                Layout.preferredHeight: 60
+                radius: 8
                 color: Theme.elevated
                 border.color: Theme.accent
                 border.width: 1
@@ -71,8 +72,8 @@ Dialog {
                     id: aboutIconImage
 
                     anchors.centerIn: parent
-                    width: 58
-                    height: 58
+                    width: 48
+                    height: 48
                     source: "qrc:///icons/lumacore-256.png"
                     sourceSize.width: 116
                     sourceSize.height: 116
@@ -99,7 +100,7 @@ Dialog {
                     Layout.fillWidth: true
                     text: Qt.application.name.length > 0 ? Qt.application.name : qsTr("LumaCore")
                     color: Theme.primaryText
-                    font.pixelSize: 26
+                    font.pixelSize: 22
                     font.bold: true
                     wrapMode: Text.WordWrap
                 }

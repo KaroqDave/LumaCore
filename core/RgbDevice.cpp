@@ -70,6 +70,36 @@ QString RgbDevice::discoveryIdentity() const
     return {};
 }
 
+QString RgbDevice::discoverySupportStage() const
+{
+    return {};
+}
+
+QString RgbDevice::discoverySupportStatus() const
+{
+    return {};
+}
+
+QString RgbDevice::discoverySupportFamily() const
+{
+    return {};
+}
+
+QString RgbDevice::discoverySupportNotes() const
+{
+    return {};
+}
+
+bool RgbDevice::discoveryCataloged() const
+{
+    return false;
+}
+
+bool RgbDevice::discoveryWriteCapableBackend() const
+{
+    return false;
+}
+
 RgbDeviceType RgbDevice::type() const
 {
     return m_type;

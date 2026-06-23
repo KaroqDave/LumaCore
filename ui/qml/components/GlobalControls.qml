@@ -11,6 +11,10 @@ Item {
     property var appController
     property color selectedColor: Theme.defaultColor
     property bool animationsEnabled: true
+    property int selectedDeviceIndex: -1
+    property int selectedZoneIndex: -1
+    property string selectedDeviceId: ""
+    property string selectedZoneName: ""
     property int effectType: 0
     property real effectSpeed: 1.0
     property int brightness: 100
@@ -18,12 +22,32 @@ Item {
     property string selectedTargetName: ""
     property var targetOptions: []
     property var editDeviceIds: []
+    property int supportRevision: 0
+    property bool zoneEffectsEnabled: false
     readonly property bool operationPending: appController
         ? appController.pendingDaemonOperations > 0
         : false
+    readonly property bool zoneSelected: selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
+    readonly property bool selectedZoneMode: zoneSelected && zoneEffectsEnabled
     readonly property bool groupTargetSelected: selectedTargetName.length > 0
+    readonly property bool selectedEffectSupported: targetSupportsEffect(effectType)
+    readonly property bool selectedEffectSpeedSupported: targetSupportsEffectSpeed(effectType)
+    readonly property bool selectedEffectBrightnessSupported: targetSupportsEffectBrightness(effectType)
+    readonly property bool colorEditable: selectedEffectSupported && (effectType === 0 || effectType === 2)
+    readonly property bool usesBaseColor: effectType !== 1 && effectType !== 3
+    readonly property bool usesSpeed: effectType !== 0
+    readonly property real brightnessFactor: brightness / 100.0
+    readonly property int rainbowPeriodMs: Math.max(600, 6000 / effectSpeed)
+    readonly property int breathingHalfPeriodMs: Math.max(150, 2000 / effectSpeed)
+    readonly property var disabledEffectSegments: [
+        !targetSupportsEffect(0),
+        !targetSupportsEffect(1),
+        !targetSupportsEffect(2),
+        !targetSupportsEffect(3)
+    ]
 
     signal chooseColorRequested()
+    signal selectedColorSyncRequested(color colorValue)
 
     implicitHeight: content.implicitHeight
 
@@ -53,6 +77,91 @@ Item {
         return index >= 0 ? targetOptions[index].label : qsTr("All devices")
     }
 
+    function targetSupportsEffect(index) {
+        if (supportRevision < 0) {
+            return false
+        }
+        if (!appController) {
+            return false
+        }
+        return selectedZoneMode
+            ? appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, index)
+            : appController.globalTargetSupportsEffect(selectedTargetName, index)
+    }
+
+    function targetSupportsEffectSpeed(index) {
+        if (supportRevision < 0) {
+            return false
+        }
+        if (!appController) {
+            return false
+        }
+        return selectedZoneMode
+            ? appController.zoneSupportsEffectSpeed(selectedDeviceIndex, selectedZoneIndex, index)
+            : appController.globalTargetSupportsEffectSpeed(selectedTargetName, index)
+    }
+
+    function targetSupportsEffectBrightness(index) {
+        if (supportRevision < 0) {
+            return false
+        }
+        if (!appController) {
+            return false
+        }
+        return selectedZoneMode
+            ? appController.zoneSupportsEffectBrightness(selectedDeviceIndex, selectedZoneIndex, index)
+            : appController.globalTargetSupportsEffectBrightness(selectedTargetName, index)
+    }
+
+    function refreshSupport() {
+        ++supportRevision
+        if (selectedEffectSupported) {
+            return
+        }
+        for (let index = 0; index < 4; ++index) {
+            if (targetSupportsEffect(index)) {
+                effectType = index
+                return
+            }
+        }
+    }
+
+    function loadSelectedZoneEffect() {
+        if (!appController || !zoneSelected) {
+            return
+        }
+        effectType = appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex)
+        effectSpeed = appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex)
+        brightness = appController.zoneEffectBrightness(selectedDeviceIndex, selectedZoneIndex)
+        selectedColorSyncRequested(appController.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex))
+        refreshSupport()
+    }
+
+    function loadZoneEffectsToggle() {
+        zoneEffectsEnabled = appController && zoneSelected
+            ? appController.zoneEffectsPanelEnabled(selectedDeviceIndex, selectedZoneIndex)
+            : false
+        zoneEffectsSwitch.checked = zoneEffectsEnabled
+        if (selectedZoneMode) {
+            loadSelectedZoneEffect()
+        } else {
+            refreshSupport()
+        }
+    }
+
+    function previewLabel() {
+        if (!selectedEffectSupported) {
+            return qsTr("No compatible zones")
+        }
+        if (effectType === 0) {
+            return colorHex(selectedColor)
+        }
+        if (effectType === 2) {
+            return qsTr("%1 breathing").arg(colorHex(selectedColor))
+        }
+        return effectType === 1 ? qsTr("Rainbow preview") : qsTr("Cycle preview")
+    }
+
     function openGroupEditor() {
         groupNameField.text = selectedTargetName
         editDeviceIds = selectedTargetName.length > 0 && appController
@@ -80,6 +189,16 @@ Item {
         if (!appController) {
             return
         }
+        if (selectedZoneMode) {
+            appController.applyEffect(
+                selectedDeviceIndex,
+                selectedZoneIndex,
+                effectType,
+                selectedColor,
+                effectSpeed,
+                brightness)
+            return
+        }
         if (groupTargetSelected) {
             appController.applyEffectToDeviceGroup(
                 selectedTargetName,
@@ -96,6 +215,10 @@ Item {
         if (!appController) {
             return
         }
+        if (selectedZoneMode) {
+            appController.setZoneBrightness(selectedDeviceIndex, selectedZoneIndex, brightness)
+            return
+        }
         if (groupTargetSelected) {
             appController.setDeviceGroupBrightness(selectedTargetName, brightness)
             return
@@ -105,6 +228,16 @@ Item {
 
     function allOffSelectedTarget() {
         if (!appController) {
+            return
+        }
+        if (selectedZoneMode) {
+            appController.applyEffect(
+                selectedDeviceIndex,
+                selectedZoneIndex,
+                0,
+                Qt.rgba(0, 0, 0, 1),
+                1.0,
+                0)
             return
         }
         if (groupTargetSelected) {
@@ -126,6 +259,27 @@ Item {
         const green = Math.round(value.g * 255).toString(16).padStart(2, "0")
         const blue = Math.round(value.b * 255).toString(16).padStart(2, "0")
         return ("#" + red + green + blue).toUpperCase()
+    }
+
+    function contrastOn(c) {
+        const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+        return lum > 0.6 ? "#10151A" : "#FFFFFF"
+    }
+
+    function restartPreviewAnimations() {
+        if (!controls.animationsEnabled) {
+            return
+        }
+        if (controls.effectType === 1 && globalRainbowClip.visible) {
+            globalRainbowScrollAnim.stop()
+            globalRainbowScrollAnim.start()
+        } else if (controls.effectType === 2) {
+            globalBreathingAnim.stop()
+            globalBreathingAnim.start()
+        } else if (controls.effectType === 3) {
+            globalColorCycleAnim.stop()
+            globalColorCycleAnim.start()
+        }
     }
 
     Dialog {
@@ -166,18 +320,54 @@ Item {
         parent: Overlay.overlay
         anchors.centerIn: parent
         modal: true
-        title: controls.groupTargetSelected
+        title: controls.selectedZoneMode
+               ? qsTr("Turn off %1?").arg(controls.selectedZoneName)
+               : controls.groupTargetSelected
                ? qsTr("Turn off %1?").arg(controls.selectedTargetName)
                : qsTr("Turn off all devices?")
-        standardButtons: Dialog.Cancel | Dialog.Ok
-        onAccepted: controls.allOffSelectedTarget()
+        standardButtons: Dialog.NoButton
+        width: Math.min(540, parent ? parent.width - 48 : 540)
 
-        contentItem: Label {
-            text: controls.groupTargetSelected
-                  ? qsTr("This sends All Off to writable devices in the selected group. Existing write-confirmation and dry-run rules still apply.")
-                  : qsTr("This sends All Off to every writable device. Existing write-confirmation and dry-run rules still apply.")
-            color: Theme.primaryText
-            wrapMode: Text.WordWrap
+        contentItem: ColumnLayout {
+            spacing: 10
+
+            Label {
+                Layout.fillWidth: true
+                text: controls.selectedZoneMode
+                      ? qsTr("This sends All Off to the selected writable zone. Existing write-confirmation and dry-run rules still apply.")
+                      : controls.groupTargetSelected
+                      ? qsTr("This sends All Off to writable devices in the selected group. Existing write-confirmation and dry-run rules still apply.")
+                      : qsTr("This sends All Off to every writable device. Existing write-confirmation and dry-run rules still apply.")
+                color: Theme.primaryText
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        footer: RowLayout {
+            spacing: 8
+
+            Item {
+                Layout.fillWidth: true
+            }
+
+            AppButton {
+                variant: "secondary"
+                text: qsTr("Cancel")
+                compact: true
+                animationsEnabled: controls.animationsEnabled
+                onClicked: allOffDialog.close()
+            }
+
+            AppButton {
+                variant: "primary"
+                text: qsTr("All Off")
+                compact: true
+                animationsEnabled: controls.animationsEnabled
+                onClicked: {
+                    allOffDialog.close()
+                    controls.allOffSelectedTarget()
+                }
+            }
         }
     }
 
@@ -256,6 +446,7 @@ Item {
                 AppButton {
                     variant: "secondary"
                     text: qsTr("Delete")
+                    compact: true
                     enabled: controls.appController
                              && groupNameField.text.length > 0
                              && controls.appController.deviceGroupNames.indexOf(groupNameField.text) >= 0
@@ -277,6 +468,7 @@ Item {
                 AppButton {
                     variant: "secondary"
                     text: qsTr("Cancel")
+                    compact: true
                     animationsEnabled: controls.animationsEnabled
                     onClicked: groupDialog.close()
                 }
@@ -284,6 +476,7 @@ Item {
                 AppButton {
                     variant: "primary"
                     text: qsTr("Save")
+                    compact: true
                     enabled: controls.appController !== null
                              && controls.appController !== undefined
                              && groupNameField.text.trim().length > 0
@@ -306,58 +499,120 @@ Item {
         id: content
 
         anchors.fill: parent
-        spacing: 10
+        spacing: 8
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 10
+            spacing: 8
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: 1
 
                 Label {
                     text: qsTr("Global Controls")
                     color: Theme.primaryText
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     font.bold: true
                 }
 
                 Label {
-                    text: qsTr("Apply across every compatible writable zone.")
+                    text: controls.selectedZoneMode
+                          ? qsTr("Apply effects to the selected zone.")
+                          : qsTr("Apply across every compatible writable zone.")
                     color: Theme.secondaryText
-                    font.pixelSize: 11
+                    font.pixelSize: 10
+                }
+            }
+
+            Rectangle {
+                visible: controls.zoneSelected
+                Layout.preferredWidth: 172
+                Layout.preferredHeight: 36
+                radius: 8
+                color: controls.selectedZoneMode ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16) : Theme.inputBg
+                border.color: controls.selectedZoneMode ? Theme.selectionBorder : Theme.border
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 8
+                    spacing: 8
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Effects")
+                            color: controls.selectedZoneMode ? Theme.accent : Theme.primaryText
+                            font.pixelSize: 10
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: controls.selectedZoneName.length > 0 ? controls.selectedZoneName : qsTr("Selected zone")
+                            color: Theme.secondaryText
+                            font.pixelSize: 9
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    AppSwitch {
+                        id: zoneEffectsSwitch
+
+                        checked: controls.zoneEffectsEnabled
+                        animationsEnabled: controls.animationsEnabled
+                        onClicked: {
+                            controls.zoneEffectsEnabled = checked
+                            if (controls.appController) {
+                                controls.appController.setZoneEffectsPanelEnabled(
+                                    controls.selectedDeviceIndex,
+                                    controls.selectedZoneIndex,
+                                    checked)
+                            }
+                            if (checked) {
+                                controls.loadSelectedZoneEffect()
+                            } else {
+                                controls.refreshSupport()
+                            }
+                        }
+                    }
+                }
+            }
+
+            ComboBox {
+                id: targetSelector
+
+                visible: !controls.selectedZoneMode
+                Layout.preferredWidth: 190
+                model: controls.targetOptions
+                textRole: "label"
+                currentIndex: Math.max(0, controls.targetIndex())
+                onActivated: function(index) {
+                    controls.selectedTargetName = controls.targetOptions[index].name
+                    controls.refreshSupport()
                 }
             }
 
             AppButton {
                 variant: "secondary"
                 text: qsTr("All Off")
-                enabled: !controls.operationPending
+                compact: true
+                enabled: !controls.operationPending && (!controls.selectedZoneMode || controls.targetSupportsEffect(0))
                 animationsEnabled: controls.animationsEnabled
                 onClicked: allOffDialog.open()
             }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
-
-            ComboBox {
-                id: targetSelector
-
-                Layout.fillWidth: true
-                model: controls.targetOptions
-                textRole: "label"
-                currentIndex: Math.max(0, controls.targetIndex())
-                onActivated: function(index) {
-                    controls.selectedTargetName = controls.targetOptions[index].name
-                }
-            }
 
             AppButton {
+                visible: !controls.selectedZoneMode
                 variant: "secondary"
                 text: qsTr("Groups")
+                compact: true
                 enabled: controls.appController !== null && controls.appController !== undefined
                 animationsEnabled: controls.animationsEnabled
                 onClicked: controls.openGroupEditor()
@@ -366,80 +621,255 @@ Item {
 
         EffectSelector {
             Layout.fillWidth: true
-            Layout.preferredHeight: 36
+            Layout.preferredHeight: 34
             segments: [qsTr("Static"), qsTr("Rainbow"), qsTr("Breathing"), qsTr("Cycle")]
+            disabledSegments: controls.disabledEffectSegments
             currentIndex: controls.effectType
             animationsEnabled: controls.animationsEnabled
-            onSelected: function(index) { controls.effectType = index }
+            compact: true
+            onSelected: function(index) {
+                if (controls.targetSupportsEffect(index)) {
+                    controls.effectType = index
+                }
+            }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
+        Rectangle {
+            id: globalPreviewBar
 
-            AppButton {
-                Layout.preferredWidth: 130
-                variant: "secondary"
-                text: qsTr("Color")
-                enabled: controls.effectType === 0 || controls.effectType === 2
-                animationsEnabled: controls.animationsEnabled
+            Layout.fillWidth: true
+            Layout.preferredHeight: 58
+            radius: 8
+            border.color: previewMouse.containsMouse && controls.colorEditable ? Theme.accent : Theme.border
+            border.width: 1
+            clip: true
+            opacity: controls.selectedEffectSupported ? 1.0 : 0.5
+
+            property real breath: 1
+            property real cycleHue: 0
+            readonly property color staticColor: Qt.rgba(
+                controls.selectedColor.r * controls.brightnessFactor,
+                controls.selectedColor.g * controls.brightnessFactor,
+                controls.selectedColor.b * controls.brightnessFactor, 1.0)
+            readonly property color breathingColor: Qt.rgba(
+                controls.selectedColor.r * breath * controls.brightnessFactor,
+                controls.selectedColor.g * breath * controls.brightnessFactor,
+                controls.selectedColor.b * breath * controls.brightnessFactor, 1.0)
+
+            color: controls.effectType === 2 ? breathingColor
+                 : controls.effectType === 3 ? Qt.hsva(cycleHue, 1, controls.brightnessFactor, 1)
+                 : controls.effectType === 0 ? staticColor
+                 : Theme.inputBg
+
+            Item {
+                id: globalRainbowClip
+
+                anchors.fill: parent
+                anchors.margins: 1
+                visible: controls.effectType === 1
+                opacity: controls.brightnessFactor
+                clip: true
+
+                Row {
+                    id: globalRainbowRow
+
+                    height: parent.height
+                    x: 0
+
+                    Repeater {
+                        model: 2
+
+                        Rectangle {
+                            width: Math.max(1, globalPreviewBar.width)
+                            height: globalRainbowRow.height
+
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: "#FF0000" }
+                                GradientStop { position: 0.17; color: "#FFFF00" }
+                                GradientStop { position: 0.34; color: "#00FF00" }
+                                GradientStop { position: 0.5; color: "#00FFFF" }
+                                GradientStop { position: 0.67; color: "#0000FF" }
+                                GradientStop { position: 0.84; color: "#FF00FF" }
+                                GradientStop { position: 1.0; color: "#FF0000" }
+                            }
+                        }
+                    }
+
+                    NumberAnimation {
+                        id: globalRainbowScrollAnim
+
+                        target: globalRainbowRow
+                        property: "x"
+                        running: controls.effectType === 1 && controls.animationsEnabled && globalRainbowClip.visible
+                        from: 0
+                        to: -Math.max(1, globalPreviewBar.width)
+                        loops: Animation.Infinite
+                        duration: controls.rainbowPeriodMs
+                    }
+                }
+            }
+
+            SequentialAnimation {
+                id: globalBreathingAnim
+
+                running: controls.effectType === 2 && controls.animationsEnabled
+                loops: Animation.Infinite
+
+                NumberAnimation {
+                    target: globalPreviewBar
+                    property: "breath"
+                    from: 0.12
+                    to: 1.0
+                    duration: controls.breathingHalfPeriodMs
+                    easing.type: Easing.InOutSine
+                }
+                NumberAnimation {
+                    target: globalPreviewBar
+                    property: "breath"
+                    from: 1.0
+                    to: 0.12
+                    duration: controls.breathingHalfPeriodMs
+                    easing.type: Easing.InOutSine
+                }
+            }
+
+            NumberAnimation {
+                id: globalColorCycleAnim
+
+                target: globalPreviewBar
+                property: "cycleHue"
+                running: controls.effectType === 3 && controls.animationsEnabled
+                loops: Animation.Infinite
+                from: 0
+                to: 1
+                duration: controls.rainbowPeriodMs
+            }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 10
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: controls.effectType === 1 ? qsTr("Rainbow wave")
+                            : controls.effectType === 2 ? qsTr("Breathing")
+                            : controls.effectType === 3 ? qsTr("Color cycle")
+                            : qsTr("Static color")
+                        color: controls.effectType === 1 || controls.effectType === 3
+                               ? "#FFFFFF"
+                               : controls.contrastOn(globalPreviewBar.staticColor)
+                        font.pixelSize: 12
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: controls.usesBaseColor && controls.colorEditable
+                        text: qsTr("Tap to change color")
+                        color: controls.contrastOn(globalPreviewBar.staticColor)
+                        opacity: 0.8
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                    }
+                }
+
+                Label {
+                    visible: controls.usesBaseColor
+                    text: controls.colorHex(controls.selectedColor)
+                    color: controls.contrastOn(globalPreviewBar.staticColor)
+                    font.family: "monospace"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+            }
+
+            MouseArea {
+                id: previewMouse
+
+                anchors.fill: parent
+                hoverEnabled: true
+                enabled: controls.colorEditable
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: controls.chooseColorRequested()
             }
-
-            Label {
-                text: controls.effectType === 0 || controls.effectType === 2
-                      ? controls.colorHex(controls.selectedColor)
-                      : qsTr("Generated color")
-                color: Theme.secondaryText
-                font.family: "monospace"
-                font.pixelSize: 11
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Label {
-                text: controls.brightness + qsTr("%")
-                color: Theme.primaryText
-                font.family: "monospace"
-                font.pixelSize: 11
-            }
         }
 
-        AppSlider {
+        GridLayout {
             Layout.fillWidth: true
-            from: 0
-            to: 100
-            stepSize: 1
-            value: controls.brightness
-            animationsEnabled: controls.animationsEnabled
-            onMoved: controls.brightness = Math.round(value)
-        }
+            columns: 1
+            columnSpacing: 10
+            rowSpacing: 4
 
-        RowLayout {
-            visible: controls.effectType !== 0
-            Layout.fillWidth: true
-
-            Label {
-                text: qsTr("Speed")
-                color: Theme.secondaryText
-                font.pixelSize: 11
-            }
-
-            AppSlider {
+            RowLayout {
                 Layout.fillWidth: true
-                from: 0.1
-                to: 5.0
-                stepSize: 0.1
-                value: controls.effectSpeed
-                animationsEnabled: controls.animationsEnabled
-                onMoved: controls.effectSpeed = value
+                spacing: 8
+
+                Label {
+                    text: qsTr("Brightness")
+                    color: Theme.secondaryText
+                    font.pixelSize: 10
+                }
+
+                AppSlider {
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 100
+                    stepSize: 1
+                    value: controls.brightness
+                    enabled: controls.selectedEffectBrightnessSupported
+                    animationsEnabled: controls.animationsEnabled
+                    onMoved: controls.brightness = Math.round(value)
+                }
+
+                Label {
+                    text: controls.brightness + qsTr("%")
+                    color: Theme.primaryText
+                    opacity: controls.selectedEffectBrightnessSupported ? 1.0 : 0.45
+                    font.family: "monospace"
+                    font.pixelSize: 10
+                }
             }
 
-            Label {
-                text: controls.effectSpeed.toFixed(1) + qsTr("x")
-                color: Theme.primaryText
-                font.family: "monospace"
-                font.pixelSize: 11
+            RowLayout {
+                visible: controls.effectType !== 0
+                Layout.fillWidth: true
+                Layout.columnSpan: 1
+                spacing: 8
+
+                Label {
+                    text: qsTr("Speed")
+                    color: Theme.secondaryText
+                    font.pixelSize: 10
+                }
+
+                AppSlider {
+                    Layout.fillWidth: true
+                    from: 0.1
+                    to: 5.0
+                    stepSize: 0.1
+                    value: controls.effectSpeed
+                    enabled: controls.selectedEffectSpeedSupported
+                    animationsEnabled: controls.animationsEnabled
+                    onMoved: controls.effectSpeed = value
+                }
+
+                Label {
+                    text: controls.selectedEffectSpeedSupported
+                          ? controls.effectSpeed.toFixed(1) + qsTr("x")
+                          : qsTr("Fixed")
+                    color: Theme.primaryText
+                    opacity: controls.selectedEffectSpeedSupported ? 1.0 : 0.55
+                    font.family: "monospace"
+                    font.pixelSize: 10
+                }
             }
         }
 
@@ -450,8 +880,12 @@ Item {
             AppButton {
                 Layout.fillWidth: true
                 variant: "primary"
-                text: controls.groupTargetSelected ? qsTr("Apply to Group") : qsTr("Apply Globally")
-                enabled: !controls.operationPending
+                text: controls.selectedZoneMode
+                      ? qsTr("Apply to Zone")
+                      : controls.groupTargetSelected ? qsTr("Apply to Group") : qsTr("Apply Globally")
+                compact: true
+                iconName: "check"
+                enabled: !controls.operationPending && controls.selectedEffectSupported
                 animationsEnabled: controls.animationsEnabled
                 onClicked: controls.applySelectedEffect()
             }
@@ -460,12 +894,19 @@ Item {
                 Layout.fillWidth: true
                 variant: "secondary"
                 text: qsTr("Brightness Only")
-                enabled: !controls.operationPending
+                compact: true
+                enabled: !controls.operationPending && controls.selectedEffectBrightnessSupported
                 animationsEnabled: controls.animationsEnabled
                 onClicked: controls.applySelectedBrightness()
             }
         }
     }
+
+    onEffectTypeChanged: Qt.callLater(restartPreviewAnimations)
+    onEffectSpeedChanged: Qt.callLater(restartPreviewAnimations)
+    onSelectedDeviceIndexChanged: Qt.callLater(loadZoneEffectsToggle)
+    onSelectedZoneIndexChanged: Qt.callLater(loadZoneEffectsToggle)
+    onAppControllerChanged: Qt.callLater(loadZoneEffectsToggle)
 
     Connections {
         target: controls.appController
@@ -477,8 +918,31 @@ Item {
 
         function onDeviceGroupsChanged() {
             controls.refreshTargetOptions()
+            controls.refreshSupport()
+        }
+
+        function onBackendInfoChanged() {
+            controls.refreshSupport()
+        }
+
+        function onDaemonDevicesRefreshed() {
+            controls.refreshSupport()
+            controls.loadZoneEffectsToggle()
+        }
+
+        function onZoneDataChanged(deviceIndex, zoneIndex) {
+            if (controls.selectedZoneMode
+                    && deviceIndex === controls.selectedDeviceIndex
+                    && (zoneIndex < 0 || zoneIndex === controls.selectedZoneIndex)) {
+                controls.loadSelectedZoneEffect()
+            } else {
+                controls.refreshSupport()
+            }
         }
     }
 
-    Component.onCompleted: controls.refreshTargetOptions()
+    Component.onCompleted: {
+        controls.refreshTargetOptions()
+        controls.loadZoneEffectsToggle()
+    }
 }

@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
 
     {
         lumacore::SettingsController settings;
-        if (!require(!settings.reduceVrrFlicker(), "VRR flicker reduction should be opt-in by default")
+        if (!require(settings.reduceVrrFlicker(), "VRR flicker reduction should be enabled by default")
             || !require(!settings.closeToTray(), "close-to-tray should be opt-in by default")
             || !require(!settings.trayAvailable(), "tray availability should default to false until detected")
             || !require(settings.activeProfile().isEmpty(), "active profile should be empty by default")

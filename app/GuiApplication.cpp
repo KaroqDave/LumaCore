@@ -5,6 +5,7 @@
 #include "app/TrayController.h"
 #include "app/Version.h"
 #include "backends/daemon/DaemonBackend.h"
+#include "core/PortablePaths.h"
 
 #include <QApplication>
 #include <QSize>
@@ -88,6 +89,7 @@ void GuiApplication::configureQtApplication(QApplication& application)
     application.setApplicationDisplayName(QStringLiteral("LumaCore"));
     application.setApplicationVersion(applicationVersion());
     application.setOrganizationName(QStringLiteral("LumaCore"));
+    configurePortableStorage();
     application.setWindowIcon(createApplicationIcon());
 }
 

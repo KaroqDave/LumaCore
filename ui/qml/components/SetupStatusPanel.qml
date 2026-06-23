@@ -8,6 +8,7 @@ Rectangle {
 
     property var controller
     property bool animationsEnabled: true
+    property bool compact: false
     readonly property string level: controller ? controller.setupStatusLevel : "warning"
     readonly property bool ready: level === "ready"
     readonly property color statusColor: level === "error"
@@ -19,8 +20,8 @@ Rectangle {
 
     visible: controller && !ready
     Layout.fillWidth: true
-    implicitHeight: visible ? content.implicitHeight + 24 : 0
-    radius: 14
+    implicitHeight: visible ? content.implicitHeight + (compact ? 18 : 24) : 0
+    radius: 8
     color: statusBackground
     border.color: statusColor
     border.width: 1
@@ -35,12 +36,12 @@ Rectangle {
         id: content
 
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 12
+        anchors.margins: panel.compact ? 9 : 12
+        spacing: panel.compact ? 9 : 12
 
         NavIcon {
-            Layout.preferredWidth: 22
-            Layout.preferredHeight: 22
+            Layout.preferredWidth: panel.compact ? 18 : 22
+            Layout.preferredHeight: panel.compact ? 18 : 22
             Layout.alignment: Qt.AlignTop
             name: panel.level === "ready" ? "check" : "info"
             color: panel.statusColor
@@ -55,7 +56,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: panel.controller ? panel.controller.setupStatusSummary : ""
                 color: Theme.primaryText
-                font.pixelSize: 14
+                font.pixelSize: panel.compact ? 13 : 14
                 font.bold: true
                 wrapMode: Text.WordWrap
             }
@@ -65,7 +66,7 @@ Rectangle {
                 text: panel.controller ? panel.controller.setupStatusDetail : ""
                 color: Theme.primaryText
                 opacity: 0.9
-                font.pixelSize: 12
+                font.pixelSize: panel.compact ? 11 : 12
                 wrapMode: Text.WordWrap
             }
 
@@ -92,6 +93,7 @@ Rectangle {
                 variant: "secondary"
                 text: qsTr("Retry")
                 animationsEnabled: panel.animationsEnabled
+                compact: panel.compact
                 onClicked: panel.controller.retryDaemonConnection()
             }
 
@@ -102,6 +104,7 @@ Rectangle {
                 variant: "secondary"
                 text: qsTr("Rescan")
                 animationsEnabled: panel.animationsEnabled
+                compact: panel.compact
                 onClicked: panel.controller.rescanDaemonDevices()
             }
         }

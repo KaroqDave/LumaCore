@@ -17,7 +17,7 @@ Broader ASUS or non-ASUS hardware support must follow the staged workflow in `do
 
 The research corpus treats ASUS RGB as several partially compatible controller families rather than one reusable protocol. LumaCore currently implements only the USB HID Aura LED Controller path above. Legacy Aura motherboard and DRAM control over SMBus/i2c, Aura Core laptop keyboards, ASUS System Control Interface / ACPI / WMI laptop paths, ASUS GPU-side lighting, Windows Dynamic Lighting / LampArray bridges, and newer receiver/dongle protocols are documentation and future-discovery subjects only.
 
-Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research should be recorded as researched identities before they are made write-capable. The currently validated write target remains `0B05:19AF`; nearby researched devices such as `0B05:18F3` and `0B05:1939` must not be enabled for writes without owned-hardware captures, config-table tests, and explicit packet verification.
+Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research should be recorded as researched identities before they are made write-capable. The currently validated write target remains `0B05:19AF`; nearby researched devices such as `0B05:18F3` and `0B05:1939` are cataloged for read-only discovery only and must not be enabled for writes without owned-hardware captures, config-table tests, and explicit packet verification.
 
 ## Safety Boundary
 

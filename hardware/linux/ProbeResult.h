@@ -30,9 +30,22 @@ struct ProbeResult {
     QStringList messages;
 };
 
+struct DiscoverySupportInfo {
+    QString stage;
+    QString status;
+    QString family;
+    QString summary;
+    QString notes;
+    bool cataloged {false};
+    bool likelyRgbController {false};
+    bool writeCapableBackend {false};
+};
+
 [[nodiscard]] QString stableProbeId(const QString& source, const QString& key);
 [[nodiscard]] QString hexWord(quint16 value);
 [[nodiscard]] QString usbVidPidKey(const ProbeDevice& device);
+[[nodiscard]] DiscoverySupportInfo discoverySupportInfo(const ProbeDevice& device);
+[[nodiscard]] bool isCatalogedRgbController(const ProbeDevice& device);
 [[nodiscard]] bool isKnownRgbController(const ProbeDevice& device);
 [[nodiscard]] bool isLikelyRgbController(const ProbeDevice& device);
 

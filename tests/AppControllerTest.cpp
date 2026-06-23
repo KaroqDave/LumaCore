@@ -216,6 +216,7 @@ int main(int argc, char* argv[])
         || !require(controller.deviceSupportsEffect(0, 1), "mock devices should support animated effects")
         || !require(!controller.deviceSupportsEffect(0, 99), "unknown effects should remain unsupported")
         || !require(!controller.deviceId(0).isEmpty(), "controller should expose stable device IDs")
+        || !require(!controller.deviceName(0).isEmpty(), "controller should expose device display names")
         || !require(
             controller.deviceIndexForId(controller.deviceId(0)) == 0,
             "controller should resolve a device index from its stable ID"
@@ -227,6 +228,10 @@ int main(int argc, char* argv[])
         || !require(
             controller.deviceIndexForId(QStringLiteral("missing-device")) == -1,
             "unknown device IDs should not resolve"
+        )
+        || !require(
+            !controller.zoneEffectsPanelEnabled(0, 0),
+            "selected-zone effects toggle should default off"
         )
         || !require(
             controller.zoneIndexForName(0, QStringLiteral("Missing Zone")) == -1,
@@ -251,6 +256,24 @@ int main(int argc, char* argv[])
         || !require(
             !controller.rescanDaemonDevices(),
             "manual rescan should reject an offline daemon"
+        )) {
+        return 1;
+    }
+
+    controller.setZoneEffectsPanelEnabled(0, 0, true);
+    {
+        lumacore::AppController persistedController(&manager);
+        if (!require(
+                persistedController.zoneEffectsPanelEnabled(0, 0),
+                "selected-zone effects toggle should persist per zone"
+            )) {
+            return 1;
+        }
+    }
+    controller.setZoneEffectsPanelEnabled(0, 0, false);
+    if (!require(
+            !controller.zoneEffectsPanelEnabled(0, 0),
+            "selected-zone effects toggle should save the off state"
         )) {
         return 1;
     }
@@ -495,6 +518,17 @@ int main(int argc, char* argv[])
             )) {
             return 1;
         }
+    }
+    if (!require(controller.setZoneBrightness(0, 0, 35), "selected-zone brightness should start")
+        || !require(
+            controller.zoneEffectType(0, 0) == static_cast<int>(lumacore::RgbEffectType::Breathing),
+            "selected-zone brightness should preserve the current effect"
+        )
+        || !require(
+            controller.zoneEffectBrightness(0, 0) == 35,
+            "selected-zone brightness should update the selected zone brightness"
+        )) {
+        return 1;
     }
     if (!require(controller.setGlobalBrightness(25), "global brightness should start")
         || !require(

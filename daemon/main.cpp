@@ -8,6 +8,7 @@
 #endif
 #include "backends/mock/MockBackend.h"
 #include "core/DeviceManager.h"
+#include "core/PortablePaths.h"
 #include "daemon/DaemonOptions.h"
 #include "ipc/DaemonServer.h"
 
@@ -29,6 +30,7 @@ void configureQtApplication(QCoreApplication& application)
     application.setApplicationName(QStringLiteral("lumacore-daemon"));
     application.setApplicationVersion(lumacore::applicationVersion());
     application.setOrganizationName(QStringLiteral("LumaCore"));
+    lumacore::configurePortableStorage();
 }
 
 bool validateEnvironment(const lumacore::DaemonOptions& options)

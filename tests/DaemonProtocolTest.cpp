@@ -149,6 +149,41 @@ public:
         return false;
     }
 
+    [[nodiscard]] QString discoveryIdentity() const override
+    {
+        return QStringLiteral("0B05:19AF");
+    }
+
+    [[nodiscard]] QString discoverySupportStage() const override
+    {
+        return QStringLiteral("guarded-write-backend");
+    }
+
+    [[nodiscard]] QString discoverySupportStatus() const override
+    {
+        return QStringLiteral("validated guarded write backend");
+    }
+
+    [[nodiscard]] QString discoverySupportFamily() const override
+    {
+        return QStringLiteral("ASUS Aura USB HID");
+    }
+
+    [[nodiscard]] QString discoverySupportNotes() const override
+    {
+        return QStringLiteral("Protocol metadata fixture.");
+    }
+
+    [[nodiscard]] bool discoveryCataloged() const override
+    {
+        return true;
+    }
+
+    [[nodiscard]] bool discoveryWriteCapableBackend() const override
+    {
+        return true;
+    }
+
     [[nodiscard]] QString lastHardwareWriteStatus() const override
     {
         return m_mode == Mode::UnverifiedAsus
@@ -945,6 +980,24 @@ int main(int argc, char* argv[])
         )) {
         return 1;
     }
+    if (!require(
+            unverifiedJson.value(QStringLiteral("discoveryIdentity")).toString() == QStringLiteral("0B05:19AF"),
+            "daemon snapshots should serialize discovery identity"
+        )
+        || !require(
+            unverifiedJson.value(QStringLiteral("discoverySupportStage")).toString() == QStringLiteral("guarded-write-backend"),
+            "daemon snapshots should serialize discovery support stage"
+        )
+        || !require(
+            unverifiedJson.value(QStringLiteral("discoveryCataloged")).toBool(false),
+            "daemon snapshots should serialize catalog state"
+        )
+        || !require(
+            unverifiedJson.value(QStringLiteral("discoveryWriteCapableBackend")).toBool(false),
+            "daemon snapshots should serialize separate write-backend availability"
+        )) {
+        return 1;
+    }
 
     const SnapshotDevice confirmable(SnapshotDevice::Mode::ConfirmableAsus);
     const QJsonObject confirmedJson = deviceToJson(confirmable, 1, true);
@@ -984,6 +1037,27 @@ int main(int argc, char* argv[])
         || !require(
             !zoneSupportProxy.supportsZoneEffectBrightness(1, static_cast<int>(RgbEffectType::Rainbow)),
             "daemon snapshots should preserve per-zone brightness limits"
+        )) {
+        return 1;
+    }
+
+    auto supportClient = std::make_shared<DaemonClient>(QStringLiteral("unused-support"));
+    DaemonRgbDevice supportProxy(unverifiedJson, supportClient);
+    if (!require(
+            supportProxy.discoveryIdentity() == QStringLiteral("0B05:19AF"),
+            "daemon proxy should preserve discovery identity"
+        )
+        || !require(
+            supportProxy.discoverySupportFamily() == QStringLiteral("ASUS Aura USB HID"),
+            "daemon proxy should preserve discovery support family"
+        )
+        || !require(
+            supportProxy.discoveryCataloged(),
+            "daemon proxy should preserve discovery catalog state"
+        )
+        || !require(
+            supportProxy.discoveryWriteCapableBackend(),
+            "daemon proxy should preserve discovery write-backend marker"
         )) {
         return 1;
     }

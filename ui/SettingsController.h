@@ -77,7 +77,7 @@ private:
 
     QSettings m_settings;
     bool m_animationsEnabled {true};
-    bool m_reduceVrrFlicker {false};
+    bool m_reduceVrrFlicker {true};
     bool m_startMinimized {false};
     bool m_closeToTray {false};
     bool m_trayAvailable {false};

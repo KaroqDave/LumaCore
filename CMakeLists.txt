@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 1.1.4
+    VERSION 1.1.6.3
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
@@ -153,6 +153,7 @@ qt_add_qml_module(lumacore
         ui/qml/components/BackendStatusChip.qml
         ui/qml/components/ColorPickerDialog.qml
         ui/qml/components/DeviceTreePanel.qml
+        ui/qml/components/DeviceWorkspacePanel.qml
         ui/qml/components/EffectSelector.qml
         ui/qml/components/GlobalControls.qml
         ui/qml/components/NavIcon.qml
@@ -192,6 +193,7 @@ lumacore_apply_project_options(
     lumacore_device_manager_write_gate_test
     lumacore_profile_persistence_test
     lumacore_auto_backend_test
+    lumacore_probe_result_test
     lumacore_daemon_protocol_test
     lumacore_option_parsing_test
     lumacore_settings_controller_test

@@ -22,6 +22,53 @@ QString effectDisplayName(RgbEffectType type)
     return QStringLiteral("Static");
 }
 
+bool deviceWritable(const RgbDevice& device)
+{
+    const BackendCapabilities capabilities = device.capabilities();
+    return capabilities.testFlag(BackendCapability::ZoneColorWrite)
+        || capabilities.testFlag(BackendCapability::ZoneEffectWrite);
+}
+
+QString deviceBadgeText(const RgbDevice& device)
+{
+    if (deviceWritable(device)) {
+        return QStringLiteral("Writable");
+    }
+
+    const QString stage = device.discoverySupportStage();
+    if (stage == QStringLiteral("guarded-write-backend")) {
+        return QStringLiteral("Guarded");
+    }
+    if (stage == QStringLiteral("research-only")) {
+        return QStringLiteral("Research");
+    }
+    if (stage == QStringLiteral("heuristic")) {
+        return QStringLiteral("Discovery");
+    }
+    if (device.capabilities().testFlag(BackendCapability::DiscoveryRead)) {
+        return QStringLiteral("Read-only");
+    }
+
+    return {};
+}
+
+QString deviceBadgeLevel(const RgbDevice& device)
+{
+    if (deviceWritable(device) || device.discoverySupportStage() == QStringLiteral("guarded-write-backend")) {
+        return QStringLiteral("ready");
+    }
+
+    const QString stage = device.discoverySupportStage();
+    if (stage == QStringLiteral("research-only") || stage == QStringLiteral("heuristic")) {
+        return QStringLiteral("warning");
+    }
+    if (device.capabilities().testFlag(BackendCapability::DiscoveryRead)) {
+        return QStringLiteral("neutral");
+    }
+
+    return {};
+}
+
 } // namespace
 
 DeviceTreeModel::DeviceTreeModel(DeviceManager* deviceManager, QObject* parent)
@@ -151,6 +198,18 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
             return device->hasRgbControllerOverride();
         case RgbControllerOverrideRole:
             return device->rgbControllerOverride();
+        case DeviceWritableRole:
+            return deviceWritable(*device);
+        case DeviceBadgeTextRole:
+            return deviceBadgeText(*device);
+        case DeviceBadgeLevelRole:
+            return deviceBadgeLevel(*device);
+        case DiscoverySupportStageRole:
+            return device->discoverySupportStage();
+        case DiscoverySupportStatusRole:
+            return device->discoverySupportStatus();
+        case DiscoverySupportFamilyRole:
+            return device->discoverySupportFamily();
         default:
             return {};
         }
@@ -202,6 +261,18 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
         return device->hasRgbControllerOverride();
     case RgbControllerOverrideRole:
         return device->rgbControllerOverride();
+    case DeviceWritableRole:
+        return deviceWritable(*device);
+    case DeviceBadgeTextRole:
+        return deviceBadgeText(*device);
+    case DeviceBadgeLevelRole:
+        return deviceBadgeLevel(*device);
+    case DiscoverySupportStageRole:
+        return device->discoverySupportStage();
+    case DiscoverySupportStatusRole:
+        return device->discoverySupportStatus();
+    case DiscoverySupportFamilyRole:
+        return device->discoverySupportFamily();
     default:
         return {};
     }
@@ -238,6 +309,12 @@ QHash<int, QByteArray> DeviceTreeModel::roleNames() const
         {IsRgbControllerRole, "isRgbController"},
         {HasRgbControllerOverrideRole, "hasRgbControllerOverride"},
         {RgbControllerOverrideRole, "rgbControllerOverride"},
+        {DeviceWritableRole, "deviceWritable"},
+        {DeviceBadgeTextRole, "deviceBadgeText"},
+        {DeviceBadgeLevelRole, "deviceBadgeLevel"},
+        {DiscoverySupportStageRole, "discoverySupportStage"},
+        {DiscoverySupportStatusRole, "discoverySupportStatus"},
+        {DiscoverySupportFamilyRole, "discoverySupportFamily"},
     };
 }
 

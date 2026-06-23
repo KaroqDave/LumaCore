@@ -37,7 +37,7 @@ Hardware writes are not exposed as raw packet methods. Backends must build appro
 
 ## Device Snapshots
 
-`listDevices` returns device snapshots with capability, permission, write-confirmation, and zone data. Device-level `effectSupport` summarizes whether any zone can use each known effect type. Each zone also includes its own `effectSupport` array so the GUI can disable effects, speed controls, and brightness controls that are not valid for that specific header.
+`listDevices` returns device snapshots with capability, permission, write-confirmation, discovery metadata, and zone data. Device-level `effectSupport` summarizes whether any zone can use each known effect type. Each zone also includes its own `effectSupport` array so the GUI can disable effects, speed controls, and brightness controls that are not valid for that specific header.
 
 Effect support entries use:
 
@@ -45,4 +45,6 @@ Effect support entries use:
 {"effectType":1,"name":"Rainbow","supported":true,"speed":false,"brightness":false}
 ```
 
-The per-zone fields are additive protocol-version-1 fields; older snapshots without zone-level support fall back to the device-level support in the daemon proxy.
+Discovery metadata fields such as `discoveryIdentity`, `discoverySupportStage`, `discoverySupportStatus`, `discoverySupportFamily`, `discoverySupportNotes`, `discoveryCataloged`, and `discoveryWriteCapableBackend` are additive protocol-version-1 fields. They describe inventory and support posture only; they do not grant write capability.
+
+The per-zone and discovery metadata fields are additive protocol-version-1 fields; older snapshots without zone-level support fall back to the device-level support in the daemon proxy.

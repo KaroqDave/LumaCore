@@ -46,6 +46,13 @@ DaemonRgbDevice::DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonCli
           parent
       )
     , m_daemonDeviceIndex(snapshot.value(QStringLiteral("index")).toInt(-1))
+    , m_discoveryIdentity(snapshot.value(QStringLiteral("discoveryIdentity")).toString())
+    , m_discoverySupportStage(snapshot.value(QStringLiteral("discoverySupportStage")).toString())
+    , m_discoverySupportStatus(snapshot.value(QStringLiteral("discoverySupportStatus")).toString())
+    , m_discoverySupportFamily(snapshot.value(QStringLiteral("discoverySupportFamily")).toString())
+    , m_discoverySupportNotes(snapshot.value(QStringLiteral("discoverySupportNotes")).toString())
+    , m_discoveryCataloged(snapshot.value(QStringLiteral("discoveryCataloged")).toBool(false))
+    , m_discoveryWriteCapableBackend(snapshot.value(QStringLiteral("discoveryWriteCapableBackend")).toBool(false))
     , m_capabilities(capabilitiesFromJson(snapshot.value(QStringLiteral("capabilities")).toArray()))
     , m_permission(permissionResultFromJson(snapshot.value(QStringLiteral("permission")).toObject()))
     , m_writeConfirmed(snapshot.value(QStringLiteral("writeConfirmed")).toBool(false))
@@ -85,6 +92,41 @@ DaemonRgbDevice::DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonCli
         mutableZones().append(rgbZone);
         m_zoneEffectSupport.append(effectSupportFromJson(zone.value(QStringLiteral("effectSupport")).toArray()));
     }
+}
+
+QString DaemonRgbDevice::discoveryIdentity() const
+{
+    return m_discoveryIdentity;
+}
+
+QString DaemonRgbDevice::discoverySupportStage() const
+{
+    return m_discoverySupportStage;
+}
+
+QString DaemonRgbDevice::discoverySupportStatus() const
+{
+    return m_discoverySupportStatus;
+}
+
+QString DaemonRgbDevice::discoverySupportFamily() const
+{
+    return m_discoverySupportFamily;
+}
+
+QString DaemonRgbDevice::discoverySupportNotes() const
+{
+    return m_discoverySupportNotes;
+}
+
+bool DaemonRgbDevice::discoveryCataloged() const
+{
+    return m_discoveryCataloged;
+}
+
+bool DaemonRgbDevice::discoveryWriteCapableBackend() const
+{
+    return m_discoveryWriteCapableBackend;
 }
 
 bool DaemonRgbDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)

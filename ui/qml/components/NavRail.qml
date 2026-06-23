@@ -25,14 +25,14 @@ Rectangle {
     signal aboutRequested()
 
     color: Theme.surface
-    radius: 18
+    radius: 8
     border.color: Theme.border
     border.width: 1
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: rail.collapsed ? 12 : 14
-        spacing: 14
+        anchors.margins: rail.collapsed ? 10 : 12
+        spacing: 10
 
         Item {
             Layout.fillWidth: true
@@ -50,7 +50,7 @@ Rectangle {
 
                 width: 46
                 height: 46
-                radius: 14
+                radius: 8
                 color: Theme.elevated
                 border.color: Theme.accent
                 border.width: 1
@@ -93,7 +93,7 @@ Rectangle {
 
                 width: 34
                 height: 34
-                radius: 17
+                radius: 8
                 color: toggleArea.containsMouse ? Theme.hover : Theme.elevated
                 border.color: toggleArea.containsMouse ? Theme.accent : Theme.border
                 border.width: 1
@@ -161,7 +161,7 @@ Rectangle {
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: 5
 
             Repeater {
                 model: rail.navModel

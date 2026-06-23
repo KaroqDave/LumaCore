@@ -355,6 +355,7 @@ Item {
             AppButton {
                 variant: "secondary"
                 text: qsTr("Cancel")
+                compact: true
                 enabled: !manager.profileBusy
                 animationsEnabled: manager.animationsEnabled
                 onClicked: compatibilityDialog.close()
@@ -364,6 +365,7 @@ Item {
                 variant: "primary"
                 enabled: manager.compatibilityReport.canApply === true && !manager.profileBusy
                 text: manager.profileBusy ? qsTr("Applying...") : qsTr("Apply Profile")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     compatibilityDialog.close()
@@ -483,6 +485,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 variant: "primary"
                 text: qsTr("Close")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: applyResultDialog.close()
             }
@@ -517,6 +520,7 @@ Item {
             AppButton {
                 variant: "secondary"
                 text: qsTr("Cancel")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: overwriteDialog.close()
             }
@@ -524,6 +528,7 @@ Item {
             AppButton {
                 variant: "primary"
                 text: qsTr("Overwrite")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     overwriteDialog.close()
@@ -591,6 +596,7 @@ Item {
             AppButton {
                 variant: "secondary"
                 text: qsTr("Cancel")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: deleteDialog.close()
             }
@@ -598,6 +604,7 @@ Item {
             AppButton {
                 variant: "primary"
                 text: qsTr("Delete")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     deleteDialog.close()
@@ -623,13 +630,13 @@ Item {
         id: content
 
         anchors.fill: parent
-        spacing: 12
+        spacing: 9
 
         Label {
             Layout.fillWidth: true
             text: qsTr("Save, restore, and choose the profile LumaCore should treat as active.")
             color: Theme.secondaryText
-            font.pixelSize: 12
+            font.pixelSize: 11
             wrapMode: Text.WordWrap
         }
 
@@ -649,6 +656,8 @@ Item {
             AppButton {
                 variant: "primary"
                 text: qsTr("Save")
+                compact: true
+                iconName: "check"
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     const normalizedName = manager.normalizedProfileName(profileNameField.text)
@@ -673,14 +682,33 @@ Item {
             Layout.fillWidth: true
             spacing: 10
 
-            Label {
+            Rectangle {
                 Layout.fillWidth: true
-                text: manager.settingsController && manager.settingsController.activeProfile.length > 0
-                      ? qsTr("Active profile: %1").arg(manager.settingsController.activeProfile)
-                      : qsTr("No active profile selected")
-                color: Theme.secondaryText
-                font.pixelSize: 12
-                elide: Text.ElideRight
+                Layout.preferredHeight: 30
+                radius: 8
+                color: manager.settingsController && manager.settingsController.activeProfile.length > 0
+                       ? Theme.pillFill
+                       : Theme.inputBg
+                border.color: manager.settingsController && manager.settingsController.activeProfile.length > 0
+                              ? Theme.pillBorder
+                              : Theme.border
+                border.width: 1
+
+                Label {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    text: manager.settingsController && manager.settingsController.activeProfile.length > 0
+                          ? qsTr("Active: %1").arg(manager.settingsController.activeProfile)
+                          : qsTr("No active profile selected")
+                    color: manager.settingsController && manager.settingsController.activeProfile.length > 0
+                           ? Theme.pillText
+                           : Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: manager.settingsController && manager.settingsController.activeProfile.length > 0
+                    elide: Text.ElideRight
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
 
             AppButton {
@@ -690,6 +718,7 @@ Item {
                       && manager.settingsController.activeProfile === profileBox.currentText
                       ? qsTr("Active")
                       : qsTr("Set Active")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     if (manager.settingsController) {
@@ -710,6 +739,8 @@ Item {
                 variant: "primary"
                 enabled: profileBox.currentText.length > 0 && !manager.profileBusy
                 text: manager.profileBusy ? qsTr("Loading...") : qsTr("Load")
+                compact: true
+                iconName: "check"
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     const report = manager.appController.profileCompatibility(profileBox.currentText)
@@ -725,6 +756,7 @@ Item {
                 Layout.fillWidth: true
                 variant: "secondary"
                 text: qsTr("Refresh")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: manager.refreshProfiles()
             }
@@ -734,6 +766,7 @@ Item {
                 variant: "secondary"
                 enabled: profileBox.currentText.length > 0 && profileNameField.text.length > 0
                 text: qsTr("Rename")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     const oldName = profileBox.currentText
@@ -756,6 +789,7 @@ Item {
                 variant: "secondary"
                 enabled: profileBox.currentText.length > 0
                 text: qsTr("Delete")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: {
                     manager.pendingDeleteProfile = profileBox.currentText
@@ -767,6 +801,7 @@ Item {
                 Layout.fillWidth: true
                 variant: "secondary"
                 text: qsTr("Import")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: importDialog.open()
             }
@@ -776,6 +811,7 @@ Item {
                 variant: "secondary"
                 enabled: profileBox.currentText.length > 0
                 text: qsTr("Export")
+                compact: true
                 animationsEnabled: manager.animationsEnabled
                 onClicked: exportDialog.open()
             }

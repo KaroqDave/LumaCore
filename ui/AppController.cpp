@@ -3,6 +3,7 @@
 #include "backends/daemon/DaemonBackend.h"
 #include "backends/daemon/DaemonRgbDevice.h"
 #include "core/ActivityLog.h"
+#include "core/PortablePaths.h"
 #include "core/ProfileStore.h"
 #include "core/RgbBackend.h"
 #include "core/RgbColor.h"
@@ -20,7 +21,6 @@
 #include <QSaveFile>
 #include <QSettings>
 #include <QSet>
-#include <QStandardPaths>
 #include <QSysInfo>
 #include <QTimer>
 #include <QtGlobal>
@@ -49,9 +49,7 @@ QString sanitizedDiagnosticString(QString value, const QString& profilesDirector
 {
     const QString homePath = QDir::toNativeSeparators(QDir::homePath());
     const QString tempPath = QDir::toNativeSeparators(QDir::tempPath());
-    const QString appDataPath = QDir::toNativeSeparators(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-    );
+    const QString appDataPath = QDir::toNativeSeparators(portableDataRoot());
     const QString normalizedProfilesDirectory = QDir::toNativeSeparators(profilesDirectory);
 
     const auto replacePath = [&value](const QString& path, const QString& replacement) {
@@ -119,6 +117,15 @@ QString deviceGroupSettingsKey(const QString& groupName)
     QString key = groupName.trimmed();
     key.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_.-]+")), QStringLiteral("_"));
     return key.isEmpty() ? QString() : key;
+}
+
+QString zoneEffectsSettingsKey(const RgbDevice& device, int zoneIndex)
+{
+    QString deviceKey = deviceGroupSettingsKey(device.id());
+    if (deviceKey.isEmpty()) {
+        deviceKey = QStringLiteral("device");
+    }
+    return QStringLiteral("%1_zone_%2").arg(deviceKey).arg(zoneIndex);
 }
 
 QStringList deviceGroupNamesFromSettings()
@@ -957,6 +964,37 @@ int AppController::zoneEffectBrightness(int deviceIndex, int zoneIndex) const
     return zone->effect().brightness();
 }
 
+bool AppController::zoneEffectsPanelEnabled(int deviceIndex, int zoneIndex) const
+{
+    const RgbDevice* device = deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return false;
+    }
+
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("ui"));
+    settings.beginGroup(QStringLiteral("zoneEffects"));
+    const bool enabled = settings.value(zoneEffectsSettingsKey(*device, zoneIndex), false).toBool();
+    settings.endGroup();
+    settings.endGroup();
+    return enabled;
+}
+
+void AppController::setZoneEffectsPanelEnabled(int deviceIndex, int zoneIndex, bool enabled)
+{
+    const RgbDevice* device = deviceAt(deviceIndex);
+    if (device == nullptr || zoneIndex < 0 || zoneIndex >= device->zones().size()) {
+        return;
+    }
+
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("ui"));
+    settings.beginGroup(QStringLiteral("zoneEffects"));
+    settings.setValue(zoneEffectsSettingsKey(*device, zoneIndex), enabled);
+    settings.endGroup();
+    settings.endGroup();
+}
+
 bool AppController::updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount)
 {
     if (m_deviceManager == nullptr) {
@@ -1129,6 +1167,108 @@ bool AppController::zoneSupportsEffectBrightness(int deviceIndex, int zoneIndex,
 
     const RgbDevice* device = deviceAt(deviceIndex);
     return device != nullptr && device->supportsZoneEffectBrightness(zoneIndex, effectType);
+}
+
+bool AppController::globalTargetSupportsEffect(const QString& groupName, int effectType) const
+{
+    if (m_deviceManager == nullptr || !isValidEffectType(effectType)) {
+        return false;
+    }
+
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QStringList targetDeviceIds = normalizedName.isEmpty()
+        ? QStringList {}
+        : storedDeviceGroupIds(normalizedName);
+    if (!normalizedName.isEmpty() && targetDeviceIds.isEmpty()) {
+        return false;
+    }
+
+    const QSet<QString> targetIdSet(targetDeviceIds.cbegin(), targetDeviceIds.cend());
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        const RgbDevice* device = deviceAt(deviceIndex);
+        if (device == nullptr || !deviceWritable(deviceIndex)) {
+            continue;
+        }
+        if (!targetIdSet.isEmpty() && !targetIdSet.contains(device->id())) {
+            continue;
+        }
+
+        for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+            if (zoneSupportsEffect(deviceIndex, zoneIndex, effectType)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool AppController::globalTargetSupportsEffectSpeed(const QString& groupName, int effectType) const
+{
+    if (m_deviceManager == nullptr || !isAnimatedEffect(effectType) || !isValidEffectType(effectType)) {
+        return false;
+    }
+
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QStringList targetDeviceIds = normalizedName.isEmpty()
+        ? QStringList {}
+        : storedDeviceGroupIds(normalizedName);
+    if (!normalizedName.isEmpty() && targetDeviceIds.isEmpty()) {
+        return false;
+    }
+
+    const QSet<QString> targetIdSet(targetDeviceIds.cbegin(), targetDeviceIds.cend());
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        const RgbDevice* device = deviceAt(deviceIndex);
+        if (device == nullptr || !deviceWritable(deviceIndex)) {
+            continue;
+        }
+        if (!targetIdSet.isEmpty() && !targetIdSet.contains(device->id())) {
+            continue;
+        }
+
+        for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+            if (zoneSupportsEffectSpeed(deviceIndex, zoneIndex, effectType)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool AppController::globalTargetSupportsEffectBrightness(const QString& groupName, int effectType) const
+{
+    if (m_deviceManager == nullptr || !isValidEffectType(effectType)) {
+        return false;
+    }
+
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QStringList targetDeviceIds = normalizedName.isEmpty()
+        ? QStringList {}
+        : storedDeviceGroupIds(normalizedName);
+    if (!normalizedName.isEmpty() && targetDeviceIds.isEmpty()) {
+        return false;
+    }
+
+    const QSet<QString> targetIdSet(targetDeviceIds.cbegin(), targetDeviceIds.cend());
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        const RgbDevice* device = deviceAt(deviceIndex);
+        if (device == nullptr || !deviceWritable(deviceIndex)) {
+            continue;
+        }
+        if (!targetIdSet.isEmpty() && !targetIdSet.contains(device->id())) {
+            continue;
+        }
+
+        for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+            if (zoneSupportsEffectBrightness(deviceIndex, zoneIndex, effectType)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 bool AppController::deviceRequiresConfirmation(int deviceIndex) const
@@ -1307,6 +1447,35 @@ bool AppController::applyEffectToDeviceGroup(
     }
 
     return applyGlobalEffectInternal(effectType, color, speed, brightness, false, targetDeviceIds, normalizedName);
+}
+
+bool AppController::setZoneBrightness(int deviceIndex, int zoneIndex, int brightness)
+{
+    const RgbZone* zone = zoneAt(deviceIndex, zoneIndex);
+    if (zone == nullptr) {
+        setStatusMessage(QStringLiteral("Select a zone before changing brightness."));
+        return false;
+    }
+
+    if (brightness < 0 || brightness > 100) {
+        setStatusMessage(QStringLiteral("Brightness must be between 0 and 100 percent."));
+        return false;
+    }
+
+    const int effectType = static_cast<int>(zone->effect().type());
+    if (!zoneSupportsEffectBrightness(deviceIndex, zoneIndex, effectType)) {
+        setStatusMessage(QStringLiteral("Selected zone does not expose brightness for its current effect."));
+        return false;
+    }
+
+    return applyEffect(
+        deviceIndex,
+        zoneIndex,
+        effectType,
+        zone->effect().color().toQColor(),
+        zone->effect().speed(),
+        brightness
+    );
 }
 
 bool AppController::setGlobalBrightness(int brightness)
@@ -2261,6 +2430,12 @@ QVariantMap AppController::diagnosticsReport() const
             {QStringLiteral("type"), device->typeName()},
             {QStringLiteral("backendId"), sanitize(device->backendId())},
             {QStringLiteral("discoveryIdentity"), sanitize(device->discoveryIdentity())},
+            {QStringLiteral("discoverySupportStage"), sanitize(device->discoverySupportStage())},
+            {QStringLiteral("discoverySupportStatus"), sanitize(device->discoverySupportStatus())},
+            {QStringLiteral("discoverySupportFamily"), sanitize(device->discoverySupportFamily())},
+            {QStringLiteral("discoverySupportNotes"), sanitize(device->discoverySupportNotes())},
+            {QStringLiteral("discoveryCataloged"), device->discoveryCataloged()},
+            {QStringLiteral("discoveryWriteCapableBackend"), device->discoveryWriteCapableBackend()},
             {QStringLiteral("likelyRgbController"), device->likelyRgbController()},
             {QStringLiteral("hasRgbControllerOverride"), device->hasRgbControllerOverride()},
             {QStringLiteral("isRgbController"), device->isRgbController()},
@@ -2320,7 +2495,7 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("profileNamesIncluded"), true},
                 {QStringLiteral("activityLinesIncluded"), true},
                 {QStringLiteral("activityLineLimit"), m_deviceManager->activityLog().maxLineCount()},
-                {QStringLiteral("pathRedaction"), QStringLiteral("<home>, <temp>, <app-data>, and <profiles> paths are redacted where known.")},
+                {QStringLiteral("pathRedaction"), QStringLiteral("<home>, <temp>, <app-data>, and <profiles> paths are redacted where known. <app-data> refers to the portable data folder beside the executable.")},
             },
         },
         {
