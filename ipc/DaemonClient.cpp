@@ -186,7 +186,7 @@ void DaemonClient::reconnectNow()
 
     ++m_reconnectAttempt;
     emit reconnectScheduled(m_reconnectAttempt, 0);
-    startAsyncConnection();
+    m_reconnectTimer.start(0);
 }
 
 void DaemonClient::reportConnectionError(const QString& message)

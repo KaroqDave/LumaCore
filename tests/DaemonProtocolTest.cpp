@@ -13,6 +13,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QThread>
+#include <QTimer>
 
 #include <algorithm>
 #include <functional>
@@ -713,20 +714,11 @@ int main(int argc, char* argv[])
 
     {
         const QString reconnectServerName = testSocketName(QStringLiteral("automatic-reconnect"));
-        std::jthread reconnectServerThread([reconnectServerName] {
-            QThread::msleep(350);
+        QLocalServer reconnectServer;
+        bool reconnectServerListened = false;
+        QTimer::singleShot(100, [&] {
             QLocalServer::removeServer(reconnectServerName);
-            QLocalServer localServer;
-            if (!localServer.listen(reconnectServerName)
-                || !localServer.waitForNewConnection(3000)) {
-                return;
-            }
-
-            QLocalSocket* socket = localServer.nextPendingConnection();
-            if (socket != nullptr) {
-                socket->waitForDisconnected(3000);
-                delete socket;
-            }
+            reconnectServerListened = reconnectServer.listen(reconnectServerName);
         });
 
         DaemonClient reconnectClient(reconnectServerName);
@@ -754,6 +746,7 @@ int main(int argc, char* argv[])
                 waitUntil([&] { return reconnectSignalReceived && reconnectClient.isConnected(); }, 4000),
                 "client should reconnect after the daemon becomes available"
             )
+            || !require(reconnectServerListened, "automatic reconnect fixture server should listen")
             || !require(
                 !reconnectDelays.isEmpty() && reconnectDelays.constFirst() == 250,
                 "automatic reconnect should start with a short bounded delay"
@@ -787,7 +780,7 @@ int main(int argc, char* argv[])
             )) {
             return 1;
         }
-        reconnectServerThread.join();
+        reconnectServer.close();
     }
 
     {
