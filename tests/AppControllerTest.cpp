@@ -356,9 +356,25 @@ int main(int argc, char* argv[])
         ? QVariantList {}
         : diagnosticDevices.first().toMap().value(QStringLiteral("zones")).toList();
     const QVariantMap diagnosticSetup = diagnostics.value(QStringLiteral("setup")).toMap();
+    const QVariantMap diagnosticSummary = diagnostics.value(QStringLiteral("summary")).toMap();
+    const QVariantMap diagnosticScope = diagnostics.value(QStringLiteral("diagnosticScope")).toMap();
+    const QVariantMap diagnosticCounts = diagnostics.value(QStringLiteral("counts")).toMap();
+    const QString diagnosticSummaryText = controller.diagnosticsSummaryText();
     if (!require(
             diagnostics.value(QStringLiteral("schemaVersion")).toInt() == 1,
             "diagnostics should expose a stable schema version"
+        )
+        || !require(
+            diagnosticSummary.value(QStringLiteral("setup")).toString() == QStringLiteral("Ready"),
+            "diagnostics should include a top-level support summary"
+        )
+        || !require(
+            !diagnosticScope.value(QStringLiteral("profileContentsIncluded")).toBool(),
+            "diagnostics should explicitly state that profile contents are excluded"
+        )
+        || !require(
+            diagnosticScope.value(QStringLiteral("profileNamesIncluded")).toBool(),
+            "diagnostics should explicitly state that profile names are included"
         )
         || !require(
             diagnostics.value(QStringLiteral("backend")).toMap().value(QStringLiteral("id")).toString()
@@ -369,6 +385,18 @@ int main(int argc, char* argv[])
         || !require(
             diagnosticZones.size() == controller.zoneCount(0),
             "diagnostics should include zone summaries"
+        )
+        || !require(
+            diagnosticCounts.value(QStringLiteral("devices")).toInt() == controller.backendDeviceCount(),
+            "diagnostics should include device counts"
+        )
+        || !require(
+            diagnosticCounts.value(QStringLiteral("zones")).toInt() == controller.zoneCount(0),
+            "diagnostics should include zone counts"
+        )
+        || !require(
+            diagnosticCounts.value(QStringLiteral("writableDevices")).toInt() > 0,
+            "diagnostics should include writable device counts"
         )
         || !require(
             diagnosticSetup.value(QStringLiteral("summary")).toString() == QStringLiteral("Ready"),
@@ -389,6 +417,14 @@ int main(int argc, char* argv[])
         || !require(
             diagnostics.value(QStringLiteral("activity")).toList().size() > 0,
             "diagnostics should include recent activity"
+        )
+        || !require(
+            diagnosticSummaryText.contains(QStringLiteral("LumaCore diagnostics summary")),
+            "diagnostics summary text should include a clear heading"
+        )
+        || !require(
+            diagnosticSummaryText.contains(QStringLiteral("profile contents are not included")),
+            "diagnostics summary text should state that profile contents are excluded"
         )) {
         return 1;
     }

@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v1.0.0** - Linux-first RGB control with tray operation, global controls, daily profile scheduling, diagnostics export, Linux install staging, release verification hardening, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.3** - Linux-first RGB control with tray operation, global controls, daily profile scheduling, profile apply previews, diagnostics export polish, Linux install staging, release verification hardening, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 

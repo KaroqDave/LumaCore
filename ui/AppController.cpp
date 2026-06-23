@@ -8,8 +8,10 @@
 #include "core/RgbColor.h"
 #include "core/RgbEffect.h"
 
+#include <QClipboard>
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -77,11 +79,11 @@ QString permissionStatusDiagnosticName(PermissionStatus status)
     return QStringLiteral("unknown");
 }
 
-QVariantMap permissionToDiagnostics(const PermissionResult& permission)
+QVariantMap permissionToDiagnostics(const PermissionResult& permission, const std::function<QString(const QString&)>& sanitize)
 {
     return QVariantMap {
         {QStringLiteral("status"), permissionStatusDiagnosticName(permission.status)},
-        {QStringLiteral("reason"), permission.reason},
+        {QStringLiteral("reason"), sanitize(permission.reason)},
     };
 }
 
@@ -112,6 +114,62 @@ struct SetupStatus {
     QString detail;
     QString action;
 };
+
+QString diagnosticsSummaryTextFor(const QVariantMap& report)
+{
+    const QVariantMap application = report.value(QStringLiteral("application")).toMap();
+    const QVariantMap backend = report.value(QStringLiteral("backend")).toMap();
+    const QVariantMap setup = report.value(QStringLiteral("setup")).toMap();
+    const QVariantMap daemon = report.value(QStringLiteral("daemon")).toMap();
+    const QVariantMap safety = report.value(QStringLiteral("safety")).toMap();
+    const QVariantMap counts = report.value(QStringLiteral("counts")).toMap();
+
+    QStringList lines {
+        QStringLiteral("LumaCore diagnostics summary"),
+        QStringLiteral("Generated: %1").arg(report.value(QStringLiteral("generatedAt")).toString()),
+        QStringLiteral("Application: %1 %2 on %3")
+            .arg(
+                application.value(QStringLiteral("name")).toString(),
+                application.value(QStringLiteral("version")).toString(),
+                application.value(QStringLiteral("platform")).toString()
+            ),
+        QStringLiteral("Backend: %1 (%2), %3 device(s)")
+            .arg(
+                backend.value(QStringLiteral("displayName")).toString(),
+                backend.value(QStringLiteral("id")).toString()
+            )
+            .arg(counts.value(QStringLiteral("devices")).toInt()),
+        QStringLiteral("Setup: %1 - %2")
+            .arg(
+                setup.value(QStringLiteral("summary")).toString(),
+                setup.value(QStringLiteral("detail")).toString()
+            ),
+        QStringLiteral("Daemon: %1, connected=%2, version=%3")
+            .arg(
+                daemon.value(QStringLiteral("state")).toString(),
+                daemon.value(QStringLiteral("connected")).toBool() ? QStringLiteral("yes") : QStringLiteral("no"),
+                daemon.value(QStringLiteral("version")).toString().isEmpty()
+                    ? QStringLiteral("unavailable")
+                    : daemon.value(QStringLiteral("version")).toString()
+            ),
+        QStringLiteral("Safety: dry-run=%1, writable=%2, confirmation-required=%3, read-only=%4")
+            .arg(safety.value(QStringLiteral("dryRunEnabled")).toBool() ? QStringLiteral("enabled") : QStringLiteral("disabled"))
+            .arg(counts.value(QStringLiteral("writableDevices")).toInt())
+            .arg(counts.value(QStringLiteral("confirmationRequiredDevices")).toInt())
+            .arg(counts.value(QStringLiteral("readOnlyDevices")).toInt()),
+        QStringLiteral("Profiles: %1 name(s); profile contents are not included")
+            .arg(counts.value(QStringLiteral("profiles")).toInt()),
+        QStringLiteral("Activity: %1 recent line(s)")
+            .arg(counts.value(QStringLiteral("activityLines")).toInt()),
+    };
+
+    const QString action = setup.value(QStringLiteral("action")).toString();
+    if (!action.isEmpty()) {
+        lines.append(QStringLiteral("Suggested action: %1").arg(action));
+    }
+
+    return lines.join(QLatin1Char('\n'));
+}
 
 int storedEffectType(const QJsonObject& zoneObject)
 {
@@ -1812,11 +1870,32 @@ QVariantMap AppController::diagnosticsReport() const
         profileNames.append(profileName);
     }
 
+    int writableDeviceCount = 0;
+    int readOnlyDeviceCount = 0;
+    int confirmationRequiredDeviceCount = 0;
+    int confirmedDeviceCount = 0;
+    int totalZoneCount = 0;
+
     QVariantList devices;
     for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
         const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
         if (device == nullptr) {
             continue;
+        }
+
+        const bool writable = deviceWritable(deviceIndex);
+        const bool requiresConfirmation = deviceRequiresConfirmation(deviceIndex);
+        const bool writeConfirmed = m_deviceManager->deviceWriteConfirmed(deviceIndex);
+        if (writable) {
+            ++writableDeviceCount;
+        } else {
+            ++readOnlyDeviceCount;
+        }
+        if (requiresConfirmation && !writeConfirmed) {
+            ++confirmationRequiredDeviceCount;
+        }
+        if (writeConfirmed) {
+            ++confirmedDeviceCount;
         }
 
         QVariantList deviceCapabilities;
@@ -1833,15 +1912,15 @@ QVariantMap AppController::diagnosticsReport() const
         QVariantMap permissions {
             {
                 backendCapabilityToString(BackendCapability::DiscoveryRead),
-                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::DiscoveryRead)),
+                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::DiscoveryRead), sanitize),
             },
             {
                 backendCapabilityToString(BackendCapability::ZoneColorWrite),
-                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::ZoneColorWrite)),
+                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::ZoneColorWrite), sanitize),
             },
             {
                 backendCapabilityToString(BackendCapability::ZoneEffectWrite),
-                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::ZoneEffectWrite)),
+                permissionToDiagnostics(device->checkRuntimePermission(BackendCapability::ZoneEffectWrite), sanitize),
             },
         };
 
@@ -1875,11 +1954,12 @@ QVariantMap AppController::diagnosticsReport() const
 
         QVariantList zones;
         const QVector<RgbZone>& deviceZones = device->zones();
+        totalZoneCount += deviceZones.size();
         for (int zoneIndex = 0; zoneIndex < deviceZones.size(); ++zoneIndex) {
             const RgbZone& zone = deviceZones.at(zoneIndex);
             zones.append(QVariantMap {
                 {QStringLiteral("index"), zoneIndex},
-                {QStringLiteral("name"), zone.name()},
+                {QStringLiteral("name"), sanitize(zone.name())},
                 {QStringLiteral("type"), zone.typeName()},
                 {QStringLiteral("ledCount"), zone.ledCount()},
                 {QStringLiteral("currentColor"), zone.currentColor().toHexString()},
@@ -1890,17 +1970,18 @@ QVariantMap AppController::diagnosticsReport() const
 
         devices.append(QVariantMap {
             {QStringLiteral("index"), deviceIndex},
-            {QStringLiteral("id"), device->id()},
-            {QStringLiteral("name"), device->name()},
-            {QStringLiteral("vendor"), device->vendor()},
+            {QStringLiteral("id"), sanitize(device->id())},
+            {QStringLiteral("name"), sanitize(device->name())},
+            {QStringLiteral("vendor"), sanitize(device->vendor())},
             {QStringLiteral("type"), device->typeName()},
-            {QStringLiteral("backendId"), device->backendId()},
-            {QStringLiteral("discoveryIdentity"), device->discoveryIdentity()},
+            {QStringLiteral("backendId"), sanitize(device->backendId())},
+            {QStringLiteral("discoveryIdentity"), sanitize(device->discoveryIdentity())},
             {QStringLiteral("likelyRgbController"), device->likelyRgbController()},
             {QStringLiteral("hasRgbControllerOverride"), device->hasRgbControllerOverride()},
             {QStringLiteral("isRgbController"), device->isRgbController()},
-            {QStringLiteral("writeConfirmed"), m_deviceManager->deviceWriteConfirmed(deviceIndex)},
-            {QStringLiteral("writable"), deviceWritable(deviceIndex)},
+            {QStringLiteral("requiresConfirmation"), requiresConfirmation},
+            {QStringLiteral("writeConfirmed"), writeConfirmed},
+            {QStringLiteral("writable"), writable},
             {QStringLiteral("lastHardwareWriteStatus"), sanitize(device->lastHardwareWriteStatus())},
             {QStringLiteral("capabilities"), deviceCapabilities},
             {QStringLiteral("permissions"), permissions},
@@ -1914,11 +1995,48 @@ QVariantMap AppController::diagnosticsReport() const
         activity.append(sanitize(line));
     }
 
+    const QString generatedAt = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+    const QVariantMap counts {
+        {QStringLiteral("devices"), devices.size()},
+        {QStringLiteral("zones"), totalZoneCount},
+        {QStringLiteral("profiles"), profileNames.size()},
+        {QStringLiteral("activityLines"), activity.size()},
+        {QStringLiteral("writableDevices"), writableDeviceCount},
+        {QStringLiteral("readOnlyDevices"), readOnlyDeviceCount},
+        {QStringLiteral("confirmationRequiredDevices"), confirmationRequiredDeviceCount},
+        {QStringLiteral("confirmedDevices"), confirmedDeviceCount},
+        {QStringLiteral("pendingDaemonOperations"), pendingDaemonOperations()},
+    };
+
     return QVariantMap {
         {QStringLiteral("schemaVersion"), 1},
+        {QStringLiteral("generatedAt"), generatedAt},
         {
-            QStringLiteral("generatedAt"),
-            QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs),
+            QStringLiteral("summary"),
+            QVariantMap {
+                {QStringLiteral("generatedAt"), generatedAt},
+                {QStringLiteral("setup"), setupStatusSummary()},
+                {QStringLiteral("setupLevel"), setupStatusLevel()},
+                {QStringLiteral("backend"), backend.displayName},
+                {QStringLiteral("backendId"), backend.id},
+                {QStringLiteral("deviceCount"), devices.size()},
+                {QStringLiteral("zoneCount"), totalZoneCount},
+                {QStringLiteral("writableDeviceCount"), writableDeviceCount},
+                {QStringLiteral("confirmationRequiredDeviceCount"), confirmationRequiredDeviceCount},
+                {QStringLiteral("dryRunEnabled"), dryRunEnabled()},
+                {QStringLiteral("daemonState"), daemonState()},
+                {QStringLiteral("daemonConnected"), daemonConnected()},
+            },
+        },
+        {
+            QStringLiteral("diagnosticScope"),
+            QVariantMap {
+                {QStringLiteral("profileContentsIncluded"), false},
+                {QStringLiteral("profileNamesIncluded"), true},
+                {QStringLiteral("activityLinesIncluded"), true},
+                {QStringLiteral("activityLineLimit"), m_deviceManager->activityLog().maxLineCount()},
+                {QStringLiteral("pathRedaction"), QStringLiteral("<home>, <temp>, <app-data>, and <profiles> paths are redacted where known.")},
+            },
         },
         {
             QStringLiteral("application"),
@@ -1932,6 +2050,20 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("kernelVersion"), QSysInfo::kernelVersion()},
             },
         },
+        {
+            QStringLiteral("environment"),
+            QVariantMap {
+                {QStringLiteral("qtVersion"), QString::fromUtf8(qVersion())},
+                {QStringLiteral("productType"), QSysInfo::productType()},
+                {QStringLiteral("productVersion"), QSysInfo::productVersion()},
+                {QStringLiteral("currentCpuArchitecture"), QSysInfo::currentCpuArchitecture()},
+                {QStringLiteral("buildCpuArchitecture"), QSysInfo::buildCpuArchitecture()},
+                {QStringLiteral("buildAbi"), QSysInfo::buildAbi()},
+                {QStringLiteral("kernel"), QSysInfo::kernelType()},
+                {QStringLiteral("kernelVersion"), QSysInfo::kernelVersion()},
+            },
+        },
+        {QStringLiteral("counts"), counts},
         {
             QStringLiteral("backend"),
             QVariantMap {
@@ -1975,6 +2107,33 @@ QVariantMap AppController::diagnosticsReport() const
         {QStringLiteral("devices"), devices},
         {QStringLiteral("activity"), activity},
     };
+}
+
+QString AppController::diagnosticsSummaryText() const
+{
+    if (m_deviceManager == nullptr) {
+        return {};
+    }
+
+    return diagnosticsSummaryTextFor(diagnosticsReport());
+}
+
+bool AppController::copyDiagnosticsSummary()
+{
+    if (m_deviceManager == nullptr) {
+        setStatusMessage(QStringLiteral("Diagnostics summary is unavailable."));
+        return false;
+    }
+
+    QClipboard* clipboard = QGuiApplication::clipboard();
+    if (clipboard == nullptr) {
+        setStatusMessage(QStringLiteral("Clipboard is unavailable."));
+        return false;
+    }
+
+    clipboard->setText(diagnosticsSummaryText());
+    setStatusMessage(QStringLiteral("Copied diagnostics summary."));
+    return true;
 }
 
 bool AppController::exportDiagnostics(const QUrl& destinationUrl)

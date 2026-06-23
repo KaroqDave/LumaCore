@@ -62,11 +62,13 @@ Dialog {
         implicitWidth: footerButtons.implicitWidth
         implicitHeight: footerButtons.implicitHeight + 8
 
-        RowLayout {
+        GridLayout {
             id: footerButtons
 
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 10
+            columns: 3
+            columnSpacing: 10
+            rowSpacing: 10
 
             AppButton {
                 visible: dialog.controller && !dialog.controller.daemonConnected
@@ -97,6 +99,15 @@ Dialog {
                 text: qsTr("Export")
                 animationsEnabled: dialog.animationsEnabled
                 onClicked: diagnosticsDialog.open()
+            }
+
+            AppButton {
+                enabled: dialog.controller
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Copy Summary")
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.controller.copyDiagnosticsSummary()
             }
 
             AppButton {

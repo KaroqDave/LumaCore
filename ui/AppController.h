@@ -111,6 +111,8 @@ public:
     Q_INVOKABLE QString importProfile(const QUrl& sourceUrl);
     Q_INVOKABLE bool exportProfile(const QString& profileName, const QUrl& destinationUrl);
     Q_INVOKABLE QVariantMap diagnosticsReport() const;
+    Q_INVOKABLE QString diagnosticsSummaryText() const;
+    Q_INVOKABLE bool copyDiagnosticsSummary();
     Q_INVOKABLE bool exportDiagnostics(const QUrl& destinationUrl);
     Q_INVOKABLE QVariantMap profileCompatibility(const QString& profileName);
     Q_INVOKABLE bool profileExists(const QString& profileName) const;
