@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QUrl>
+#include <QVariantList>
 
 #include <memory>
 
@@ -37,6 +38,7 @@ class AppController final : public QObject
     Q_PROPERTY(bool dryRunEnabled READ dryRunEnabled WRITE setDryRunEnabled NOTIFY dryRunEnabledChanged)
     Q_PROPERTY(int pendingDaemonOperations READ pendingDaemonOperations NOTIFY pendingDaemonOperationsChanged)
     Q_PROPERTY(bool profileApplyInProgress READ profileApplyInProgress NOTIFY profileApplyInProgressChanged)
+    Q_PROPERTY(QStringList deviceGroupNames READ deviceGroupNames NOTIFY deviceGroupsChanged)
 
 public:
     explicit AppController(
@@ -67,6 +69,7 @@ public:
     [[nodiscard]] bool dryRunEnabled() const;
     [[nodiscard]] int pendingDaemonOperations() const;
     [[nodiscard]] bool profileApplyInProgress() const;
+    [[nodiscard]] QStringList deviceGroupNames() const;
     void setDryRunEnabled(bool enabled);
 
     Q_INVOKABLE bool applyEffect(int deviceIndex, int zoneIndex, int effectType, const QColor& color, double speed, int brightness);
@@ -91,8 +94,16 @@ public:
     Q_INVOKABLE bool revokeDeviceWrites(int deviceIndex);
     Q_INVOKABLE bool allOffDevice(int deviceIndex);
     Q_INVOKABLE bool applyEffectGlobally(int effectType, const QColor& color, double speed, int brightness);
+    Q_INVOKABLE bool applyEffectToDeviceGroup(const QString& groupName, int effectType, const QColor& color, double speed, int brightness);
     Q_INVOKABLE bool setGlobalBrightness(int brightness);
+    Q_INVOKABLE bool setDeviceGroupBrightness(const QString& groupName, int brightness);
     Q_INVOKABLE bool allOffAllDevices();
+    Q_INVOKABLE bool allOffDeviceGroup(const QString& groupName);
+    Q_INVOKABLE QVariantList deviceGroupInfos() const;
+    Q_INVOKABLE QVariantList deviceGroupDeviceOptions() const;
+    Q_INVOKABLE QStringList deviceGroupDeviceIds(const QString& groupName) const;
+    Q_INVOKABLE bool saveDeviceGroup(const QString& groupName, const QStringList& deviceIds);
+    Q_INVOKABLE bool deleteDeviceGroup(const QString& groupName);
     Q_INVOKABLE bool markDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool removeDeviceRgbController(int deviceIndex);
     Q_INVOKABLE bool resetDeviceRgbControllerOverride(int deviceIndex);
@@ -133,6 +144,7 @@ signals:
     void daemonInfoChanged();
     void writeConfirmationChanged(int deviceIndex);
     void dryRunEnabledChanged();
+    void deviceGroupsChanged();
     void pendingDaemonOperationsChanged();
     void profileApplyInProgressChanged();
     void daemonDevicesRefreshed();
@@ -157,8 +169,13 @@ private:
         const QColor& color,
         double speed,
         int brightness,
-        bool preserveCurrentEffect
+        bool preserveCurrentEffect,
+        const QStringList& targetDeviceIds = {},
+        const QString& targetName = {}
     );
+    bool allOffDevicesInternal(const QStringList& targetDeviceIds = {}, const QString& targetName = {});
+    [[nodiscard]] static QString normalizeDeviceGroupName(const QString& groupName);
+    [[nodiscard]] QStringList storedDeviceGroupIds(const QString& groupName) const;
     bool refreshDaemonDevices(bool recoveredConnection);
 
     DeviceManager* m_deviceManager {nullptr};

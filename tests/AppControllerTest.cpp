@@ -11,6 +11,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSettings>
 #include <QTemporaryDir>
 #include <QUrl>
 
@@ -74,6 +75,64 @@ public:
     }
 };
 
+class GroupTestDevice final : public lumacore::RgbDevice
+{
+public:
+    GroupTestDevice(QString id, QString name)
+        : RgbDevice(
+              std::move(id),
+              std::move(name),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        setLikelyRgbController(true);
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Zone"),
+            lumacore::RgbZoneType::AddressableHeader,
+            4,
+            lumacore::RgbColor(0, 0, 0)
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        return applyZoneEffect(zoneIndex, lumacore::RgbEffect(lumacore::RgbEffectType::Static, color));
+    }
+
+    [[nodiscard]] bool applyAllOff() override
+    {
+        for (int zoneIndex = 0; zoneIndex < mutableZones().size(); ++zoneIndex) {
+            setZoneEffect(zoneIndex, lumacore::RgbEffect(
+                lumacore::RgbEffectType::Static,
+                lumacore::RgbColor(0, 0, 0),
+                1.0,
+                0
+            ));
+        }
+        return true;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneColorWrite
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capabilities().testFlag(capability)) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+
+        return {
+            lumacore::PermissionStatus::Denied,
+            QStringLiteral("Group test device does not support %1.").arg(lumacore::backendCapabilityToString(capability)),
+        };
+    }
+};
+
 bool saveProfileFixture(
     const QString& profilesDirectory,
     const QString& profileName,
@@ -128,6 +187,15 @@ int main(int argc, char* argv[])
     if (!require(profileDirectory.isValid(), "temporary profile directory should be available")) {
         return 1;
     }
+    QTemporaryDir settingsDirectory;
+    if (!require(settingsDirectory.isValid(), "temporary settings directory should be available")) {
+        return 1;
+    }
+
+    QCoreApplication::setOrganizationName(QStringLiteral("LumaCoreTests"));
+    QCoreApplication::setApplicationName(QStringLiteral("AppControllerTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
 
     lumacore::DeviceManager manager(nullptr, profileDirectory.filePath(QStringLiteral("profiles")));
     manager.registerBackend(std::make_unique<lumacore::MockBackend>());
@@ -289,6 +357,109 @@ int main(int argc, char* argv[])
             || !require(
                 selectionController.zoneIndexForName(restoredDeviceIndex, selectedZone) == 0,
                 "zone names should restore selection on the reordered device"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        lumacore::DeviceManager groupManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("group-profiles"))
+        );
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> groupDevices;
+        groupDevices.push_back(std::make_unique<GroupTestDevice>(
+            QStringLiteral("group-device-a"),
+            QStringLiteral("Group Device A")
+        ));
+        groupDevices.push_back(std::make_unique<GroupTestDevice>(
+            QStringLiteral("group-device-b"),
+            QStringLiteral("Group Device B")
+        ));
+        groupManager.replaceDevices(std::move(groupDevices));
+        lumacore::AppController groupController(&groupManager);
+
+        QVariantMap groupResult;
+        QObject::connect(
+            &groupController,
+            &lumacore::AppController::globalOperationFinished,
+            &groupController,
+            [&groupResult](const QVariantMap& result) { groupResult = result; }
+        );
+
+        const QColor groupColor(QStringLiteral("#204060"));
+        if (!require(
+                groupController.saveDeviceGroup(
+                    QStringLiteral("Desk"),
+                    QStringList {QStringLiteral("group-device-b"), QStringLiteral("missing-device")}
+                ),
+                "controller should save a named device group"
+            )
+            || !require(
+                groupController.deviceGroupNames().contains(QStringLiteral("Desk")),
+                "saved device groups should be listed"
+            )
+            || !require(
+                groupController.deviceGroupDeviceIds(QStringLiteral("desk")).size() == 2,
+                "device group lookup should be case-insensitive"
+            )
+            || !require(
+                groupController.deviceGroupInfos().first().toMap().value(QStringLiteral("presentDeviceCount")).toInt() == 1,
+                "device group info should count present devices separately from stale IDs"
+            )
+            || !require(
+                groupController.applyEffectToDeviceGroup(
+                    QStringLiteral("Desk"),
+                    static_cast<int>(lumacore::RgbEffectType::Static),
+                    groupColor,
+                    1.0,
+                    70
+                ),
+                "group effects should start for a non-empty group"
+            )
+            || !require(
+                groupResult.value(QStringLiteral("targetKind")).toString() == QStringLiteral("group"),
+                "group operation results should identify the target kind"
+            )
+            || !require(
+                groupResult.value(QStringLiteral("targetName")).toString() == QStringLiteral("Desk"),
+                "group operation results should identify the target name"
+            )
+            || !require(
+                groupResult.value(QStringLiteral("applied")).toInt() == 1,
+                "group effects should apply only to present grouped devices"
+            )
+            || !require(
+                groupController.zoneEffectColor(1, 0) == groupColor,
+                "group effects should update grouped devices"
+            )
+            || !require(
+                groupController.zoneEffectColor(0, 0) != groupColor,
+                "group effects should not update devices outside the group"
+            )
+            || !require(
+                groupController.setDeviceGroupBrightness(QStringLiteral("Desk"), 35),
+                "group brightness should start for a non-empty group"
+            )
+            || !require(
+                groupController.zoneEffectBrightness(1, 0) == 35,
+                "group brightness should update grouped devices"
+            )
+            || !require(
+                groupController.allOffDeviceGroup(QStringLiteral("Desk")),
+                "group All Off should start for a non-empty group"
+            )
+            || !require(
+                groupController.zoneEffectBrightness(1, 0) == 0,
+                "group All Off should turn off grouped devices"
+            )
+            || !require(
+                groupController.deleteDeviceGroup(QStringLiteral("Desk")),
+                "controller should delete a device group"
+            )
+            || !require(
+                groupController.deviceGroupNames().isEmpty(),
+                "deleted device groups should be removed from the list"
             )) {
             return 1;
         }

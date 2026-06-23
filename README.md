@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v1.1.3** - Linux-first RGB control with tray operation, global controls, daily profile scheduling, profile apply previews, diagnostics export polish, Linux install staging, release verification hardening, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.4** - Linux-first RGB control with tray operation, grouped global controls, daily profile scheduling, profile apply previews, diagnostics export polish, Linux install staging, release verification hardening, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
@@ -27,7 +27,7 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 ## Current Capabilities
 
 - Qt Quick desktop UI with a collapsible navigation rail, Devices, Profiles, Settings, Activities, backend status, and an About dialog.
-- Global controls for applying one effect or brightness level across compatible zones and sending All Off to every writable device, with partial-result reporting.
+- Global controls for applying one effect or brightness level across all compatible zones or saved device groups, plus All Off for every writable device or a selected group, with partial-result reporting.
 - In-memory RGB model for devices, zones, LEDs, profiles, static colors, rainbow, breathing, and color-cycle effects.
 - GUI-to-daemon boundary through `backends/daemon/`, `ipc/`, and `lumacore-daemon`.
 - Non-blocking interactive daemon requests with correlated responses, cancellation, bounded reconnect backoff, automatic device refresh, stable selection restoration, and manual Retry/Rescan controls.

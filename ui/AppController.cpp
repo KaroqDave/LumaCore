@@ -16,12 +16,16 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSaveFile>
+#include <QSettings>
+#include <QSet>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QTimer>
 #include <QtGlobal>
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -99,6 +103,8 @@ QVariantMap effectToDiagnostics(const RgbEffect& effect)
 
 struct GlobalOperationState {
     QString operation;
+    QString targetName;
+    QString targetKind;
     int total {0};
     int applied {0};
     int skipped {0};
@@ -107,6 +113,37 @@ struct GlobalOperationState {
     bool dispatching {true};
     QStringList details;
 };
+
+QString deviceGroupSettingsKey(const QString& groupName)
+{
+    QString key = groupName.trimmed();
+    key.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_.-]+")), QStringLiteral("_"));
+    return key.isEmpty() ? QString() : key;
+}
+
+QStringList deviceGroupNamesFromSettings()
+{
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("deviceGroups"));
+    QStringList names = settings.value(QStringLiteral("names")).toStringList();
+    settings.endGroup();
+    names.removeAll(QString());
+    names.removeDuplicates();
+    names.sort(Qt::CaseInsensitive);
+    return names;
+}
+
+QStringList uniqueNonEmptyStrings(const QStringList& values)
+{
+    QStringList result;
+    for (const QString& value : values) {
+        const QString normalized = value.trimmed();
+        if (!normalized.isEmpty() && !result.contains(normalized)) {
+            result.append(normalized);
+        }
+    }
+    return result;
+}
 
 struct SetupStatus {
     QString level;
@@ -432,6 +469,7 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
 
     connect(m_deviceManager, &DeviceManager::devicesChanged, this, [this]() {
         refreshBackendInfo();
+        emit deviceGroupsChanged();
     });
 
     connect(m_deviceManager, &DeviceManager::dryRunEnabledChanged, this, [this]() {
@@ -645,6 +683,160 @@ int AppController::pendingDaemonOperations() const
 bool AppController::profileApplyInProgress() const
 {
     return m_profileApplyInProgress;
+}
+
+QStringList AppController::deviceGroupNames() const
+{
+    return deviceGroupNamesFromSettings();
+}
+
+QVariantList AppController::deviceGroupInfos() const
+{
+    QVariantList groups;
+    if (m_deviceManager == nullptr) {
+        return groups;
+    }
+
+    for (const QString& groupName : deviceGroupNames()) {
+        const QStringList deviceIds = storedDeviceGroupIds(groupName);
+        int presentDevices = 0;
+        int writableDevices = 0;
+        int zoneCount = 0;
+        for (const QString& deviceId : deviceIds) {
+            const int deviceIndex = deviceIndexForId(deviceId);
+            const RgbDevice* device = deviceAt(deviceIndex);
+            if (device == nullptr) {
+                continue;
+            }
+            ++presentDevices;
+            zoneCount += device->zones().size();
+            if (deviceWritable(deviceIndex)) {
+                ++writableDevices;
+            }
+        }
+
+        groups.append(QVariantMap {
+            {QStringLiteral("name"), groupName},
+            {QStringLiteral("deviceIds"), deviceIds},
+            {QStringLiteral("deviceCount"), deviceIds.size()},
+            {QStringLiteral("presentDeviceCount"), presentDevices},
+            {QStringLiteral("writableDeviceCount"), writableDevices},
+            {QStringLiteral("zoneCount"), zoneCount},
+            {
+                QStringLiteral("summary"),
+                QStringLiteral("%1 present, %2 writable, %3 zone(s)")
+                    .arg(presentDevices)
+                    .arg(writableDevices)
+                    .arg(zoneCount),
+            },
+        });
+    }
+
+    return groups;
+}
+
+QVariantList AppController::deviceGroupDeviceOptions() const
+{
+    QVariantList devices;
+    if (m_deviceManager == nullptr) {
+        return devices;
+    }
+
+    for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
+        const RgbDevice* device = deviceAt(deviceIndex);
+        if (device == nullptr) {
+            continue;
+        }
+
+        devices.append(QVariantMap {
+            {QStringLiteral("index"), deviceIndex},
+            {QStringLiteral("id"), device->id()},
+            {QStringLiteral("name"), device->name()},
+            {QStringLiteral("vendor"), device->vendor()},
+            {QStringLiteral("zoneCount"), device->zones().size()},
+            {QStringLiteral("writable"), deviceWritable(deviceIndex)},
+            {QStringLiteral("isRgbController"), device->isRgbController()},
+        });
+    }
+
+    return devices;
+}
+
+QStringList AppController::deviceGroupDeviceIds(const QString& groupName) const
+{
+    return storedDeviceGroupIds(groupName);
+}
+
+bool AppController::saveDeviceGroup(const QString& groupName, const QStringList& deviceIds)
+{
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QString key = deviceGroupSettingsKey(normalizedName);
+    const QStringList normalizedIds = uniqueNonEmptyStrings(deviceIds);
+    if (normalizedName.isEmpty() || key.isEmpty()) {
+        setStatusMessage(QStringLiteral("Choose a name for the device group."));
+        return false;
+    }
+    if (normalizedIds.isEmpty()) {
+        setStatusMessage(QStringLiteral("Select at least one device for the group."));
+        return false;
+    }
+
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("deviceGroups"));
+    QStringList names = settings.value(QStringLiteral("names")).toStringList();
+    const auto existingName = std::find_if(names.begin(), names.end(), [&normalizedName](const QString& name) {
+        return name.compare(normalizedName, Qt::CaseInsensitive) == 0;
+    });
+    if (existingName == names.end()) {
+        names.append(normalizedName);
+    } else {
+        *existingName = normalizedName;
+    }
+    names = uniqueNonEmptyStrings(names);
+    names.sort(Qt::CaseInsensitive);
+    settings.setValue(QStringLiteral("names"), names);
+    settings.beginGroup(key);
+    settings.setValue(QStringLiteral("name"), normalizedName);
+    settings.setValue(QStringLiteral("deviceIds"), normalizedIds);
+    settings.endGroup();
+    settings.endGroup();
+
+    setStatusMessage(QStringLiteral("Saved device group '%1'.").arg(normalizedName));
+    emit deviceGroupsChanged();
+    return true;
+}
+
+bool AppController::deleteDeviceGroup(const QString& groupName)
+{
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QString key = deviceGroupSettingsKey(normalizedName);
+    if (normalizedName.isEmpty() || key.isEmpty()) {
+        setStatusMessage(QStringLiteral("Choose a device group to delete."));
+        return false;
+    }
+
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("deviceGroups"));
+    QStringList names = settings.value(QStringLiteral("names")).toStringList();
+    const int before = names.size();
+    names.erase(
+        std::remove_if(names.begin(), names.end(), [&normalizedName](const QString& name) {
+            return name.compare(normalizedName, Qt::CaseInsensitive) == 0;
+        }),
+        names.end()
+    );
+    settings.setValue(QStringLiteral("names"), names);
+    settings.remove(key);
+    settings.endGroup();
+
+    if (names.size() == before) {
+        setStatusMessage(QStringLiteral("Device group '%1' does not exist.").arg(normalizedName));
+        return false;
+    }
+
+    setStatusMessage(QStringLiteral("Deleted device group '%1'.").arg(normalizedName));
+    emit deviceGroupsChanged();
+    return true;
 }
 
 void AppController::setDryRunEnabled(bool enabled)
@@ -1096,7 +1288,25 @@ bool AppController::applyEffectGlobally(
     int brightness
 )
 {
-    return applyGlobalEffectInternal(effectType, color, speed, brightness, false);
+    return applyGlobalEffectInternal(effectType, color, speed, brightness, false, {}, QStringLiteral("All devices"));
+}
+
+bool AppController::applyEffectToDeviceGroup(
+    const QString& groupName,
+    int effectType,
+    const QColor& color,
+    double speed,
+    int brightness
+)
+{
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QStringList targetDeviceIds = storedDeviceGroupIds(normalizedName);
+    if (normalizedName.isEmpty() || targetDeviceIds.isEmpty()) {
+        setStatusMessage(QStringLiteral("Choose a non-empty device group."));
+        return false;
+    }
+
+    return applyGlobalEffectInternal(effectType, color, speed, brightness, false, targetDeviceIds, normalizedName);
 }
 
 bool AppController::setGlobalBrightness(int brightness)
@@ -1106,7 +1316,29 @@ bool AppController::setGlobalBrightness(int brightness)
         QColor(Qt::black),
         1.0,
         brightness,
-        true
+        true,
+        {},
+        QStringLiteral("All devices")
+    );
+}
+
+bool AppController::setDeviceGroupBrightness(const QString& groupName, int brightness)
+{
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QStringList targetDeviceIds = storedDeviceGroupIds(normalizedName);
+    if (normalizedName.isEmpty() || targetDeviceIds.isEmpty()) {
+        setStatusMessage(QStringLiteral("Choose a non-empty device group."));
+        return false;
+    }
+
+    return applyGlobalEffectInternal(
+        static_cast<int>(RgbEffectType::Static),
+        QColor(Qt::black),
+        1.0,
+        brightness,
+        true,
+        targetDeviceIds,
+        normalizedName
     );
 }
 
@@ -1115,7 +1347,9 @@ bool AppController::applyGlobalEffectInternal(
     const QColor& color,
     double speed,
     int brightness,
-    bool preserveCurrentEffect
+    bool preserveCurrentEffect,
+    const QStringList& targetDeviceIds,
+    const QString& targetName
 )
 {
     if (m_deviceManager == nullptr
@@ -1124,10 +1358,18 @@ bool AppController::applyGlobalEffectInternal(
         return false;
     }
 
+    const QStringList normalizedTargetIds = uniqueNonEmptyStrings(targetDeviceIds);
+    QSet<QString> targetIdSet;
+    for (const QString& deviceId : normalizedTargetIds) {
+        targetIdSet.insert(deviceId);
+    }
+    const bool groupScoped = !normalizedTargetIds.isEmpty();
     auto state = std::make_shared<GlobalOperationState>();
     state->operation = preserveCurrentEffect
-        ? QStringLiteral("Global brightness")
-        : QStringLiteral("Global effect");
+        ? (groupScoped ? QStringLiteral("Group brightness") : QStringLiteral("Global brightness"))
+        : (groupScoped ? QStringLiteral("Group effect") : QStringLiteral("Global effect"));
+    state->targetName = targetName.isEmpty() ? QStringLiteral("All devices") : targetName;
+    state->targetKind = groupScoped ? QStringLiteral("group") : QStringLiteral("all");
     const QPointer<AppController> self(this);
     const auto finish = std::make_shared<std::function<void()>>();
     *finish = [self, state]() {
@@ -1142,6 +1384,8 @@ bool AppController::applyGlobalEffectInternal(
             {QStringLiteral("skipped"), state->skipped},
             {QStringLiteral("failed"), state->failed},
             {QStringLiteral("partial"), state->applied > 0 && (state->skipped > 0 || state->failed > 0)},
+            {QStringLiteral("targetName"), state->targetName},
+            {QStringLiteral("targetKind"), state->targetKind},
             {QStringLiteral("details"), state->details},
         };
         self->setStatusMessage(
@@ -1160,6 +1404,9 @@ bool AppController::applyGlobalEffectInternal(
     const int boundedBrightness = qBound(0, brightness, 100);
     for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
         RgbDevice* device = deviceAt(deviceIndex);
+        if (device != nullptr && groupScoped && !targetIdSet.contains(device->id())) {
+            continue;
+        }
         if (device == nullptr || !deviceWritable(deviceIndex)) {
             continue;
         }
@@ -1262,7 +1509,11 @@ bool AppController::applyGlobalEffectInternal(
 
     state->dispatching = false;
     if (state->total == 0) {
-        setStatusMessage(QStringLiteral("No writable zones are available."));
+        setStatusMessage(
+            groupScoped
+                ? QStringLiteral("No writable zones are available in '%1'.").arg(state->targetName)
+                : QStringLiteral("No writable zones are available.")
+        );
         return false;
     }
 
@@ -1273,13 +1524,38 @@ bool AppController::applyGlobalEffectInternal(
 
 bool AppController::allOffAllDevices()
 {
+    return allOffDevicesInternal({}, QStringLiteral("All devices"));
+}
+
+bool AppController::allOffDeviceGroup(const QString& groupName)
+{
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QStringList targetDeviceIds = storedDeviceGroupIds(normalizedName);
+    if (normalizedName.isEmpty() || targetDeviceIds.isEmpty()) {
+        setStatusMessage(QStringLiteral("Choose a non-empty device group."));
+        return false;
+    }
+
+    return allOffDevicesInternal(targetDeviceIds, normalizedName);
+}
+
+bool AppController::allOffDevicesInternal(const QStringList& targetDeviceIds, const QString& targetName)
+{
     if (m_deviceManager == nullptr) {
         setStatusMessage(QStringLiteral("Could not start global All Off."));
         return false;
     }
 
+    const QStringList normalizedTargetIds = uniqueNonEmptyStrings(targetDeviceIds);
+    QSet<QString> targetIdSet;
+    for (const QString& deviceId : normalizedTargetIds) {
+        targetIdSet.insert(deviceId);
+    }
+    const bool groupScoped = !normalizedTargetIds.isEmpty();
     auto state = std::make_shared<GlobalOperationState>();
-    state->operation = QStringLiteral("All Off");
+    state->operation = groupScoped ? QStringLiteral("Group All Off") : QStringLiteral("All Off");
+    state->targetName = targetName.isEmpty() ? QStringLiteral("All devices") : targetName;
+    state->targetKind = groupScoped ? QStringLiteral("group") : QStringLiteral("all");
     const QPointer<AppController> self(this);
     const auto finish = std::make_shared<std::function<void()>>();
     *finish = [self, state]() {
@@ -1294,6 +1570,8 @@ bool AppController::allOffAllDevices()
             {QStringLiteral("skipped"), state->skipped},
             {QStringLiteral("failed"), state->failed},
             {QStringLiteral("partial"), state->applied > 0 && (state->skipped > 0 || state->failed > 0)},
+            {QStringLiteral("targetName"), state->targetName},
+            {QStringLiteral("targetKind"), state->targetKind},
             {QStringLiteral("details"), state->details},
         };
         self->setStatusMessage(
@@ -1310,6 +1588,9 @@ bool AppController::allOffAllDevices()
 
     for (int deviceIndex = 0; deviceIndex < m_deviceManager->deviceCount(); ++deviceIndex) {
         RgbDevice* device = deviceAt(deviceIndex);
+        if (device != nullptr && groupScoped && !targetIdSet.contains(device->id())) {
+            continue;
+        }
         if (device == nullptr || !deviceWritable(deviceIndex)) {
             continue;
         }
@@ -1370,7 +1651,11 @@ bool AppController::allOffAllDevices()
 
     state->dispatching = false;
     if (state->total == 0) {
-        setStatusMessage(QStringLiteral("No writable devices are available."));
+        setStatusMessage(
+            groupScoped
+                ? QStringLiteral("No writable devices are available in '%1'.").arg(state->targetName)
+                : QStringLiteral("No writable devices are available.")
+        );
         return false;
     }
 
@@ -2271,6 +2556,38 @@ void AppController::appendLog(const QString& message)
         m_logLines.removeFirst();
     }
     emit logTextChanged();
+}
+
+QString AppController::normalizeDeviceGroupName(const QString& groupName)
+{
+    return groupName.simplified();
+}
+
+QStringList AppController::storedDeviceGroupIds(const QString& groupName) const
+{
+    const QString normalizedName = normalizeDeviceGroupName(groupName);
+    const QString key = deviceGroupSettingsKey(normalizedName);
+    if (normalizedName.isEmpty() || key.isEmpty()) {
+        return {};
+    }
+
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("deviceGroups"));
+    const QStringList names = settings.value(QStringLiteral("names")).toStringList();
+    const auto existingName = std::find_if(names.cbegin(), names.cend(), [&normalizedName](const QString& name) {
+        return name.compare(normalizedName, Qt::CaseInsensitive) == 0;
+    });
+    if (existingName == names.cend()) {
+        settings.endGroup();
+        return {};
+    }
+
+    const QString storedKey = deviceGroupSettingsKey(*existingName);
+    settings.beginGroup(storedKey);
+    const QStringList deviceIds = uniqueNonEmptyStrings(settings.value(QStringLiteral("deviceIds")).toStringList());
+    settings.endGroup();
+    settings.endGroup();
+    return deviceIds;
 }
 
 void AppController::setStatusMessage(const QString& message)
