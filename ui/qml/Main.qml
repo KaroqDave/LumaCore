@@ -291,6 +291,8 @@ ApplicationWindow {
                         dryRunEnabled: root.controller ? root.controller.dryRunEnabled : false
                         daemonConnected: root.controller ? root.controller.daemonConnected : false
                         daemonState: root.controller ? root.controller.daemonState : qsTr("Disconnected")
+                        setupStatusLevel: root.controller ? root.controller.setupStatusLevel : "warning"
+                        setupStatusSummary: root.controller ? root.controller.setupStatusSummary : qsTr("Backend attention required")
                         backendName: root.controller && root.controller.backendDisplayName.length > 0
                                      ? root.controller.backendDisplayName
                                      : qsTr("Daemon backend")
@@ -321,7 +323,7 @@ ApplicationWindow {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Windows Preview: Mock devices only—hardware discovery and RGB writes are not supported.")
+                        text: qsTr("Windows Preview: Mock devices only - hardware discovery and RGB writes are not supported.")
                         color: Theme.primaryText
                         font.pixelSize: 12
                         font.bold: true
@@ -366,6 +368,12 @@ ApplicationWindow {
                             Layout.minimumWidth: 320
                             Layout.fillHeight: true
                             spacing: 14
+
+                            SetupStatusPanel {
+                                Layout.fillWidth: true
+                                controller: root.controller
+                                animationsEnabled: root.animationsEnabled
+                            }
 
                             SectionCard {
                                 Layout.fillWidth: true

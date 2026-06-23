@@ -17,6 +17,15 @@ Dialog {
     property var controller
     property bool animationsEnabled: true
     readonly property bool recoveryBusy: controller ? controller.daemonRecoveryBusy : false
+    readonly property string setupStatusLevel: controller ? controller.setupStatusLevel : "warning"
+    readonly property color setupStatusColor: setupStatusLevel === "error"
+        ? Theme.error
+        : (setupStatusLevel === "warning"
+           ? Theme.warning
+           : (setupStatusLevel === "ready" ? Theme.success : Theme.accent))
+    readonly property color setupStatusBackground: setupStatusLevel === "error"
+        ? Theme.errorBg
+        : (setupStatusLevel === "warning" ? Theme.warningBg : Theme.inputBg)
 
     standardButtons: Dialog.NoButton
 
@@ -137,6 +146,49 @@ Dialog {
             font.pixelSize: 13
             wrapMode: Text.WordWrap
             lineHeight: 1.35
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: setupStatusColumn.implicitHeight + 20
+            radius: 12
+            color: dialog.setupStatusBackground
+            border.color: dialog.setupStatusColor
+            border.width: 1
+
+            ColumnLayout {
+                id: setupStatusColumn
+
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 4
+
+                Label {
+                    Layout.fillWidth: true
+                    text: dialog.controller ? dialog.controller.setupStatusSummary : qsTr("Backend status unavailable")
+                    color: Theme.primaryText
+                    font.pixelSize: 13
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: dialog.controller ? dialog.controller.setupStatusDetail : ""
+                    color: Theme.primaryText
+                    opacity: 0.9
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: dialog.controller ? dialog.controller.setupStatusAction : ""
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                }
+            }
         }
 
         ColumnLayout {

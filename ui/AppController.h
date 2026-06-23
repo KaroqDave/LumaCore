@@ -23,6 +23,11 @@ class AppController final : public QObject
     Q_PROPERTY(QString backendDescription READ backendDescription NOTIFY backendInfoChanged)
     Q_PROPERTY(QString backendCapabilitiesText READ backendCapabilitiesText NOTIFY backendInfoChanged)
     Q_PROPERTY(int backendDeviceCount READ backendDeviceCount NOTIFY backendInfoChanged)
+    Q_PROPERTY(QString setupStatusLevel READ setupStatusLevel NOTIFY setupStatusChanged)
+    Q_PROPERTY(QString setupStatusSummary READ setupStatusSummary NOTIFY setupStatusChanged)
+    Q_PROPERTY(QString setupStatusDetail READ setupStatusDetail NOTIFY setupStatusChanged)
+    Q_PROPERTY(QString setupStatusAction READ setupStatusAction NOTIFY setupStatusChanged)
+    Q_PROPERTY(bool setupAttentionRequired READ setupAttentionRequired NOTIFY setupStatusChanged)
     Q_PROPERTY(bool daemonConnected READ daemonConnected NOTIFY daemonInfoChanged)
     Q_PROPERTY(QString daemonState READ daemonState NOTIFY daemonInfoChanged)
     Q_PROPERTY(QString daemonSocketPath READ daemonSocketPath NOTIFY daemonInfoChanged)
@@ -48,6 +53,11 @@ public:
     [[nodiscard]] QString backendDescription() const;
     [[nodiscard]] QString backendCapabilitiesText() const;
     [[nodiscard]] int backendDeviceCount() const;
+    [[nodiscard]] QString setupStatusLevel() const;
+    [[nodiscard]] QString setupStatusSummary() const;
+    [[nodiscard]] QString setupStatusDetail() const;
+    [[nodiscard]] QString setupStatusAction() const;
+    [[nodiscard]] bool setupAttentionRequired() const;
     [[nodiscard]] bool daemonConnected() const;
     [[nodiscard]] QString daemonState() const;
     [[nodiscard]] QString daemonSocketPath() const;
@@ -117,6 +127,7 @@ signals:
     void profilesChanged();
     void zoneDataChanged(int deviceIndex, int zoneIndex);
     void backendInfoChanged();
+    void setupStatusChanged();
     void daemonInfoChanged();
     void writeConfirmationChanged(int deviceIndex);
     void dryRunEnabledChanged();

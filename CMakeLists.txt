@@ -161,6 +161,7 @@ qt_add_qml_module(lumacore
         ui/qml/components/ProfileManager.qml
         ui/qml/components/SectionCard.qml
         ui/qml/components/SettingsPage.qml
+        ui/qml/components/SetupStatusPanel.qml
         ui/qml/components/ZoneEditor.qml
         ui/qml/Main.qml
 )

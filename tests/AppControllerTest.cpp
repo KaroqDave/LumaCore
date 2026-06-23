@@ -169,10 +169,57 @@ int main(int argc, char* argv[])
             "controllers without a daemon client should report an offline state"
         )
         || !require(
+            controller.setupStatusLevel() == QStringLiteral("ready"),
+            "loaded writable local backends should report a ready setup state"
+        )
+        || !require(
+            controller.setupStatusSummary() == QStringLiteral("Ready"),
+            "ready setup state should expose a concise summary"
+        )
+        || !require(
+            !controller.setupAttentionRequired(),
+            "ready setup state should not require user attention"
+        )
+        || !require(
             !controller.rescanDaemonDevices(),
             "manual rescan should reject an offline daemon"
         )) {
         return 1;
+    }
+
+    manager.setDryRunEnabled(true);
+    if (!require(
+            controller.setupStatusLevel() == QStringLiteral("warning"),
+            "dry-run should be visible as a setup warning"
+        )
+        || !require(
+            controller.setupStatusSummary() == QStringLiteral("Dry-run active"),
+            "dry-run setup warning should explain why writes will not apply"
+        )
+        || !require(
+            controller.setupAttentionRequired(),
+            "dry-run setup warning should require user attention"
+        )) {
+        return 1;
+    }
+    manager.setDryRunEnabled(false);
+
+    {
+        lumacore::DeviceManager emptyManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("empty-profiles"))
+        );
+        lumacore::AppController emptyController(&emptyManager);
+        if (!require(
+                emptyController.setupStatusLevel() == QStringLiteral("warning"),
+                "empty inventory should report a setup warning"
+            )
+            || !require(
+                emptyController.setupStatusSummary() == QStringLiteral("No devices loaded"),
+                "empty inventory warning should explain that no devices are available"
+            )) {
+            return 1;
+        }
     }
 
     {
@@ -182,6 +229,10 @@ int main(int argc, char* argv[])
         );
         lumacore::AppController offlineController(&manager, offlineClient);
         if (!require(
+                offlineController.setupStatusSummary() == QStringLiteral("Daemon offline"),
+                "offline daemon-backed controllers should expose daemon setup guidance"
+            )
+            || !require(
                 offlineController.retryDaemonConnection(),
                 "manual retry should queue an immediate daemon connection attempt"
             )
@@ -192,6 +243,10 @@ int main(int argc, char* argv[])
             || !require(
                 offlineController.daemonState() == QStringLiteral("Reconnecting"),
                 "manual retry should expose the reconnecting state"
+            )
+            || !require(
+                offlineController.setupStatusSummary() == QStringLiteral("Reconnecting to daemon"),
+                "manual retry should update setup guidance to reconnecting"
             )) {
             return 1;
         }
@@ -300,6 +355,7 @@ int main(int argc, char* argv[])
     const QVariantList diagnosticZones = diagnosticDevices.isEmpty()
         ? QVariantList {}
         : diagnosticDevices.first().toMap().value(QStringLiteral("zones")).toList();
+    const QVariantMap diagnosticSetup = diagnostics.value(QStringLiteral("setup")).toMap();
     if (!require(
             diagnostics.value(QStringLiteral("schemaVersion")).toInt() == 1,
             "diagnostics should expose a stable schema version"
@@ -313,6 +369,14 @@ int main(int argc, char* argv[])
         || !require(
             diagnosticZones.size() == controller.zoneCount(0),
             "diagnostics should include zone summaries"
+        )
+        || !require(
+            diagnosticSetup.value(QStringLiteral("summary")).toString() == QStringLiteral("Ready"),
+            "diagnostics should include the derived setup summary"
+        )
+        || !require(
+            !diagnosticSetup.value(QStringLiteral("attentionRequired")).toBool(),
+            "diagnostics should include setup attention state"
         )
         || !require(
             diagnosticDevices.first().toMap().value(QStringLiteral("supportedEffects")).toList().size() == 4,

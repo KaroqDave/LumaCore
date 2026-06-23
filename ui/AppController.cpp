@@ -106,6 +106,13 @@ struct GlobalOperationState {
     QStringList details;
 };
 
+struct SetupStatus {
+    QString level;
+    QString summary;
+    QString detail;
+    QString action;
+};
+
 int storedEffectType(const QJsonObject& zoneObject)
 {
     const QJsonObject effectObject = zoneObject.value(QStringLiteral("effect")).toObject();
@@ -232,6 +239,112 @@ QVariantMap profileApplyReport(const ProfileApplyState& state)
     };
 }
 
+SetupStatus setupStatusFor(const AppController& controller)
+{
+    const bool daemonBacked = !controller.daemonSocketPath().isEmpty();
+    if (daemonBacked) {
+        const QString daemonState = controller.daemonState();
+        if (daemonState == QStringLiteral("Refreshing devices")) {
+            return {
+                QStringLiteral("info"),
+                QStringLiteral("Refreshing devices"),
+                QStringLiteral("LumaCore is reloading the device inventory from the daemon."),
+                QStringLiteral("Wait for the refresh to finish before changing effects."),
+            };
+        }
+        if (daemonState == QStringLiteral("Connecting") || daemonState == QStringLiteral("Reconnecting")) {
+            return {
+                QStringLiteral("warning"),
+                daemonState == QStringLiteral("Connecting")
+                    ? QStringLiteral("Connecting to daemon")
+                    : QStringLiteral("Reconnecting to daemon"),
+                QStringLiteral("The GUI cannot refresh devices or send RGB commands until the daemon connection is ready."),
+                QStringLiteral("Start lumacore-daemon if it is not running, then use Retry if needed."),
+            };
+        }
+        if (daemonState == QStringLiteral("Incompatible daemon")) {
+            return {
+                QStringLiteral("error"),
+                QStringLiteral("Daemon version mismatch"),
+                QStringLiteral("The GUI reached a daemon, but its protocol version is not compatible with this build."),
+                QStringLiteral("Restart the matching lumacore-daemon build."),
+            };
+        }
+        if (!controller.daemonConnected()) {
+            const QString lastError = controller.daemonLastError();
+            return {
+                QStringLiteral("warning"),
+                QStringLiteral("Daemon offline"),
+                lastError.isEmpty()
+                    ? QStringLiteral("The GUI is running, but no compatible LumaCore daemon is connected.")
+                    : QStringLiteral("The GUI is running, but the daemon connection failed: %1").arg(lastError),
+                QStringLiteral("Start lumacore-daemon, then use Retry."),
+            };
+        }
+    }
+
+    const int deviceCount = controller.backendDeviceCount();
+    if (deviceCount == 0) {
+        return {
+            QStringLiteral("warning"),
+            QStringLiteral("No devices loaded"),
+            QStringLiteral("The active backend is available, but it has not reported any devices."),
+            daemonBacked
+                ? QStringLiteral("Use Rescan or check daemon permissions and backend selection.")
+                : QStringLiteral("Check backend selection and local permissions."),
+        };
+    }
+
+    int writableDevices = 0;
+    int confirmationRequiredDevices = 0;
+    for (int deviceIndex = 0; deviceIndex < deviceCount; ++deviceIndex) {
+        if (!controller.deviceWritable(deviceIndex)) {
+            continue;
+        }
+        ++writableDevices;
+        if (controller.deviceRequiresConfirmation(deviceIndex)
+            && !controller.deviceWriteConfirmed(deviceIndex)) {
+            ++confirmationRequiredDevices;
+        }
+    }
+
+    if (writableDevices == 0) {
+        return {
+            QStringLiteral("info"),
+            QStringLiteral("Read-only inventory"),
+            QStringLiteral("Devices are visible, but the active backend does not expose RGB write capability."),
+            QStringLiteral("Use a write-capable backend or keep this backend for diagnostics only."),
+        };
+    }
+
+    if (controller.dryRunEnabled()) {
+        return {
+            QStringLiteral("warning"),
+            QStringLiteral("Dry-run active"),
+            QStringLiteral("RGB writes are being logged instead of applied to hardware."),
+            QStringLiteral("Disable dry-run when you are ready to apply real lighting changes."),
+        };
+    }
+
+    if (confirmationRequiredDevices > 0) {
+        return {
+            QStringLiteral("warning"),
+            QStringLiteral("Hardware confirmation required"),
+            QStringLiteral("%1 write-capable device(s) require confirmation before real hardware writes.")
+                .arg(confirmationRequiredDevices),
+            QStringLiteral("Select each device and confirm writes for this daemon session."),
+        };
+    }
+
+    return {
+        QStringLiteral("ready"),
+        QStringLiteral("Ready"),
+        QStringLiteral("%1 device(s) loaded. The active backend can apply supported RGB changes.")
+            .arg(deviceCount),
+        QStringLiteral("Save a profile once the current lighting state is correct."),
+    };
+}
+
 } // namespace
 
 AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<DaemonClient> daemonClient, QObject* parent)
@@ -265,11 +378,13 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
 
     connect(m_deviceManager, &DeviceManager::dryRunEnabledChanged, this, [this]() {
         emit dryRunEnabledChanged();
+        emit setupStatusChanged();
     });
 
     if (m_daemonClient != nullptr) {
         connect(m_daemonClient.get(), &DaemonClient::connectionStateChanged, this, [this]() {
             emit daemonInfoChanged();
+            emit setupStatusChanged();
             if (daemonConnected()) {
                 syncDaemonDryRun();
             }
@@ -277,12 +392,14 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
         });
         connect(m_daemonClient.get(), &DaemonClient::lastErrorChanged, this, [this]() {
             emit daemonInfoChanged();
+            emit setupStatusChanged();
             if (!daemonLastError().isEmpty()) {
                 setStatusMessage(daemonLastError());
             }
         });
         connect(m_daemonClient.get(), &DaemonClient::daemonInfoChanged, this, [this]() {
             emit daemonInfoChanged();
+            emit setupStatusChanged();
         });
         connect(m_daemonClient.get(), &DaemonClient::reconnected, this, [this]() {
             if (m_daemonRecoveryEnabled) {
@@ -291,6 +408,7 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
         });
         connect(m_daemonClient.get(), &DaemonClient::reconnectScheduled, this, [this](int attempt, int delayMs) {
             emit daemonInfoChanged();
+            emit setupStatusChanged();
             setStatusMessage(
                 delayMs > 0
                     ? QStringLiteral("Daemon offline. Reconnect attempt %1 in %2 ms.").arg(attempt).arg(delayMs)
@@ -375,6 +493,32 @@ QString AppController::backendCapabilitiesText() const
 int AppController::backendDeviceCount() const
 {
     return m_deviceManager == nullptr ? 0 : m_deviceManager->deviceCount();
+}
+
+QString AppController::setupStatusLevel() const
+{
+    return setupStatusFor(*this).level;
+}
+
+QString AppController::setupStatusSummary() const
+{
+    return setupStatusFor(*this).summary;
+}
+
+QString AppController::setupStatusDetail() const
+{
+    return setupStatusFor(*this).detail;
+}
+
+QString AppController::setupStatusAction() const
+{
+    return setupStatusFor(*this).action;
+}
+
+bool AppController::setupAttentionRequired() const
+{
+    const QString level = setupStatusLevel();
+    return level == QStringLiteral("warning") || level == QStringLiteral("error");
 }
 
 bool AppController::daemonConnected() const
@@ -1799,6 +1943,16 @@ QVariantMap AppController::diagnosticsReport() const
             },
         },
         {
+            QStringLiteral("setup"),
+            QVariantMap {
+                {QStringLiteral("level"), setupStatusLevel()},
+                {QStringLiteral("summary"), setupStatusSummary()},
+                {QStringLiteral("detail"), sanitize(setupStatusDetail())},
+                {QStringLiteral("action"), sanitize(setupStatusAction())},
+                {QStringLiteral("attentionRequired"), setupAttentionRequired()},
+            },
+        },
+        {
             QStringLiteral("daemon"),
             QVariantMap {
                 {QStringLiteral("state"), daemonState()},
@@ -1892,6 +2046,7 @@ bool AppController::retryDaemonConnection()
     m_daemonClient->setAutomaticReconnectEnabled(true);
     m_daemonClient->reconnectNow();
     emit daemonInfoChanged();
+    emit setupStatusChanged();
     return true;
 }
 
@@ -1979,6 +2134,7 @@ void AppController::setLocalDaemonWriteConfirmed(int deviceIndex, bool confirmed
 
     daemonDevice->setWriteConfirmed(confirmed);
     emit writeConfirmationChanged(deviceIndex);
+    emit setupStatusChanged();
     emit zoneDataChanged(deviceIndex, -1);
 }
 
@@ -2005,6 +2161,7 @@ void AppController::refreshBackendInfo()
 {
     emit backendInfoChanged();
     emit daemonInfoChanged();
+    emit setupStatusChanged();
 }
 
 void AppController::refreshDaemonActivityLog()
@@ -2063,6 +2220,7 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
 
     m_daemonRefreshInProgress = true;
     emit daemonInfoChanged();
+    emit setupStatusChanged();
     setStatusMessage(
         recoveredConnection
             ? QStringLiteral("Reconnected to daemon. Refreshing devices.")
@@ -2078,6 +2236,7 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
             }
             self->m_daemonRefreshInProgress = false;
             emit self->daemonInfoChanged();
+            emit self->setupStatusChanged();
             if (!response.ok) {
                 self->setStatusMessage(
                     response.error.isEmpty()
