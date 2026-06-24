@@ -202,8 +202,23 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (!require(
+            QFile::exists(QDir(profilesDirectory).filePath(QStringLiteral(".legacy-profiles-migrated"))),
+            "legacy migration should write a one-shot marker"
+        )
+        || !require(reopenedStore.remove(QStringLiteral("legacy")), "migrated legacy profile should delete")) {
+        return 1;
+    }
+
+    const lumacore::ProfileStore deletedLegacyStore(profilesDirectory);
+    if (!require(
+            deletedLegacyStore.names().isEmpty(),
+            "deleted migrated legacy profiles should not be restored from the old directory"
+        )) {
+        return 1;
+    }
+
     QFile::remove(QStringLiteral("profiles/legacy.json"));
-    QFile::remove(QDir(profilesDirectory).filePath(QStringLiteral("legacy.json")));
 
     const lumacore::RgbColor savedColor(17, 34, 51);
     const lumacore::RgbColor changedColor(170, 187, 204);

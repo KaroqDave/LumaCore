@@ -261,15 +261,32 @@ void ProfileStore::migrateLegacyProfilesIfNeeded()
         return;
     }
 
+    const QString migrationMarkerPath =
+        destinationDirectory.filePath(QStringLiteral(".legacy-profiles-migrated"));
+    if (QFile::exists(migrationMarkerPath)) {
+        return;
+    }
+
     if (!QDir().mkpath(m_directoryPath)) {
         return;
     }
 
+    bool migrationComplete = true;
     for (const QFileInfo& legacyProfile : legacyProfiles) {
         const QString destinationPath = destinationDirectory.filePath(legacyProfile.fileName());
-        if (!QFile::exists(destinationPath)) {
-            QFile::copy(legacyProfile.absoluteFilePath(), destinationPath);
+        if (!QFile::exists(destinationPath)
+            && !QFile::copy(legacyProfile.absoluteFilePath(), destinationPath)) {
+            migrationComplete = false;
         }
+    }
+
+    if (!migrationComplete) {
+        return;
+    }
+
+    QFile markerFile(migrationMarkerPath);
+    if (markerFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        markerFile.write("Legacy profiles migrated.\n");
     }
 }
 
