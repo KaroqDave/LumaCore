@@ -11,6 +11,17 @@ Rectangle {
     property string backendName: qsTr("Backend")
     property bool daemonConnected: controller ? controller.daemonConnected : false
     property string daemonState: controller ? controller.daemonState : qsTr("Disconnected")
+    property string setupStatusLevel: controller ? controller.setupStatusLevel : "warning"
+    property string setupStatusSummary: controller ? controller.setupStatusSummary : qsTr("Backend attention required")
+    readonly property bool recoveryBusy: controller ? controller.daemonRecoveryBusy : false
+    readonly property color stateColor: setupStatusLevel === "error"
+        ? Theme.error
+        : (setupStatusLevel === "warning"
+           ? Theme.warning
+           : (setupStatusLevel === "ready" ? Theme.success : Theme.accent))
+    readonly property color daemonColor: recoveryBusy
+        ? Theme.accent
+        : (daemonConnected ? Theme.success : Theme.warning)
 
     signal clicked()
 
@@ -38,7 +49,7 @@ Rectangle {
             width: 8
             height: 8
             radius: 4
-            color: chip.daemonConnected ? Theme.success : Theme.warning
+            color: chip.stateColor
         }
 
         Label {
@@ -76,9 +87,9 @@ Rectangle {
             width: daemonStateLabel.implicitWidth + 10
             height: 18
             radius: 999
-            color: chip.daemonConnected ? Theme.success : Theme.warning
+            color: chip.daemonColor
             opacity: 0.18
-            border.color: chip.daemonConnected ? Theme.success : Theme.warning
+            border.color: chip.daemonColor
             border.width: 1
 
             Label {
@@ -86,7 +97,7 @@ Rectangle {
 
                 anchors.centerIn: parent
                 text: chip.daemonState
-                color: chip.daemonConnected ? Theme.success : Theme.warning
+                color: chip.daemonColor
                 font.pixelSize: 9
                 font.bold: true
             }
@@ -104,6 +115,6 @@ Rectangle {
 
     ToolTip.visible: chipMouse.containsMouse
     ToolTip.text: chip.dryRunEnabled
-        ? qsTr("Dry-run active. %1 — click for backend details").arg(chip.daemonState)
-        : qsTr("%1 — click for backend details").arg(chip.daemonState)
+        ? qsTr("%1. Dry-run active. Click for backend details.").arg(chip.setupStatusSummary)
+        : qsTr("%1. Click for backend details.").arg(chip.setupStatusSummary)
 }

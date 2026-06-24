@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=LumaCore
+GenericName=RGB Controller
+Comment=Safe daemon-backed RGB lighting control
+Exec=lumacore
+Icon=lumacore
+Terminal=false
+Categories=Settings;HardwareSettings;Utility;
+StartupNotify=true

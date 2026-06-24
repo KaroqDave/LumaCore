@@ -37,6 +37,11 @@ QmlHost::QmlHost()
 
 QmlHost::~QmlHost() = default;
 
+QWindow* QmlHost::mainWindow() const
+{
+    return qobject_cast<QWindow*>(m_rootObject.get());
+}
+
 bool QmlHost::load(const QmlBindings& bindings, const QIcon& applicationIcon, bool startMinimized)
 {
     m_mainComponent = std::make_unique<QQmlComponent>(

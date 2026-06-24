@@ -1,6 +1,8 @@
 qt_add_library(lumacore_ipc STATIC
     DaemonClient.cpp
     DaemonClient.h
+    DaemonFrameCodec.cpp
+    DaemonFrameCodec.h
     DaemonProtocol.cpp
     DaemonProtocol.h
     DaemonServer.cpp

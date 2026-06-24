@@ -1,10 +1,13 @@
 #include "app/GuiApplication.h"
 
 #include "app/DaemonLauncher.h"
+#include "app/ProfileScheduleRunner.h"
+#include "app/TrayController.h"
 #include "app/Version.h"
 #include "backends/daemon/DaemonBackend.h"
+#include "core/PortablePaths.h"
 
-#include <QGuiApplication>
+#include <QApplication>
 #include <QSize>
 #include <QtGlobal>
 
@@ -39,7 +42,7 @@ GuiApplication::BackendContext::BackendContext(const QString& socketPath)
     deviceManager.registerBackend(std::make_unique<DaemonBackend>(daemonClient));
 }
 
-GuiApplication::GuiApplication(QGuiApplication& qtApplication, const GuiOptions& options)
+GuiApplication::GuiApplication(QApplication& qtApplication, const GuiOptions& options)
     : m_applicationIcon(qtApplication.windowIcon())
     , m_backendContext(options.daemonSocketPath)
     , m_deviceTreeModel(&m_backendContext.deviceManager)
@@ -58,6 +61,7 @@ GuiApplication::GuiApplication(QGuiApplication& qtApplication, const GuiOptions&
 
 GuiApplication::~GuiApplication()
 {
+    m_backendContext.daemonClient->setAutomaticReconnectEnabled(false);
     m_backendContext.daemonClient->disconnectFromDaemon();
     if (m_daemonLauncher != nullptr) {
         const bool exited = m_daemonLauncher->waitForStartedDaemonExit(1000);
@@ -79,12 +83,13 @@ bool GuiApplication::validateEnvironment()
     return true;
 }
 
-void GuiApplication::configureQtApplication(QGuiApplication& application)
+void GuiApplication::configureQtApplication(QApplication& application)
 {
     application.setApplicationName(QStringLiteral("LumaCore"));
     application.setApplicationDisplayName(QStringLiteral("LumaCore"));
     application.setApplicationVersion(applicationVersion());
     application.setOrganizationName(QStringLiteral("LumaCore"));
+    configurePortableStorage();
     application.setWindowIcon(createApplicationIcon());
 }
 
@@ -95,6 +100,12 @@ int GuiApplication::run()
     if (!daemonAvailable && !m_daemonLauncher->lastError().isEmpty()) {
         m_backendContext.daemonClient->reportConnectionError(m_daemonLauncher->lastError());
     }
+    if (m_settingsController.applyOnLaunch()) {
+        const bool profileApplied =
+            m_appController.applyProfileOnLaunch(m_settingsController.activeProfile());
+        Q_UNUSED(profileApplied)
+    }
+    m_appController.enableDaemonRecovery();
 
     const QmlBindings bindings {
         .deviceTreeModel = &m_deviceTreeModel,
@@ -105,7 +116,17 @@ int GuiApplication::run()
         return 1;
     }
 
-    return QGuiApplication::exec();
+    m_trayController = std::make_unique<TrayController>(
+        m_qmlHost.mainWindow(),
+        &m_settingsController,
+        m_applicationIcon
+    );
+    m_profileScheduleRunner = std::make_unique<ProfileScheduleRunner>(
+        &m_settingsController,
+        &m_appController
+    );
+
+    return QApplication::exec();
 }
 
 } // namespace lumacore

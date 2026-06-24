@@ -45,6 +45,17 @@ bool MockRgbDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)
     return true;
 }
 
+bool MockRgbDevice::applyAllOff()
+{
+    const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        setZoneEffect(zoneIndex, offEffect);
+        mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
+        emit zoneChanged(zoneIndex);
+    }
+    return true;
+}
+
 BackendCapabilities MockRgbDevice::capabilities() const
 {
     return kMockCapabilities;

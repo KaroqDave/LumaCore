@@ -70,6 +70,36 @@ QString RgbDevice::discoveryIdentity() const
     return {};
 }
 
+QString RgbDevice::discoverySupportStage() const
+{
+    return {};
+}
+
+QString RgbDevice::discoverySupportStatus() const
+{
+    return {};
+}
+
+QString RgbDevice::discoverySupportFamily() const
+{
+    return {};
+}
+
+QString RgbDevice::discoverySupportNotes() const
+{
+    return {};
+}
+
+bool RgbDevice::discoveryCataloged() const
+{
+    return false;
+}
+
+bool RgbDevice::discoveryWriteCapableBackend() const
+{
+    return false;
+}
+
 RgbDeviceType RgbDevice::type() const
 {
     return m_type;
@@ -233,6 +263,13 @@ BackendCapabilities RgbDevice::capabilities() const
     return BackendCapability::None;
 }
 
+bool RgbDevice::isWritable() const
+{
+    const BackendCapabilities caps = capabilities();
+    return caps.testFlag(BackendCapability::ZoneColorWrite)
+        || caps.testFlag(BackendCapability::ZoneEffectWrite);
+}
+
 PermissionResult RgbDevice::checkRuntimePermission(BackendCapability capability) const
 {
     Q_UNUSED(capability)
@@ -244,12 +281,11 @@ PermissionResult RgbDevice::checkRuntimePermission(BackendCapability capability)
 
 bool RgbDevice::supportsEffect(int effectType) const
 {
-    if (effectType < static_cast<int>(RgbEffectType::Static)
-        || effectType > static_cast<int>(RgbEffectType::ColorCycle)) {
+    if (!isValidRgbEffectType(effectType)) {
         return false;
     }
 
-    const bool animated = effectType != static_cast<int>(RgbEffectType::Static);
+    const bool animated = isAnimatedRgbEffectType(effectType);
     return capabilities().testFlag(
         animated ? BackendCapability::ZoneEffectWrite : BackendCapability::ZoneColorWrite
     );
@@ -257,12 +293,27 @@ bool RgbDevice::supportsEffect(int effectType) const
 
 bool RgbDevice::supportsEffectSpeed(int effectType) const
 {
-    return effectType != static_cast<int>(RgbEffectType::Static) && supportsEffect(effectType);
+    return isAnimatedRgbEffectType(effectType) && supportsEffect(effectType);
 }
 
 bool RgbDevice::supportsEffectBrightness(int effectType) const
 {
     return supportsEffect(effectType);
+}
+
+bool RgbDevice::supportsZoneEffect(int zoneIndex, int effectType) const
+{
+    return zoneIndex >= 0 && zoneIndex < m_zones.size() && supportsEffect(effectType);
+}
+
+bool RgbDevice::supportsZoneEffectSpeed(int zoneIndex, int effectType) const
+{
+    return zoneIndex >= 0 && zoneIndex < m_zones.size() && supportsEffectSpeed(effectType);
+}
+
+bool RgbDevice::supportsZoneEffectBrightness(int zoneIndex, int effectType) const
+{
+    return zoneIndex >= 0 && zoneIndex < m_zones.size() && supportsEffectBrightness(effectType);
 }
 
 } // namespace lumacore

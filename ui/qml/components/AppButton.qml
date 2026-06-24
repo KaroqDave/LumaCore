@@ -9,13 +9,15 @@ Button {
     property string variant: "secondary"
     property string iconName: ""
     property bool animationsEnabled: true
+    property bool compact: false
+    property int controlHeight: compact ? 34 : 40
     readonly property bool primary: variant === "primary"
     readonly property int animationDuration: animationsEnabled ? 140 : 0
 
-    implicitHeight: 40
-    leftPadding: 16
-    rightPadding: 16
-    font.pixelSize: 13
+    implicitHeight: controlHeight
+    leftPadding: compact ? 12 : 16
+    rightPadding: compact ? 12 : 16
+    font.pixelSize: compact ? 12 : 13
     font.bold: true
     hoverEnabled: true
 
@@ -53,7 +55,7 @@ Button {
     background: Rectangle {
         id: bg
 
-        radius: 13
+        radius: 8
         border.width: control.primary ? 0 : 1
         border.color: control.hovered ? Theme.accent : Theme.border
         opacity: control.enabled ? 1.0 : 0.45

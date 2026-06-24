@@ -35,6 +35,12 @@ public:
     [[nodiscard]] const QString& backendId() const;
     void setBackendId(const QString& backendId);
     [[nodiscard]] virtual QString discoveryIdentity() const;
+    [[nodiscard]] virtual QString discoverySupportStage() const;
+    [[nodiscard]] virtual QString discoverySupportStatus() const;
+    [[nodiscard]] virtual QString discoverySupportFamily() const;
+    [[nodiscard]] virtual QString discoverySupportNotes() const;
+    [[nodiscard]] virtual bool discoveryCataloged() const;
+    [[nodiscard]] virtual bool discoveryWriteCapableBackend() const;
     [[nodiscard]] RgbDeviceType type() const;
     [[nodiscard]] QString typeName() const;
     [[nodiscard]] const QVector<RgbZone>& zones() const;
@@ -57,10 +63,14 @@ public:
     [[nodiscard]] virtual QString previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const;
     [[nodiscard]] virtual QString lastHardwareWriteStatus() const;
     [[nodiscard]] virtual BackendCapabilities capabilities() const;
+    [[nodiscard]] bool isWritable() const;
     [[nodiscard]] virtual PermissionResult checkRuntimePermission(BackendCapability capability) const;
     [[nodiscard]] virtual bool supportsEffect(int effectType) const;
     [[nodiscard]] virtual bool supportsEffectSpeed(int effectType) const;
     [[nodiscard]] virtual bool supportsEffectBrightness(int effectType) const;
+    [[nodiscard]] virtual bool supportsZoneEffect(int zoneIndex, int effectType) const;
+    [[nodiscard]] virtual bool supportsZoneEffectSpeed(int zoneIndex, int effectType) const;
+    [[nodiscard]] virtual bool supportsZoneEffectBrightness(int zoneIndex, int effectType) const;
 
     void setZoneEffect(int zoneIndex, const RgbEffect& effect);
     [[nodiscard]] RgbEffect zoneEffect(int zoneIndex) const;

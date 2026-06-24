@@ -16,14 +16,14 @@ Item {
 
     signal clicked()
 
-    implicitHeight: 46
+    implicitHeight: 42
     Layout.fillWidth: true
 
     Rectangle {
         id: background
 
         anchors.fill: parent
-        radius: 13
+        radius: 8
         color: navItem.selected
                ? Theme.selectionBg
                : (hoverArea.containsMouse ? Theme.hover : "transparent")
@@ -40,7 +40,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: navItem.collapsed ? 0 : 14
             anchors.rightMargin: navItem.collapsed ? 0 : 12
-            spacing: 12
+            spacing: 10
 
             Item {
                 Layout.preferredWidth: navItem.collapsed ? parent.width : 24
@@ -63,7 +63,7 @@ Item {
                 opacity: navItem.collapsed ? 0 : 1
                 text: navItem.label
                 color: navItem.selected ? Theme.selectionText : Theme.primaryText
-                font.pixelSize: 14
+                font.pixelSize: 13
                 font.bold: navItem.selected
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter

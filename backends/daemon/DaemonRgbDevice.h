@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QJsonObject>
 
+#include <functional>
 #include <memory>
 
 namespace lumacore {
@@ -15,6 +16,8 @@ class DaemonRgbDevice final : public RgbDevice
     Q_OBJECT
 
 public:
+    using OperationHandler = std::function<void(bool success, QString error)>;
+
     struct EffectSupport {
         bool supported {false};
         bool speed {false};
@@ -24,6 +27,13 @@ public:
     DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonClient> client, QObject* parent = nullptr);
 
     [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const RgbColor& color) override;
+    [[nodiscard]] QString discoveryIdentity() const override;
+    [[nodiscard]] QString discoverySupportStage() const override;
+    [[nodiscard]] QString discoverySupportStatus() const override;
+    [[nodiscard]] QString discoverySupportFamily() const override;
+    [[nodiscard]] QString discoverySupportNotes() const override;
+    [[nodiscard]] bool discoveryCataloged() const override;
+    [[nodiscard]] bool discoveryWriteCapableBackend() const override;
     [[nodiscard]] bool applyZoneEffect(int zoneIndex, const RgbEffect& effect) override;
     [[nodiscard]] bool applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors) override;
     [[nodiscard]] bool applyAllOff() override;
@@ -38,14 +48,41 @@ public:
     [[nodiscard]] bool supportsEffect(int effectType) const override;
     [[nodiscard]] bool supportsEffectSpeed(int effectType) const override;
     [[nodiscard]] bool supportsEffectBrightness(int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffect(int zoneIndex, int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffectSpeed(int zoneIndex, int effectType) const override;
+    [[nodiscard]] bool supportsZoneEffectBrightness(int zoneIndex, int effectType) const override;
     void setWriteConfirmed(bool confirmed);
+    [[nodiscard]] quint64 applyZoneEffectAsync(
+        int zoneIndex,
+        const RgbEffect& effect,
+        bool updateLocalState,
+        OperationHandler handler
+    );
+    [[nodiscard]] quint64 applyAllOffAsync(bool updateLocalState, OperationHandler handler);
+    [[nodiscard]] quint64 updateZoneMetadataAsync(
+        int zoneIndex,
+        const QString& name,
+        int ledCount,
+        OperationHandler handler
+    );
 
 private:
+    void applyLocalZoneEffect(int zoneIndex, const RgbEffect& effect);
+    void applyLocalAllOff();
+
     int m_daemonDeviceIndex {-1};
+    QString m_discoveryIdentity;
+    QString m_discoverySupportStage;
+    QString m_discoverySupportStatus;
+    QString m_discoverySupportFamily;
+    QString m_discoverySupportNotes;
+    bool m_discoveryCataloged {false};
+    bool m_discoveryWriteCapableBackend {false};
     BackendCapabilities m_capabilities {BackendCapability::None};
     PermissionResult m_permission {PermissionStatus::Denied, QStringLiteral("Daemon permission snapshot unavailable.")};
     QHash<QString, PermissionResult> m_permissions;
     QHash<int, EffectSupport> m_effectSupport;
+    QVector<QHash<int, EffectSupport>> m_zoneEffectSupport;
     bool m_writeConfirmed {false};
     QString m_lastHardwareWriteStatus;
     std::shared_ptr<DaemonClient> m_client;

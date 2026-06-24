@@ -61,6 +61,9 @@ int main(int argc, char* argv[])
     if (!require(parsedConfig.valid, "EC30 config response should parse")) {
         return 1;
     }
+    if (!require(isAsusAuraConfigTableWriteReady(parsedConfig), "parsed config should be write-ready")) {
+        return 1;
+    }
     if (!require(parsedConfig.addressableHeaderCount == 2, "config parser should extract addressable header count")) {
         return 1;
     }
@@ -101,10 +104,37 @@ int main(int argc, char* argv[])
     inconsistentConfigResponse[0x04 + 0x1B] = static_cast<char>(1);
     inconsistentConfigResponse[0x04 + 0x1D] = static_cast<char>(3);
     const AsusAuraConfigTable inconsistentConfig = parseAsusAuraConfigTableResponse(inconsistentConfigResponse);
-    if (!require(inconsistentConfig.valid, "config responses with inconsistent RGB header counts should still parse")) {
+    if (!require(!inconsistentConfig.valid, "config responses with inconsistent RGB header counts should be rejected")) {
         return 1;
     }
-    if (!require(inconsistentConfig.rgbHeaderCount == 0, "RGB header counts beyond mainboard LEDs should be suppressed")) {
+    if (!require(
+            inconsistentConfig.error.contains(QStringLiteral("invalid fixed-channel geometry")),
+            "inconsistent RGB header counts should report invalid geometry"
+        )) {
+        return 1;
+    }
+    QByteArray emptyConfigResponse(kAsusAuraResearchReportLength, '\0');
+    emptyConfigResponse[0] = static_cast<char>(0xEC);
+    emptyConfigResponse[1] = static_cast<char>(0x30);
+    if (!require(!parseAsusAuraConfigTableResponse(emptyConfigResponse).valid, "empty EC30 config tables should be rejected")) {
+        return 1;
+    }
+    QByteArray oversizedAddressableConfigResponse(kAsusAuraResearchReportLength, '\0');
+    oversizedAddressableConfigResponse[0] = static_cast<char>(0xEC);
+    oversizedAddressableConfigResponse[1] = static_cast<char>(0x30);
+    oversizedAddressableConfigResponse[0x04 + 0x02] = static_cast<char>(17);
+    if (!require(
+            !parseAsusAuraConfigTableResponse(oversizedAddressableConfigResponse).valid,
+            "addressable channel counts beyond the EC40 field should be rejected"
+        )) {
+        return 1;
+    }
+    AsusAuraConfigTable emptyMarkedValidConfig;
+    emptyMarkedValidConfig.valid = true;
+    if (!require(
+            !isAsusAuraConfigTableWriteReady(emptyMarkedValidConfig),
+            "valid flags without usable channels must not advertise write readiness"
+        )) {
         return 1;
     }
 
@@ -243,6 +273,20 @@ int main(int argc, char* argv[])
     if (!require(static_cast<unsigned char>(finalDirectReport.at(2)) == 0x80, "final direct report should set apply bit")) {
         return 1;
     }
+    AsusAuraConfigTable invalidDirectChannelConfig = parsedConfig;
+    invalidDirectChannelConfig.channels[1].directChannel = 16;
+    if (!require(
+            !buildAsusAuraStaticColorWrite(
+                invalidDirectChannelConfig,
+                1,
+                lumacore::RgbColor(20, 40, 80),
+                30,
+                25
+            ).ok,
+            "out-of-range direct channels should be rejected instead of aliased"
+        )) {
+        return 1;
+    }
 
     const AsusAuraHidProtocolResult breathingWrite = buildAsusAuraNativeEffectWrite(
         parsedConfig,
@@ -250,37 +294,20 @@ int main(int argc, char* argv[])
         lumacore::RgbEffect(lumacore::RgbEffectType::Breathing, lumacore::RgbColor(20, 40, 80), 1.5, 25),
         1
     );
-    if (!require(breathingWrite.ok, "breathing native effect should build")) {
+    if (!require(!breathingWrite.ok, "fixed-header native effects should be rejected because their effect channel is shared")) {
         return 1;
     }
-    if (!require(breathingWrite.packet.hardwareWriteApproved, "breathing native effect should be hardware-approved")) {
-        return 1;
-    }
-    if (!require(breathingWrite.packet.kind == AsusAuraHidPacketKind::NativeEffectWrite, "breathing should be marked as a native effect write")) {
-        return 1;
-    }
-    if (!require(breathingWrite.packet.reports.size() == 3, "breathing should contain gen1, mode, and color reports")) {
-        return 1;
-    }
-    const QByteArray breathingModeReport = breathingWrite.packet.reports.at(1);
-    const QByteArray breathingColorReport = breathingWrite.packet.reports.at(2);
-    if (!require(static_cast<unsigned char>(breathingModeReport.at(1)) == 0x35, "breathing mode report should use EC35")) {
-        return 1;
-    }
-    if (!require(static_cast<unsigned char>(breathingModeReport.at(5)) == 0x02, "breathing mode report should request mode 0x02")) {
-        return 1;
-    }
-    if (!require(static_cast<unsigned char>(breathingColorReport.at(1)) == 0x36, "breathing color report should use EC36")) {
-        return 1;
-    }
-    if (!require(static_cast<unsigned char>(breathingColorReport.at(11)) == 5, "breathing red channel should be brightness-scaled at fixed header offset")) {
+    if (!require(
+            breathingWrite.error.contains(QStringLiteral("channel-wide")),
+            "fixed-header native effect rejection should explain the shared-channel boundary"
+        )) {
         return 1;
     }
 
     const AsusAuraHidProtocolResult colorCycleWrite = buildAsusAuraNativeEffectWrite(
         parsedConfig,
         1,
-        lumacore::RgbEffect(lumacore::RgbEffectType::ColorCycle, lumacore::RgbColor(20, 40, 80), 1.0, 75),
+        lumacore::RgbEffect(lumacore::RgbEffectType::ColorCycle, lumacore::RgbColor(20, 40, 80), 1.0, 100),
         1
     );
     if (!require(colorCycleWrite.ok, "color cycle native effect should build")) {
@@ -294,6 +321,18 @@ int main(int argc, char* argv[])
         return 1;
     }
     if (!require(static_cast<unsigned char>(colorCycleModeReport.at(5)) == 0x04, "color cycle mode report should request mode 0x04")) {
+        return 1;
+    }
+    const AsusAuraHidProtocolResult unsupportedBrightnessWrite = buildAsusAuraNativeEffectWrite(
+        parsedConfig,
+        1,
+        lumacore::RgbEffect(lumacore::RgbEffectType::ColorCycle, lumacore::RgbColor(20, 40, 80), 1.0, 75),
+        1
+    );
+    if (!require(
+            !unsupportedBrightnessWrite.ok,
+            "native effects should reject brightness values without a verified hardware representation"
+        )) {
         return 1;
     }
 
@@ -311,6 +350,21 @@ int main(int argc, char* argv[])
         return 1;
     }
     if (!require(static_cast<unsigned char>(rainbowModeReport.at(5)) == 0x05, "rainbow mode report should request mode 0x05")) {
+        return 1;
+    }
+    const AsusAuraHidProtocolResult zeroBrightnessWrite = buildAsusAuraNativeEffectWrite(
+        parsedConfig,
+        2,
+        lumacore::RgbEffect(lumacore::RgbEffectType::Rainbow, lumacore::RgbColor(20, 40, 80), 1.0, 0),
+        1
+    );
+    if (!require(zeroBrightnessWrite.ok, "zero-brightness native effects should serialize as off")) {
+        return 1;
+    }
+    if (!require(
+            static_cast<unsigned char>(zeroBrightnessWrite.packet.reports.at(1).at(5)) == 0x00,
+            "zero-brightness native effects should request off mode"
+        )) {
         return 1;
     }
 
@@ -369,7 +423,16 @@ int main(int argc, char* argv[])
     if (!require(!buildAsusAuraStaticColorPreview(0, lumacore::RgbColor(1, 2, 3), 1, 101).ok, "brightness over 100 should be rejected")) {
         return 1;
     }
-    if (!require(!buildAsusAuraStaticColorWrite(kAsusAuraHeaderCount, lumacore::RgbColor(1, 2, 3), 1, 25).ok, "approved writes should reject zones beyond the header model")) {
+    if (!require(
+            !buildAsusAuraStaticColorWrite(
+                parsedConfig,
+                kAsusAuraHeaderCount,
+                lumacore::RgbColor(1, 2, 3),
+                1,
+                25
+            ).ok,
+            "approved writes should reject zones beyond the parsed config"
+        )) {
         return 1;
     }
     if (!require(!buildAsusAuraNativeEffectWrite(

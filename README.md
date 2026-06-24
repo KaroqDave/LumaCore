@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v0.6.1** - Linux-first RGB control with a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.6.8** - Linux-first RGB control with behavior-preserving modernization passes, shared profile planning, shared daemon frame handling, extracted UI preference stores, parity documentation, portable app-local settings/cache storage, grouped global controls, daily profile scheduling, profile apply previews, diagnostics export polish, expanded read-only discovery groundwork, Linux install staging, release verification hardening, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
@@ -26,17 +26,19 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 
 ## Current Capabilities
 
-- Qt Quick desktop UI with a collapsible navigation rail, Devices, Profiles, Settings, Activities, backend status, and an About dialog.
+- Qt Quick desktop UI with a compact collapsible navigation rail, denser Devices workflow, Profiles, Settings, Activities, backend status, and an About dialog.
+- Global controls for applying one effect or brightness level across all compatible zones or saved device groups, plus All Off for every writable device or a selected group, with partial-result reporting.
 - In-memory RGB model for devices, zones, LEDs, profiles, static colors, rainbow, breathing, and color-cycle effects.
 - GUI-to-daemon boundary through `backends/daemon/`, `ipc/`, and `lumacore-daemon`.
+- Non-blocking interactive daemon requests with correlated responses, cancellation, bounded reconnect backoff, automatic device refresh, stable selection restoration, and manual Retry/Rescan controls.
 - Default daemon `auto` backend that prefers verified ASUS Aura HID control, adds read-only Linux discovery inventory when available, and falls back to the mock backend.
 - Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
-- Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata.
-- ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native breathing/color-cycle/rainbow effects, and All Off.
-- Profile save, load, rename, and delete support with atomic JSON writes and legacy color-only profile compatibility.
-- Persistent Auto/Light/Dark themes, animation and dry-run preferences, start-minimized behavior, and an opt-in Windows VRR flicker workaround.
+- Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata, with cataloged RGB-controller research identities and conservative heuristic classification.
+- ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native color-cycle/rainbow effects on addressable headers, and All Off.
+- Profile save, load, rename, confirmed overwrite/delete, JSON import/export, compatibility reporting, partial-result summaries, and persisted active-profile selection with atomic writes and legacy color-only profile compatibility.
+- Portable Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, daily in-app profile scheduling, opt-in close-to-tray behavior, and an enabled-by-default Windows VRR flicker workaround.
 - Activity log with structured severity/category entries and console mirroring.
-- Backend capability dialog showing daemon connection/version details, active backend, dry-run state, and supported operations.
+- Backend capability dialog showing daemon connection/version details, active backend, dry-run state, supported operations, Retry/Rescan, and sanitized diagnostics export.
 
 ## Safety Model
 
@@ -49,13 +51,14 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - SMBus/I2C writes, generic hidraw writes, persistent hardware configuration, firmware writes, and unconfirmed ASUS writes are intentionally out of scope.
 
 See `docs/hardware/asus-aura-hid.md` for the ASUS protocol notes, licensing boundary, and validation checklist.
+New hardware contributions must follow `docs/hardware/contributing-hardware.md`, which separates research notes, read-only discovery, dry-run previews, and guarded write enablement.
 
 ## Requirements
 
 - C++23 compiler, such as GCC or Clang
 - CMake 3.24+
 - Ninja or Make
-- Qt 6.5+ with `Core`, `Gui`, `Network`, `Qml`, `Quick`, `QuickControls2`, and `QuickDialogs2`
+- Qt 6.5+ with `Core`, `Gui`, `Network`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`, and `Widgets`
 - Optional for Linux discovery and ASUS Aura HID builds: `pkg-config`, `hidapi`, and/or `libusb`
 
 On Arch-based systems:
@@ -126,6 +129,16 @@ Create the portable preview ZIP from a Release build with:
 
 See [docs/windows-preview.md](docs/windows-preview.md) for end-user instructions and preview limitations.
 
+Stage Linux install artifacts for packaging with:
+
+```sh
+cmake --preset linux-debug
+cmake --build --preset linux-debug
+DESTDIR="$PWD/dist/linux-stage" cmake --install build --prefix /usr
+```
+
+The install target stages `lumacore`, `lumacore-daemon`, the desktop entry, hicolor icons, and the configured systemd unit. Package post-install scripts should create the `lumacore` group when group-based daemon socket access is desired, then reload systemd and enable/start `lumacore-daemon.service` according to the distribution's policy.
+
 Run the same QML analysis enforced by CI with:
 
 ```sh
@@ -150,6 +163,11 @@ The daemon accepts `--backend auto`, `mock`, `linux-discovery`, or `asus-aura-hi
 - `LUMACORE_ENABLE_LIBUSB` enables libusb discovery when available.
 - `LUMACORE_ENABLE_I2C_DEV` enables optional read-only i2c-dev adapter metadata discovery.
 - `LUMACORE_ENABLE_ASUS_AURA_HID` builds the ASUS Aura USB HID backend with config-verified, confirmation-gated writes. It requires hidapi and Linux discovery.
+- `LUMACORE_ENABLE_WARNINGS` enables project compiler warnings for first-party targets.
+- `LUMACORE_WARNINGS_AS_ERRORS` treats project compiler warnings as errors.
+- `LUMACORE_ENABLE_SANITIZERS` enables AddressSanitizer and UndefinedBehaviorSanitizer for supported GNU/Clang Linux builds.
+- `LUMACORE_INSTALL_SYSTEMD_UNIT` controls whether Linux installs stage the systemd unit.
+- `LUMACORE_SYSTEMD_UNIT_DIR` overrides the systemd unit install destination.
 
 ## Tests
 
@@ -159,15 +177,23 @@ Run all configured CTest targets after building:
 ctest --test-dir build --output-on-failure
 ```
 
-Current tests cover write confirmation and gating, profile persistence and failure handling,
-auto-backend deduplication, daemon protocol framing and snapshots, option parsing, settings and
-application controllers, daemon launch behavior, and, when the ASUS backend is built, the ASUS
-Aura HID configuration parser and protocol serializer.
+Run the Linux sanitizer configuration on Linux or WSL:
+
+```sh
+cmake --preset linux-sanitizer
+cmake --build --preset linux-sanitizer
+ctest --preset linux-sanitizer
+```
+
+Current tests cover write confirmation and gating, profile persistence, profile apply/preview
+reports, daemon frame limits and snapshots, auto-backend deduplication, option parsing, schedule
+settings, application controllers, daemon launch behavior, and, when the ASUS backend is built,
+the ASUS Aura HID configuration parser and protocol serializer.
 
 ## Project Layout
 
 - `app/` - application startup, version helper, and Qt/QML wiring.
-- `core/` - RGB model, effects, profile storage, activity log, backend registry, permission gate, and write gate.
+- `core/` - RGB model, effects, profile storage and planning, schedule-time parsing, activity log, backend registry, permission gate, and write gate.
 - `backends/auto/` - daemon-side hardware/discovery aggregation with mock fallback.
 - `backends/mock/` - safe simulated hardware backend.
 - `backends/daemon/` - GUI-facing backend that talks to `lumacore-daemon`.
@@ -175,34 +201,39 @@ Aura HID configuration parser and protocol serializer.
 - `backends/asus/` - ASUS Aura USB HID backend.
 - `daemon/` - privileged daemon entry point and backend registration.
 - `hardware/linux/` - Linux provider probes, HID writer, and ASUS Aura protocol helpers.
-- `ipc/` - local daemon protocol, client, and server.
-- `ui/` and `ui/qml/` - QML-facing controllers, models, and Qt Quick UI.
-- `docs/` - daemon protocol, ASUS hardware notes, and systemd packaging notes.
-- `packaging/systemd/` - example `lumacore-daemon.service`.
+- `ipc/` - local daemon protocol, shared frame codec, client, and server.
+- `ui/` and `ui/qml/` - QML-facing controllers, models, private UI preference stores, and Qt Quick UI.
+- `docs/` - architecture, daemon protocol, refactor parity, release verification, hardware notes, Windows preview, and systemd packaging notes.
+- `packaging/` - desktop entry, systemd unit template, and Windows preview packaging.
 - `tests/` - focused unit tests.
 - `assets/` - icons and screenshots. After editing `assets/icons/lumacore.svg`, run `python scripts/generate-icons.py` (requires PySide6 and Pillow).
 
 ## Profiles
 
-Profiles are JSON files stored in `./profiles` relative to the current working directory when `lumacore` starts. Running `./build/lumacore` from the repository root writes profiles to `profiles/`, which is gitignored. Saves use `QSaveFile` for atomic replacement.
+Profiles are JSON files stored under LumaCore's application data root. Portable and local builds use `data/profiles` beside the running executable; installed Linux builds use the platform data location for the GUI and `/var/lib/lumacore` for the root daemon service. App settings and Qt/QML caches live under the same root, so the Windows preview does not write registry settings or AppData state for normal operation. On first use, LumaCore migrates JSON profiles from the legacy `./profiles` directory when the new directory does not yet exist. Saves use `QSaveFile` for atomic replacement.
 
-Devices match by `id`; zones match by `name` with their stored index as a fallback. Profiles restore zone names, LED counts, colors, effect types, speed, and brightness. Legacy color-only zones still load. Unknown devices or zones are skipped, invalid colors are reported in the activity log, and a profile that matches no available zones is rejected.
+Devices match by `id`; zones match by `name` with their stored index as a fallback. Profiles restore zone names, LED counts, colors, effect types, speed, and brightness. Legacy color-only zones still load. Unknown devices or zones are skipped, invalid colors are reported in the activity log, and a profile that matches no available zones is rejected. Synchronous startup/scheduled applies and asynchronous interactive applies share the same internal profile planner so report keys, skip counts, details, and preview item shapes stay aligned.
 
 ## Documentation
 
 - `docs/daemon/protocol.md` documents the newline-delimited JSON socket protocol.
 - `docs/architecture.md` documents runtime boundaries and stable APIs.
 - `docs/refactor-parity.md` is the behavior-preservation checklist for structural changes.
+- `docs/release-verification.md` documents repeatable build, test, lint, sanitizer, install-staging, and Windows preview checks.
+- `docs/windows-preview.md` documents mock-only Windows preview behavior and limitations.
 - `docs/hardware/asus-aura-hid.md` documents the guarded ASUS Aura HID support and protocol research boundaries.
-- `docs/packaging/systemd.md` documents the example systemd service and backend overrides.
+- `docs/hardware/discovery-catalog.md` documents read-only discovery classification stages and cataloged research identities.
+- `docs/hardware/contributing-hardware.md` documents the staged workflow and PR checklist for new hardware support.
+- `docs/packaging/systemd.md` documents Linux install staging, the systemd service, and backend overrides.
 
 ## Current Gaps
 
-- Automated coverage is still focused; broader mock-backend and end-to-end UI integration, sanitizers, and warning-policy work remains.
-- ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation is documented.
+- Automated coverage is still focused; broader mock-backend and end-to-end UI integration work remains beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
+- Startup and scheduled profile application still use the synchronous compatibility path; direct interactive device operations and GUI profile loads are asynchronous.
+- Profile scheduling currently runs inside the GUI session; daemon/systemd background scheduling is not implemented.
+- ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation follows the hardware contribution workflow.
 - Profile validation is minimal.
-- Applying a selected profile on launch is not implemented yet.
-- Native installers, Linux distribution packages, and full install targets are not implemented; Windows packaging currently produces a portable preview ZIP.
+- Native installers and Linux distribution packages are not implemented; CMake install targets stage Linux package inputs and Windows packaging produces a portable preview ZIP.
 
 ## License
 

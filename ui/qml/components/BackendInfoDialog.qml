@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import LumaCore
 
@@ -11,16 +12,36 @@ Dialog {
     title: qsTr("Active Backend")
     modal: true
     anchors.centerIn: parent
-    padding: 24
+    padding: 18
 
     property var controller
     property bool animationsEnabled: true
+    readonly property bool recoveryBusy: controller ? controller.daemonRecoveryBusy : false
+    readonly property string setupStatusLevel: controller ? controller.setupStatusLevel : "warning"
+    readonly property color setupStatusColor: setupStatusLevel === "error"
+        ? Theme.error
+        : (setupStatusLevel === "warning"
+           ? Theme.warning
+           : (setupStatusLevel === "ready" ? Theme.success : Theme.accent))
+    readonly property color setupStatusBackground: setupStatusLevel === "error"
+        ? Theme.errorBg
+        : (setupStatusLevel === "warning" ? Theme.warningBg : Theme.inputBg)
 
     standardButtons: Dialog.NoButton
 
+    FileDialog {
+        id: diagnosticsDialog
+
+        title: qsTr("Export LumaCore Diagnostics")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [qsTr("LumaCore diagnostics (*.json)")]
+        onAccepted: dialog.controller.exportDiagnostics(selectedFile)
+    }
+
     background: Rectangle {
         color: Theme.surface
-        radius: 18
+        radius: 8
         border.color: Theme.border
         border.width: 1
     }
@@ -30,31 +51,84 @@ Dialog {
         color: Theme.primaryText
         font.pixelSize: 17
         font.bold: true
-        padding: 18
-        leftPadding: 24
-        rightPadding: 24
-        topPadding: 20
+        padding: 14
+        leftPadding: 18
+        rightPadding: 18
+        topPadding: 16
         bottomPadding: 0
     }
 
     footer: Item {
-        implicitWidth: closeButton.implicitWidth
-        implicitHeight: closeButton.implicitHeight + 8
+        implicitWidth: footerButtons.implicitWidth
+        implicitHeight: footerButtons.implicitHeight + 8
 
-        AppButton {
-            id: closeButton
+        GridLayout {
+            id: footerButtons
 
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 160
-            variant: "primary"
-            text: qsTr("Close")
-            animationsEnabled: dialog.animationsEnabled
-            onClicked: dialog.close()
+            columns: 3
+            columnSpacing: 10
+            rowSpacing: 10
+
+            AppButton {
+                visible: dialog.controller && !dialog.controller.daemonConnected
+                enabled: dialog.controller
+                    && dialog.controller.daemonState !== qsTr("Refreshing devices")
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Retry now")
+                compact: true
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.controller.retryDaemonConnection()
+            }
+
+            AppButton {
+                enabled: dialog.controller
+                    && dialog.controller.daemonConnected
+                    && !dialog.recoveryBusy
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Rescan")
+                compact: true
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.controller.rescanDaemonDevices()
+            }
+
+            AppButton {
+                enabled: dialog.controller
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Export")
+                compact: true
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: diagnosticsDialog.open()
+            }
+
+            AppButton {
+                enabled: dialog.controller
+                Layout.preferredWidth: 130
+                variant: "secondary"
+                text: qsTr("Copy Summary")
+                compact: true
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.controller.copyDiagnosticsSummary()
+            }
+
+            AppButton {
+                id: closeButton
+
+                Layout.preferredWidth: 130
+                variant: "primary"
+                text: qsTr("Close")
+                compact: true
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.close()
+            }
         }
     }
 
     contentItem: ColumnLayout {
-        spacing: 16
+        spacing: 12
         width: 460
 
         ColumnLayout {
@@ -65,7 +139,7 @@ Dialog {
                 Layout.fillWidth: true
                 text: dialog.controller ? dialog.controller.backendDisplayName : qsTr("Unknown backend")
                 color: Theme.primaryText
-                font.pixelSize: 22
+                font.pixelSize: 20
                 font.bold: true
                 wrapMode: Text.WordWrap
             }
@@ -88,6 +162,49 @@ Dialog {
             font.pixelSize: 13
             wrapMode: Text.WordWrap
             lineHeight: 1.35
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: setupStatusColumn.implicitHeight + 20
+            radius: 8
+            color: dialog.setupStatusBackground
+            border.color: dialog.setupStatusColor
+            border.width: 1
+
+            ColumnLayout {
+                id: setupStatusColumn
+
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 4
+
+                Label {
+                    Layout.fillWidth: true
+                    text: dialog.controller ? dialog.controller.setupStatusSummary : qsTr("Backend status unavailable")
+                    color: Theme.primaryText
+                    font.pixelSize: 13
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: dialog.controller ? dialog.controller.setupStatusDetail : ""
+                    color: Theme.primaryText
+                    opacity: 0.9
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: dialog.controller ? dialog.controller.setupStatusAction : ""
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                }
+            }
         }
 
         ColumnLayout {
@@ -201,7 +318,9 @@ Dialog {
                 Label {
                     Layout.fillWidth: true
                     text: dialog.controller ? dialog.controller.daemonState : qsTr("Unknown")
-                    color: dialog.controller && dialog.controller.daemonConnected ? Theme.success : Theme.warning
+                    color: dialog.recoveryBusy
+                           ? Theme.accent
+                           : (dialog.controller && dialog.controller.daemonConnected ? Theme.success : Theme.warning)
                     font.pixelSize: 18
                     font.bold: true
                 }
@@ -233,7 +352,7 @@ Dialog {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: noteLabel.implicitHeight + 16
-            radius: 12
+            radius: 8
             color: Theme.inputBg
             border.color: Theme.border
 

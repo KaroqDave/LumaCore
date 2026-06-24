@@ -15,6 +15,6 @@ The GUI starts the bundled daemon without a console window and connects through 
 - Mock devices only.
 - No Windows hardware discovery or physical RGB writes.
 - No Windows service, installer, automatic startup, elevation, code signing, Dynamic Lighting, or LampArray support.
-- Profiles and settings are local to the current user, as in the development build.
+- Profiles, settings, and Qt cache data stay beside the extracted executable under `data/`; no installer or registry-backed settings are used for the preview build.
 
 If automatic startup fails, restore both executables from the ZIP. Advanced users can run `lumacore-daemon.exe --backend mock` manually, then start `lumacore.exe --no-auto-start-daemon`.

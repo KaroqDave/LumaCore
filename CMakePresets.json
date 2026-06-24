@@ -43,12 +43,27 @@
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
       }
+    },
+    {
+      "name": "linux-sanitizer",
+      "displayName": "Linux / WSL Sanitizer",
+      "description": "Enables AddressSanitizer and UndefinedBehaviorSanitizer for first-party targets.",
+      "inherits": "linux-debug",
+      "binaryDir": "${sourceDir}/build-sanitizer",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "LUMACORE_ENABLE_SANITIZERS": "ON"
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "linux-debug",
       "configurePreset": "linux-debug"
+    },
+    {
+      "name": "linux-sanitizer",
+      "configurePreset": "linux-sanitizer"
     }
   ],
   "testPresets": [
@@ -57,6 +72,17 @@
       "configurePreset": "linux-debug",
       "output": {
         "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-sanitizer",
+      "configurePreset": "linux-sanitizer",
+      "output": {
+        "outputOnFailure": true
+      },
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
       }
     }
   ]

@@ -14,6 +14,10 @@ qt_add_library(lumacore_core STATIC
     EffectsEngine.h
     PermissionGate.cpp
     PermissionGate.h
+    PortablePaths.cpp
+    PortablePaths.h
+    ProfilePlan.cpp
+    ProfilePlan.h
     ProfileStore.cpp
     ProfileStore.h
     RgbBackend.cpp
@@ -28,6 +32,8 @@ qt_add_library(lumacore_core STATIC
     RgbLed.h
     RgbZone.cpp
     RgbZone.h
+    ScheduleTime.cpp
+    ScheduleTime.h
     WriteGate.cpp
     WriteGate.h
 )

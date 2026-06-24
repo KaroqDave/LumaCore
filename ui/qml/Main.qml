@@ -28,7 +28,10 @@ ApplicationWindow {
     property int currentPage: 0
     property int selectedDeviceIndex: -1
     property int selectedZoneIndex: -1
-    property real sidebarWidth: sidebarCollapsed ? 74 : 248
+    property string selectedDeviceId: ""
+    property string selectedZoneName: ""
+    property int selectedZoneFallbackIndex: -1
+    property real sidebarWidth: sidebarCollapsed ? 66 : 228
     readonly property var controller: root.appController
     readonly property var settings: root.settingsController
     readonly property bool animationsEnabled: settings.animationsEnabled
@@ -60,33 +63,78 @@ ApplicationWindow {
         value: root.settings.theme
     }
 
-    function colorToHex(value) {
-        const red = Math.round(value.r * 255).toString(16).padStart(2, "0")
-        const green = Math.round(value.g * 255).toString(16).padStart(2, "0")
-        const blue = Math.round(value.b * 255).toString(16).padStart(2, "0")
-        return ("#" + red + green + blue).toUpperCase()
-    }
-
     function selectDevice(deviceIndex) {
-        if (deviceIndex < 0) {
+        if (deviceIndex < 0 || deviceIndex >= controller.backendDeviceCount) {
             return
         }
 
         selectedDeviceIndex = deviceIndex
+        selectedDeviceId = controller.deviceId(deviceIndex)
         selectedZoneIndex = controller.zoneCount(deviceIndex) > 0 ? 0 : -1
+        selectedZoneFallbackIndex = selectedZoneIndex
+        selectedZoneName = selectedZoneIndex >= 0
+            ? controller.zoneName(deviceIndex, selectedZoneIndex)
+            : ""
         if (selectedZoneIndex >= 0) {
             selectedColor = controller.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex)
         }
     }
 
     function selectZone(deviceIndex, zoneIndex) {
-        if (deviceIndex < 0 || zoneIndex < 0) {
+        if (deviceIndex < 0
+                || deviceIndex >= controller.backendDeviceCount
+                || zoneIndex < 0
+                || zoneIndex >= controller.zoneCount(deviceIndex)) {
             return
         }
 
         selectedDeviceIndex = deviceIndex
         selectedZoneIndex = zoneIndex
+        selectedDeviceId = controller.deviceId(deviceIndex)
+        selectedZoneName = controller.zoneName(deviceIndex, zoneIndex)
+        selectedZoneFallbackIndex = zoneIndex
         selectedColor = controller.zoneEffectColor(deviceIndex, zoneIndex)
+    }
+
+    function restoreSelection() {
+        let deviceIndex = controller.deviceIndexForId(selectedDeviceId)
+        const restoredSameDevice = deviceIndex >= 0
+        if (deviceIndex < 0) {
+            deviceIndex = controller.backendDeviceCount > 0 ? 0 : -1
+        }
+
+        if (deviceIndex < 0) {
+            selectedDeviceIndex = -1
+            selectedZoneIndex = -1
+            selectedDeviceId = ""
+            selectedZoneName = ""
+            selectedZoneFallbackIndex = -1
+            return
+        }
+
+        selectedDeviceIndex = deviceIndex
+        selectedDeviceId = controller.deviceId(deviceIndex)
+
+        let zoneIndex = restoredSameDevice
+            ? controller.zoneIndexForName(deviceIndex, selectedZoneName)
+            : -1
+        const zoneCount = controller.zoneCount(deviceIndex)
+        if (restoredSameDevice
+                && zoneIndex < 0
+                && selectedZoneFallbackIndex >= 0
+                && selectedZoneFallbackIndex < zoneCount) {
+            zoneIndex = selectedZoneFallbackIndex
+        }
+        if (zoneIndex < 0 && zoneCount > 0) {
+            zoneIndex = 0
+        }
+
+        selectedZoneIndex = zoneIndex
+        selectedZoneFallbackIndex = zoneIndex
+        selectedZoneName = zoneIndex >= 0 ? controller.zoneName(deviceIndex, zoneIndex) : ""
+        if (zoneIndex >= 0) {
+            selectedColor = controller.zoneEffectColor(deviceIndex, zoneIndex)
+        }
     }
 
     Behavior on sidebarWidth {
@@ -121,10 +169,62 @@ ApplicationWindow {
         animationsEnabled: root.animationsEnabled
     }
 
+    Dialog {
+        id: zoneEditorDialog
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(720, parent ? parent.width - 48 : 720)
+        height: Math.min(260, parent ? parent.height - 48 : 260)
+        modal: true
+        title: root.selectedZoneName.length > 0
+               ? qsTr("Edit %1").arg(root.selectedZoneName)
+               : qsTr("Edit Zone")
+        standardButtons: Dialog.NoButton
+
+        contentItem: ZoneEditor {
+            appController: root.controller
+            selectedDeviceIndex: root.selectedDeviceIndex
+            selectedZoneIndex: root.selectedZoneIndex
+            animationsEnabled: root.animationsEnabled
+        }
+
+        footer: Item {
+            implicitHeight: 54
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                anchors.bottomMargin: 8
+                spacing: 12
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                AppButton {
+                    Layout.preferredWidth: 220
+                    Layout.preferredHeight: 40
+                    variant: "primary"
+                    text: qsTr("Close")
+                    compact: false
+                    controlHeight: 40
+                    animationsEnabled: root.animationsEnabled
+                    onClicked: zoneEditorDialog.close()
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                }
+            }
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 14
+        anchors.margins: 12
+        spacing: 10
 
         NavRail {
             id: navRail
@@ -142,23 +242,23 @@ ApplicationWindow {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 14
+            spacing: 10
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 72
-                radius: 18
+                Layout.preferredHeight: 60
+                radius: 8
                 color: Theme.surface
                 border.color: Theme.border
                 border.width: 1
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 16
-                    anchors.topMargin: 12
-                    anchors.bottomMargin: 12
-                    spacing: 14
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 12
+                    anchors.topMargin: 8
+                    anchors.bottomMargin: 8
+                    spacing: 10
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -168,7 +268,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             text: root.pageTitles[root.currentPage].title
                             color: Theme.primaryText
-                            font.pixelSize: 22
+                            font.pixelSize: 20
                             font.bold: true
                             elide: Text.ElideRight
                         }
@@ -185,7 +285,7 @@ ApplicationWindow {
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                         implicitWidth: statusRow.implicitWidth + 24
-                        implicitHeight: 34
+                        implicitHeight: 30
                         radius: 999
                         color: Theme.elevated
                         border.color: Theme.border
@@ -201,11 +301,15 @@ ApplicationWindow {
                                 Layout.preferredWidth: 9
                                 Layout.preferredHeight: 9
                                 radius: 5
-                                color: root.controller && root.controller.daemonConnected ? Theme.success : Theme.warning
+                                color: root.controller && root.controller.daemonRecoveryBusy
+                                       ? Theme.accent
+                                       : (root.controller && root.controller.daemonConnected
+                                          ? Theme.success
+                                          : Theme.warning)
                             }
 
                             Label {
-                                Layout.maximumWidth: 320
+                                Layout.maximumWidth: 300
                                 text: root.controller.statusMessage
                                 color: Theme.primaryText
                                 font.pixelSize: 12
@@ -232,6 +336,8 @@ ApplicationWindow {
                         dryRunEnabled: root.controller ? root.controller.dryRunEnabled : false
                         daemonConnected: root.controller ? root.controller.daemonConnected : false
                         daemonState: root.controller ? root.controller.daemonState : qsTr("Disconnected")
+                        setupStatusLevel: root.controller ? root.controller.setupStatusLevel : "warning"
+                        setupStatusSummary: root.controller ? root.controller.setupStatusSummary : qsTr("Backend attention required")
                         backendName: root.controller && root.controller.backendDisplayName.length > 0
                                      ? root.controller.backendDisplayName
                                      : qsTr("Daemon backend")
@@ -244,7 +350,7 @@ ApplicationWindow {
                 visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? 48 : 0
-                radius: 14
+                radius: 8
                 color: Theme.warningBg
                 border.color: Theme.warning
                 border.width: 1
@@ -262,7 +368,7 @@ ApplicationWindow {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Windows Preview: Mock devices only—hardware discovery and RGB writes are not supported.")
+                        text: qsTr("Windows Preview: Mock devices only - hardware discovery and RGB writes are not supported.")
                         color: Theme.primaryText
                         font.pixelSize: 12
                         font.bold: true
@@ -281,13 +387,14 @@ ApplicationWindow {
                 Item {
                     RowLayout {
                         anchors.fill: parent
-                        spacing: 14
+                        spacing: 10
 
                         SectionCard {
-                            Layout.preferredWidth: 280
-                            Layout.minimumWidth: 240
+                            Layout.preferredWidth: 292
+                            Layout.minimumWidth: 250
                             Layout.fillHeight: true
                             animationsEnabled: root.animationsEnabled
+                            compact: true
 
                             DeviceTreePanel {
                                 Layout.fillWidth: true
@@ -299,34 +406,59 @@ ApplicationWindow {
                                 animationsEnabled: root.animationsEnabled
                                 onDeviceSelected: function(deviceIndex) { root.selectDevice(deviceIndex) }
                                 onZoneSelected: function(deviceIndex, zoneIndex) { root.selectZone(deviceIndex, zoneIndex) }
+                                onZoneEditRequested: function(deviceIndex, zoneIndex) {
+                                    root.selectZone(deviceIndex, zoneIndex)
+                                    zoneEditorDialog.open()
+                                }
                             }
                         }
 
-                        SectionCard {
+                        ColumnLayout {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 320
                             Layout.fillHeight: true
-                            title: qsTr("Zone Editor")
-                            subtitle: qsTr("Rename zones, tune LED counts, and apply lighting effects.")
-                            animationsEnabled: root.animationsEnabled
+                            spacing: 10
 
-                            ScrollView {
-                                id: zoneScroll
-
+                            SetupStatusPanel {
                                 Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                clip: true
-                                contentWidth: availableWidth
+                                controller: root.controller
+                                animationsEnabled: root.animationsEnabled
+                            }
 
-                                ZoneEditor {
-                                    width: zoneScroll.availableWidth
-                                    height: Math.max(implicitHeight, zoneScroll.availableHeight)
+                            SectionCard {
+                                Layout.fillWidth: true
+                                animationsEnabled: root.animationsEnabled
+                                compact: true
+
+                                GlobalControls {
+                                    Layout.fillWidth: true
                                     appController: root.controller
                                     selectedDeviceIndex: root.selectedDeviceIndex
                                     selectedZoneIndex: root.selectedZoneIndex
+                                    selectedDeviceId: root.selectedDeviceId
+                                    selectedZoneName: root.selectedZoneName
                                     selectedColor: root.selectedColor
                                     animationsEnabled: root.animationsEnabled
                                     onChooseColorRequested: colorDialog.open()
+                                    onSelectedColorSyncRequested: function(colorValue) { root.selectedColor = colorValue }
+                                }
+                            }
+
+                            SectionCard {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                title: qsTr("Workspace")
+                                animationsEnabled: root.animationsEnabled
+                                compact: true
+
+                                DeviceWorkspacePanel {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    appController: root.controller
+                                    selectedDeviceIndex: root.selectedDeviceIndex
+                                    selectedZoneIndex: root.selectedZoneIndex
+                                    selectedZoneName: root.selectedZoneName
+                                    animationsEnabled: root.animationsEnabled
                                 }
                             }
                         }
@@ -339,11 +471,13 @@ ApplicationWindow {
                         title: qsTr("Profile Manager")
                         subtitle: qsTr("Save and restore device state for the active backend.")
                         animationsEnabled: root.animationsEnabled
+                        compact: true
 
                         ProfileManager {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             appController: root.controller
+                            settingsController: root.settings
                             animationsEnabled: root.animationsEnabled
                         }
                     }
@@ -373,6 +507,7 @@ ApplicationWindow {
                         title: qsTr("Activity Log")
                         subtitle: qsTr("Structured activity, warnings, and errors")
                         animationsEnabled: root.animationsEnabled
+                        compact: true
 
                         ActivityLogPanel {
                             Layout.fillWidth: true
@@ -390,6 +525,9 @@ ApplicationWindow {
 
         function onZoneDataChanged(deviceIndex, zoneIndex) {
             if (deviceIndex === root.selectedDeviceIndex && zoneIndex === root.selectedZoneIndex) {
+                root.selectedDeviceId = root.controller.deviceId(deviceIndex)
+                root.selectedZoneName = root.controller.zoneName(deviceIndex, zoneIndex)
+                root.selectedZoneFallbackIndex = zoneIndex
                 // Static and Breathing use a base color. Rainbow and Color Cycle
                 // are generated effects, so following their frame color would fight the picker.
                 const effectType = root.controller.zoneEffectType(deviceIndex, zoneIndex)
@@ -397,6 +535,10 @@ ApplicationWindow {
                     root.selectedColor = root.controller.zoneEffectColor(deviceIndex, zoneIndex)
                 }
             }
+        }
+
+        function onDaemonDevicesRefreshed() {
+            root.restoreSelection()
         }
     }
 

@@ -19,6 +19,7 @@ Item {
 
     signal deviceSelected(int deviceIndex)
     signal zoneSelected(int deviceIndex, int zoneIndex)
+    signal zoneEditRequested(int deviceIndex, int zoneIndex)
 
     function applyFilter(filterIndex) {
         if (panel.treeModel) {
@@ -27,9 +28,19 @@ Item {
         filterPopup.close()
     }
 
+    function badgeColor(level) {
+        if (level === "ready") {
+            return Theme.success
+        }
+        if (level === "warning") {
+            return Theme.warning
+        }
+        return Theme.secondaryText
+    }
+
     ColumnLayout {
         anchors.fill: parent
-        spacing: 10
+        spacing: 8
 
         RowLayout {
             Layout.fillWidth: true
@@ -37,13 +48,13 @@ Item {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 4
+                spacing: 2
 
                 Label {
                     Layout.fillWidth: true
                     text: qsTr("Device Tree")
                     color: Theme.primaryText
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     font.bold: true
                     elide: Text.ElideRight
                 }
@@ -52,7 +63,7 @@ Item {
                     Layout.fillWidth: true
                     text: qsTr("Pick a device or zone")
                     color: Theme.secondaryText
-                    font.pixelSize: 11
+                    font.pixelSize: 10
                     elide: Text.ElideRight
                 }
             }
@@ -62,7 +73,7 @@ Item {
 
                 Layout.alignment: Qt.AlignRight
                 implicitWidth: filterButtonContent.implicitWidth + 28
-                implicitHeight: 36
+                implicitHeight: 32
                 hoverEnabled: true
                 text: panel.activeFilterLabel
 
@@ -93,7 +104,7 @@ Item {
                 }
 
                 background: Rectangle {
-                    radius: 12
+                    radius: 8
                     color: filterButton.down
                            ? Theme.hover
                            : (filterButton.hovered || filterPopup.opened ? Theme.elevated : Theme.inputBg)
@@ -154,7 +165,7 @@ Item {
             }
 
             background: Rectangle {
-                radius: 16
+                radius: 8
                 color: Theme.surface
                 border.color: Theme.border
                 border.width: 1
@@ -182,13 +193,13 @@ Item {
 
                     Layout.fillWidth: true
                     implicitWidth: 180
-                    implicitHeight: 40
+                    implicitHeight: 34
                     hoverEnabled: true
                     text: qsTr("All devices")
                     onClicked: panel.applyFilter(0)
 
                     background: Rectangle {
-                        radius: 10
+                        radius: 8
                         color: allDevicesFilter.down
                                ? Theme.hover
                                : (allDevicesFilter.hovered ? Theme.elevated : "transparent")
@@ -227,13 +238,13 @@ Item {
 
                     Layout.fillWidth: true
                     implicitWidth: 180
-                    implicitHeight: 40
+                    implicitHeight: 34
                     hoverEnabled: true
                     text: qsTr("RGB controllers")
                     onClicked: panel.applyFilter(1)
 
                     background: Rectangle {
-                        radius: 10
+                        radius: 8
                         color: rgbControllersFilter.down
                                ? Theme.hover
                                : (rgbControllersFilter.hovered ? Theme.elevated : "transparent")
@@ -303,11 +314,11 @@ Item {
                 readonly property color zoneSwatchColor: zoneEffectColorHex || Theme.accent
 
                 implicitWidth: tree.width
-                implicitHeight: deviceNode ? 48 : 40
-                leftPadding: 10
-                rightPadding: 12
-                topPadding: 6
-                bottomPadding: 6
+                implicitHeight: deviceNode ? 42 : 34
+                leftPadding: 8
+                rightPadding: 10
+                topPadding: 4
+                bottomPadding: 4
                 text: model.displayName || ""
 
                 onClicked: {
@@ -331,7 +342,9 @@ Item {
                     }
                 }
 
-                ToolTip.text: model.description || ""
+                ToolTip.text: (model.discoverySupportStatus || "").length > 0
+                              ? qsTr("%1\n%2").arg(model.description || "").arg(model.discoverySupportStatus)
+                              : (model.description || "")
                 ToolTip.visible: hovered && ToolTip.text.length > 0
 
                 // Chevron lives in contentItem so it aligns with the icon + text block.
@@ -345,7 +358,7 @@ Item {
                     anchors.rightMargin: 8
                     anchors.topMargin: 1
                     anchors.bottomMargin: 1
-                    radius: 12
+                    radius: 8
                     scale: treeDelegate.down ? 0.985 : 1
                     color: treeDelegate.selectedNode
                            ? Theme.selectionBg
@@ -376,7 +389,7 @@ Item {
                 }
 
                 contentItem: RowLayout {
-                    spacing: 10
+                    spacing: 8
 
                     Item {
                         visible: treeDelegate.deviceNode && treeDelegate.hasChildren
@@ -409,12 +422,12 @@ Item {
 
                     Item {
                         visible: treeDelegate.zoneNode
-                        Layout.preferredWidth: 28
+                        Layout.preferredWidth: 22
                         Layout.fillHeight: true
                         Layout.alignment: Qt.AlignVCenter
 
                         Rectangle {
-                            x: 12
+                            x: 10
                             y: 0
                             width: 1
                             height: parent.height
@@ -422,7 +435,7 @@ Item {
                         }
 
                         Rectangle {
-                            x: 12
+                            x: 10
                             anchors.verticalCenter: parent.verticalCenter
                             width: 12
                             height: 1
@@ -432,14 +445,14 @@ Item {
 
                     Item {
                         visible: treeDelegate.deviceNode
-                        Layout.preferredWidth: 22
-                        Layout.preferredHeight: 22
+                        Layout.preferredWidth: 20
+                        Layout.preferredHeight: 20
                         Layout.alignment: Qt.AlignVCenter
 
                         NavIcon {
                             anchors.centerIn: parent
-                            width: 20
-                            height: 20
+                            width: 18
+                            height: 18
                             name: "motherboard"
                             color: treeDelegate.selectedNode ? Theme.selectionText : Theme.secondaryText
                             animationsEnabled: panel.animationsEnabled
@@ -449,14 +462,14 @@ Item {
 
                     Item {
                         visible: treeDelegate.zoneNode
-                        Layout.preferredWidth: 26
-                        Layout.preferredHeight: 26
+                        Layout.preferredWidth: 22
+                        Layout.preferredHeight: 22
                         Layout.alignment: Qt.AlignVCenter
 
                         Rectangle {
                             anchors.fill: parent
                             visible: !treeDelegate.zoneEffectAnimated
-                            radius: 8
+                            radius: 6
                             color: treeDelegate.zoneSwatchColor
                             border.color: treeDelegate.selectedNode
                                           ? Theme.selectionBorder
@@ -468,7 +481,7 @@ Item {
                             anchors.fill: parent
                             visible: treeDelegate.zoneEffectAnimated
                                      && (treeDelegate.zoneEffectType === 1 || treeDelegate.zoneEffectType === 3)
-                            radius: 8
+                            radius: 6
                             border.color: treeDelegate.selectedNode ? Theme.selectionBorder : Theme.border
                             border.width: treeDelegate.selectedNode ? 2 : 1
                             gradient: Gradient {
@@ -487,7 +500,7 @@ Item {
                             visible: treeDelegate.zoneEffectAnimated
                                      && treeDelegate.zoneEffectType !== 1
                                      && treeDelegate.zoneEffectType !== 3
-                            radius: 8
+                            radius: 6
                             color: treeDelegate.zoneSwatchColor
                             opacity: 0.82
                             border.color: treeDelegate.selectedNode
@@ -499,9 +512,9 @@ Item {
                         Rectangle {
                             visible: treeDelegate.zoneEffectAnimated
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 6
+                            height: 6
+                            radius: 3
                             color: "#FFFFFF"
                             opacity: 0.86
                         }
@@ -510,13 +523,13 @@ Item {
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
-                        spacing: 2
+                        spacing: 1
 
                         Label {
                             Layout.fillWidth: true
                             text: treeDelegate.model.displayName || ""
                             color: treeDelegate.selectedNode ? Theme.selectionText : Theme.primaryText
-                            font.pixelSize: treeDelegate.deviceNode ? 13 : 12
+                            font.pixelSize: treeDelegate.deviceNode ? 12 : 11
                             font.bold: treeDelegate.deviceNode || treeDelegate.selectedNode
                             elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
@@ -534,7 +547,7 @@ Item {
                             visible: (treeDelegate.model.description || "").length > 0
                             text: treeDelegate.model.description || ""
                             color: treeDelegate.selectedNode ? Theme.selectionSubText : Theme.secondaryText
-                            font.pixelSize: 10
+                            font.pixelSize: 9
                             elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
 
@@ -552,17 +565,43 @@ Item {
                         text: treeDelegate.zoneColorHex
                         color: Theme.secondaryText
                         font.family: "monospace"
-                        font.pixelSize: 10
+                        font.pixelSize: 9
                         font.bold: true
                         Layout.alignment: Qt.AlignVCenter
                     }
 
                     Rectangle {
+                        visible: treeDelegate.deviceNode && (treeDelegate.model.deviceBadgeText || "").length > 0
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: Math.min(88, deviceBadgeLabel.implicitWidth + 16)
+                        Layout.preferredHeight: 20
+                        radius: 8
+                        color: Qt.rgba(
+                            panel.badgeColor(treeDelegate.model.deviceBadgeLevel).r,
+                            panel.badgeColor(treeDelegate.model.deviceBadgeLevel).g,
+                            panel.badgeColor(treeDelegate.model.deviceBadgeLevel).b,
+                            Theme.dark ? 0.16 : 0.12)
+                        border.color: panel.badgeColor(treeDelegate.model.deviceBadgeLevel)
+                        border.width: 1
+
+                        Label {
+                            id: deviceBadgeLabel
+
+                            anchors.centerIn: parent
+                            text: treeDelegate.model.deviceBadgeText || ""
+                            color: panel.badgeColor(treeDelegate.model.deviceBadgeLevel)
+                            font.pixelSize: 9
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Rectangle {
                         visible: treeDelegate.zoneNode && treeDelegate.zoneEffectAnimated
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: Math.min(122, effectBadgeLabel.implicitWidth + 32)
-                        Layout.preferredHeight: 24
-                        radius: 10
+                        Layout.preferredWidth: Math.min(104, effectBadgeLabel.implicitWidth + 26)
+                        Layout.preferredHeight: 20
+                        radius: 8
                         color: treeDelegate.selectedNode ? Qt.rgba(1, 1, 1, 0.14) : Theme.inputBg
                         border.color: treeDelegate.selectedNode ? Theme.selectionBorder : Theme.border
                         border.width: 1
@@ -571,9 +610,9 @@ Item {
                             id: effectBadgeContent
 
                             anchors.fill: parent
-                            anchors.leftMargin: 8
-                            anchors.rightMargin: 8
-                            spacing: 6
+                            anchors.leftMargin: 6
+                            anchors.rightMargin: 6
+                            spacing: 5
 
                             Rectangle {
                                 Layout.preferredWidth: 6
@@ -592,10 +631,34 @@ Item {
                                 Layout.alignment: Qt.AlignVCenter
                                 text: treeDelegate.zoneEffectLabel
                                 color: treeDelegate.selectedNode ? Theme.selectionText : Theme.primaryText
-                                font.pixelSize: 10
+                                font.pixelSize: 9
                                 font.bold: true
                                 elide: Text.ElideRight
                                 verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
+
+                    Item {
+                        visible: treeDelegate.zoneNode
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: 58
+                        Layout.preferredHeight: 28
+
+                        AppButton {
+                            anchors.fill: parent
+                            text: qsTr("Edit")
+                            compact: true
+                            controlHeight: 28
+                            font.pixelSize: 11
+                            leftPadding: 10
+                            rightPadding: 10
+                            variant: treeDelegate.selectedNode ? "primary" : "secondary"
+                            enabled: panel.appController !== null && panel.appController !== undefined
+                            animationsEnabled: panel.animationsEnabled
+                            onClicked: {
+                                panel.zoneSelected(treeDelegate.sourceDeviceIndex, treeDelegate.sourceZoneIndex)
+                                panel.zoneEditRequested(treeDelegate.sourceDeviceIndex, treeDelegate.sourceZoneIndex)
                             }
                         }
                     }
@@ -638,7 +701,7 @@ Item {
                     }
 
                     background: Rectangle {
-                        radius: 14
+                        radius: 8
                         color: Theme.surface
                         border.color: Theme.border
                         border.width: 1
@@ -662,7 +725,7 @@ Item {
                             }
 
                             background: Rectangle {
-                                radius: 10
+                                radius: 8
                                 color: registerControllerAction.down
                                        ? Theme.hover
                                        : (registerControllerAction.hovered ? Theme.elevated : "transparent")
@@ -699,7 +762,7 @@ Item {
                             }
 
                             background: Rectangle {
-                                radius: 10
+                                radius: 8
                                 color: removeControllerAction.down
                                        ? Theme.hover
                                        : (removeControllerAction.hovered ? Theme.elevated : "transparent")
@@ -736,7 +799,7 @@ Item {
                             }
 
                             background: Rectangle {
-                                radius: 10
+                                radius: 8
                                 color: resetControllerAction.down
                                        ? Theme.hover
                                        : (resetControllerAction.hovered ? Theme.elevated : "transparent")

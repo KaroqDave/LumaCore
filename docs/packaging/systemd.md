@@ -1,6 +1,7 @@
 # systemd Service
 
 `packaging/systemd/lumacore-daemon.service` is an example service unit for running the privileged backend daemon.
+`packaging/systemd/lumacore-daemon.service.in` is the CMake install template; install builds substitute the configured binary directory into `ExecStart`.
 
 ## Behavior
 
@@ -11,13 +12,29 @@
 
 ## Install Notes
 
-The repository currently provides the service file but not full install targets. Package scripts should install:
+The CMake install target stages the files a Linux package needs:
 
-- `lumacore` and `lumacore-daemon` into the target binary directory.
-- `packaging/systemd/lumacore-daemon.service` into the system unit directory.
+- `lumacore` and `lumacore-daemon` into `${CMAKE_INSTALL_BINDIR}`.
+- `packaging/lumacore.desktop.in` as `share/applications/lumacore.desktop`.
+- LumaCore icons into the hicolor icon theme.
+- The configured `lumacore-daemon.service` into `LUMACORE_SYSTEMD_UNIT_DIR` when `LUMACORE_INSTALL_SYSTEMD_UNIT` is enabled.
 - A `lumacore` group when group-based socket access is desired.
 
 The unit sets `Group=lumacore`, `UMask=0007`, and `RuntimeDirectory=lumacore` so the socket directory is created at runtime with group access.
+
+For a package staging tree:
+
+```sh
+cmake --preset linux-debug
+cmake --build --preset linux-debug
+DESTDIR="$PWD/dist/linux-stage" cmake --install build --prefix /usr
+```
+
+Override the systemd destination when the target distribution expects a different unit directory:
+
+```sh
+cmake -S . -B build -DLUMACORE_SYSTEMD_UNIT_DIR=lib/systemd/system
+```
 
 ## Backend Overrides
 

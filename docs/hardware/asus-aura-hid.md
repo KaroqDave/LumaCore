@@ -2,6 +2,8 @@
 
 LumaCore supports an allowlisted ASUS Aura USB HID controller through the privileged daemon. The path is standard when the daemon runs with the default `--backend auto`, but real hardware writes remain gated by device allowlisting, config-table verification, dry-run state, approved packet builders, and per-session UI confirmation.
 
+Broader ASUS or non-ASUS hardware support must follow the staged workflow in `docs/hardware/contributing-hardware.md`. Research notes, read-only discovery, dry-run previews, and guarded write enablement are separate milestones.
+
 ## Candidate
 
 - Transport: USB HID via hidapi.
@@ -15,7 +17,7 @@ LumaCore supports an allowlisted ASUS Aura USB HID controller through the privil
 
 The research corpus treats ASUS RGB as several partially compatible controller families rather than one reusable protocol. LumaCore currently implements only the USB HID Aura LED Controller path above. Legacy Aura motherboard and DRAM control over SMBus/i2c, Aura Core laptop keyboards, ASUS System Control Interface / ACPI / WMI laptop paths, ASUS GPU-side lighting, Windows Dynamic Lighting / LampArray bridges, and newer receiver/dongle protocols are documentation and future-discovery subjects only.
 
-Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research should be recorded as researched identities before they are made write-capable. The currently validated write target remains `0B05:19AF`; nearby researched devices such as `0B05:18F3` and `0B05:1939` must not be enabled for writes without owned-hardware captures, config-table tests, and explicit packet verification.
+Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research should be recorded as researched identities before they are made write-capable. The currently validated write target remains `0B05:19AF`; nearby researched devices such as `0B05:18F3` and `0B05:1939` are cataloged for read-only discovery only and must not be enabled for writes without owned-hardware captures, config-table tests, and explicit packet verification.
 
 ## Safety Boundary
 
@@ -45,11 +47,12 @@ Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research
 - Dry-run must be off and the UI must confirm writes for the current daemon session.
 - Confirmation is held in memory by the daemon and is cleared when the daemon restarts or the backend is reinitialized.
 - Approved packets use 65-byte reports based on GPL-compatible OpenRGB protocol references. The sequence starts with the OpenRGB mainboard `EC52 53 00 01` setup packet.
-- Fixed RGB headers are targeted from the parsed config table with `EC35` static mode plus `EC36` color data at the computed RGB-header LED offset.
+- Fixed RGB headers are targeted from the parsed config table with `EC35` static mode plus `EC36` color data at the computed RGB-header LED offset, and are advertised as static-only.
 - Addressable headers are targeted from the parsed config table with `EC35` direct mode plus chunked `EC40` direct color packets, with the apply bit set only on the final chunk.
-- Breathing uses native ASUS mode `0x02` plus `EC36` mode color data only where fixed-header color mapping is verified. Color-bearing native effects on addressable headers are blocked until the EC36 addressable color mapping is captured and tested.
+- Native effects on individual fixed RGB headers are blocked because those headers share one channel-wide `EC35` effect channel. Addressable headers advertise native color cycle and rainbow only; color-bearing native effects such as breathing remain blocked until the EC36 addressable color mapping is captured and tested.
 - Color cycle uses native ASUS spectrum-cycle mode `0x04`.
 - Rainbow uses native ASUS mode `0x05`.
+- Native mode brightness is accepted only as `0` (off) or `100`; intermediate values are rejected until a hardware brightness field is verified.
 - LumaCore stores effect speed in the UI/model and logs it in previews, but no ASUS speed payload byte is encoded until a verified field is documented.
 - The All Off action sends one explicit `EC35` off-mode packet per parsed config channel and requires session confirmation.
 - Successful and failed real HID writes are recorded in the activity log with interface/path, report count, byte count, and protocol summary or transport error.

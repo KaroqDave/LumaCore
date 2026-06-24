@@ -16,8 +16,11 @@ public:
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> createDevices() const override;
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> discoverDevices() const override;
     [[nodiscard]] PermissionResult probe() const override;
+    [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> devicesFromPayload(const QJsonObject& payload) const;
 
 private:
+    void updateDescriptor(const QJsonObject& payload) const;
+
     std::shared_ptr<DaemonClient> m_client;
     mutable BackendDescriptor m_descriptor {
         QStringLiteral("daemon"),

@@ -2,7 +2,7 @@
 #include "app/GuiOptions.h"
 #include "app/Version.h"
 
-#include <QGuiApplication>
+#include <QApplication>
 #include <QQuickStyle>
 
 #include <cstdio>
@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    QGuiApplication qtApplication(argc, argv);
+    QApplication qtApplication(argc, argv);
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     lumacore::GuiApplication::configureQtApplication(qtApplication);

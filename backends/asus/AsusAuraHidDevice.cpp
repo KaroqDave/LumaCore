@@ -29,12 +29,15 @@ AsusAuraHidDevice::AsusAuraHidDevice(
           device.vendor.isEmpty() ? QStringLiteral("ASUS") : device.vendor,
           RgbDeviceType::Motherboard,
           parent
-      )
+    )
     , m_device(std::move(device))
+    , m_support(hardware::linux::discoverySupportInfo(m_device))
     , m_configTableVerified(configTableVerified)
     , m_configTable(std::move(configTable))
     , m_configSummary(std::move(configSummary))
 {
+    m_configTableVerified = m_configTableVerified
+        && hardware::linux::isAsusAuraConfigTableWriteReady(m_configTable);
     setLikelyRgbController(true);
     initializeZones();
 }
@@ -42,6 +45,36 @@ AsusAuraHidDevice::AsusAuraHidDevice(
 QString AsusAuraHidDevice::discoveryIdentity() const
 {
     return hardware::linux::usbVidPidKey(m_device);
+}
+
+QString AsusAuraHidDevice::discoverySupportStage() const
+{
+    return m_support.stage;
+}
+
+QString AsusAuraHidDevice::discoverySupportStatus() const
+{
+    return m_support.status;
+}
+
+QString AsusAuraHidDevice::discoverySupportFamily() const
+{
+    return m_support.family;
+}
+
+QString AsusAuraHidDevice::discoverySupportNotes() const
+{
+    return m_support.notes;
+}
+
+bool AsusAuraHidDevice::discoveryCataloged() const
+{
+    return m_support.cataloged;
+}
+
+bool AsusAuraHidDevice::discoveryWriteCapableBackend() const
+{
+    return m_support.writeCapableBackend;
 }
 
 void AsusAuraHidDevice::initializeZones()
@@ -112,6 +145,34 @@ QString AsusAuraHidDevice::writeDisabledReason() const
         : QStringLiteral("ASUS Aura HID writes are disabled: %1").arg(m_configSummary);
 }
 
+bool AsusAuraHidDevice::sendApprovedPacket(
+    const hardware::linux::AsusAuraHidProtocolResult& protocol,
+    const QString& operation
+)
+{
+    if (!protocol.ok || !protocol.packet.hardwareWriteApproved) {
+        m_lastHardwareWriteStatus = !protocol.ok
+            ? QStringLiteral("ASUS Aura HID %1 skipped: %2").arg(operation, protocol.error)
+            : QStringLiteral("ASUS Aura HID %1 skipped: packet was not hardware-approved.").arg(operation);
+        return false;
+    }
+
+    const hardware::linux::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
+    if (!write.success) {
+        m_lastHardwareWriteStatus =
+            QStringLiteral("ASUS Aura HID %1 failed on %2: %3").arg(operation, m_device.path, write.error);
+        return false;
+    }
+    m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID %1 sent on interface %2 path %3: %4 report(s), %5 byte(s). %6")
+                                    .arg(operation)
+                                    .arg(m_device.interfaceNumber)
+                                    .arg(m_device.path)
+                                    .arg(protocol.packet.reports.size())
+                                    .arg(write.bytesWritten)
+                                    .arg(protocol.packet.summary);
+    return true;
+}
+
 bool AsusAuraHidDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)
 {
     return applyZoneEffect(zoneIndex, RgbEffect(RgbEffectType::Static, color, 1.0, 25));
@@ -144,24 +205,9 @@ bool AsusAuraHidDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
               zones().at(zoneIndex).ledCount(),
               effect.brightness()
           );
-    if (!protocol.ok || !protocol.packet.hardwareWriteApproved) {
-        m_lastHardwareWriteStatus = !protocol.ok
-            ? QStringLiteral("ASUS Aura HID write skipped: %1").arg(protocol.error)
-            : QStringLiteral("ASUS Aura HID write skipped: packet was not hardware-approved.");
+    if (!sendApprovedPacket(protocol, QStringLiteral("write"))) {
         return false;
     }
-
-    const hardware::linux::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
-    if (!write.success) {
-        m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID write failed on %1: %2").arg(m_device.path, write.error);
-        return false;
-    }
-    m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID write sent on interface %1 path %2: %3 report(s), %4 byte(s). %5")
-                                    .arg(m_device.interfaceNumber)
-                                    .arg(m_device.path)
-                                    .arg(protocol.packet.reports.size())
-                                    .arg(write.bytesWritten)
-                                    .arg(protocol.packet.summary);
 
     setZoneEffect(zoneIndex, effect);
     mutableZones()[zoneIndex].setColor(effect.color());
@@ -185,32 +231,22 @@ bool AsusAuraHidDevice::applyAllOff()
     }
 
     const hardware::linux::AsusAuraHidProtocolResult protocol = hardware::linux::buildAsusAuraAllOffWrite(m_configTable);
-    if (!protocol.ok || !protocol.packet.hardwareWriteApproved) {
-        m_lastHardwareWriteStatus = !protocol.ok
-            ? QStringLiteral("ASUS Aura HID all-off skipped: %1").arg(protocol.error)
-            : QStringLiteral("ASUS Aura HID all-off skipped: packet was not hardware-approved.");
+    if (!sendApprovedPacket(protocol, QStringLiteral("all-off"))) {
         return false;
     }
 
-    const hardware::linux::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
-    if (!write.success) {
-        m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID all-off failed on %1: %2").arg(m_device.path, write.error);
-        return false;
-    }
-    m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID all-off sent on interface %1 path %2: %3 report(s), %4 byte(s). %5")
-                                    .arg(m_device.interfaceNumber)
-                                    .arg(m_device.path)
-                                    .arg(protocol.packet.reports.size())
-                                    .arg(write.bytesWritten)
-                                    .arg(protocol.packet.summary);
+    applyLocalAllOff();
+    return true;
+}
 
+void AsusAuraHidDevice::applyLocalAllOff()
+{
     const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
     for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
         setZoneEffect(zoneIndex, offEffect);
         mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
         emit zoneChanged(zoneIndex);
     }
-    return true;
 }
 
 bool AsusAuraHidDevice::updateZoneMetadata(int zoneIndex, const QString& name, int ledCount)
@@ -287,6 +323,90 @@ PermissionResult AsusAuraHidDevice::checkRuntimePermission(BackendCapability cap
         PermissionStatus::RequiresConfirmation,
         QStringLiteral("ASUS Aura HID writes require confirmation before real hardware writes are allowed for this daemon session."),
     };
+}
+
+bool AsusAuraHidDevice::supportsEffect(int effectType) const
+{
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        if (supportsZoneEffect(zoneIndex, effectType)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsEffectSpeed(int effectType) const
+{
+    Q_UNUSED(effectType)
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsEffectBrightness(int effectType) const
+{
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        if (supportsZoneEffectBrightness(zoneIndex, effectType)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsZoneEffect(int zoneIndex, int effectType) const
+{
+    if (zoneIndex < 0 || zoneIndex >= zones().size()) {
+        return false;
+    }
+
+    if (effectType == static_cast<int>(RgbEffectType::Static)) {
+        return capabilities().testFlag(BackendCapability::ZoneColorWrite);
+    }
+
+    if (!capabilities().testFlag(BackendCapability::ZoneEffectWrite)) {
+        return false;
+    }
+
+    if (effectType == static_cast<int>(RgbEffectType::Rainbow)
+        || effectType == static_cast<int>(RgbEffectType::ColorCycle)) {
+        return isAddressableZone(zoneIndex);
+    }
+
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsZoneEffectSpeed(int zoneIndex, int effectType) const
+{
+    Q_UNUSED(zoneIndex)
+    Q_UNUSED(effectType)
+    return false;
+}
+
+bool AsusAuraHidDevice::supportsZoneEffectBrightness(int zoneIndex, int effectType) const
+{
+    return supportsZoneEffect(zoneIndex, effectType)
+        && effectType == static_cast<int>(RgbEffectType::Static);
+}
+
+int AsusAuraHidDevice::fixedZoneCount() const
+{
+    if (!m_configTableVerified || !m_configTable.valid) {
+        return 0;
+    }
+
+    int count = 0;
+    for (const hardware::linux::AsusAuraConfigChannel& channel : m_configTable.channels) {
+        if (channel.type == hardware::linux::AsusAuraChannelType::Fixed) {
+            count += qBound(0, channel.headerCount, hardware::linux::kAsusAuraHeaderCount);
+        }
+    }
+    return count;
+}
+
+bool AsusAuraHidDevice::isAddressableZone(int zoneIndex) const
+{
+    return m_configTableVerified
+        && m_configTable.valid
+        && zoneIndex >= fixedZoneCount()
+        && zoneIndex < zones().size();
 }
 
 } // namespace lumacore

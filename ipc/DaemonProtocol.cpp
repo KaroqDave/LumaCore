@@ -1,9 +1,10 @@
 #include "ipc/DaemonProtocol.h"
 
+#include "core/PortablePaths.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QJsonDocument>
-#include <QStandardPaths>
 #include <QtGlobal>
 
 namespace lumacore {
@@ -66,10 +67,7 @@ DaemonMethod daemonMethodFromName(const QString& name)
 QString defaultDaemonSocketPath()
 {
 #ifdef Q_OS_WIN
-    QString userScope = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    if (userScope.isEmpty()) {
-        userScope = QDir::homePath();
-    }
+    const QString userScope = portableDataRoot();
     const QByteArray userHash = QCryptographicHash::hash(
         QDir::cleanPath(userScope).toLower().toUtf8(),
         QCryptographicHash::Sha256
@@ -217,48 +215,38 @@ BackendDescriptor backendDescriptorFromJson(const QJsonObject& object)
     };
 }
 
-QJsonObject zoneToJson(const RgbZone& zone)
+QJsonArray effectSupportToJson(const RgbDevice& device, int zoneIndex = -1);
+
+QJsonObject zoneToJson(const RgbDevice& device, int zoneIndex)
 {
+    const RgbZone& zone = device.zones().at(zoneIndex);
     return {
         {QStringLiteral("name"), zone.name()},
         {QStringLiteral("type"), zone.typeName()},
         {QStringLiteral("ledCount"), zone.ledCount()},
         {QStringLiteral("color"), zone.currentColor().toHexString()},
         {QStringLiteral("effect"), zone.effect().toJson()},
+        {QStringLiteral("effectSupport"), effectSupportToJson(device, zoneIndex)},
     };
 }
 
-bool isAnimatedEffectType(RgbEffectType type)
+QJsonArray effectSupportToJson(const RgbDevice& device, int zoneIndex)
 {
-    return type != RgbEffectType::Static;
-}
-
-QJsonArray effectSupportToJson(const RgbDevice& device)
-{
-    const BackendCapabilities capabilities = device.capabilities();
-    const bool supportsStatic = capabilities.testFlag(BackendCapability::ZoneColorWrite);
-    const bool supportsAnimated = capabilities.testFlag(BackendCapability::ZoneEffectWrite);
-    const bool isAsusAura = device.backendId() == QStringLiteral("asus-aura-hid");
-
     QJsonArray effects;
-    for (const RgbEffectType type : {
-             RgbEffectType::Static,
-             RgbEffectType::Rainbow,
-             RgbEffectType::Breathing,
-             RgbEffectType::ColorCycle,
-         }) {
-        const bool animated = isAnimatedEffectType(type);
-        const bool supported = animated ? supportsAnimated : supportsStatic;
-        bool speed = supported && animated;
-        bool brightness = supported;
-
-        if (isAsusAura) {
-            speed = false;
-            brightness = type == RgbEffectType::Static || type == RgbEffectType::Breathing;
-        }
+    for (const RgbEffectType type : allRgbEffectTypes()) {
+        const int effectType = static_cast<int>(type);
+        const bool supported = zoneIndex >= 0
+            ? device.supportsZoneEffect(zoneIndex, effectType)
+            : device.supportsEffect(effectType);
+        const bool speed = zoneIndex >= 0
+            ? device.supportsZoneEffectSpeed(zoneIndex, effectType)
+            : device.supportsEffectSpeed(effectType);
+        const bool brightness = zoneIndex >= 0
+            ? device.supportsZoneEffectBrightness(zoneIndex, effectType)
+            : device.supportsEffectBrightness(effectType);
 
         effects.append(QJsonObject {
-            {QStringLiteral("effectType"), static_cast<int>(type)},
+            {QStringLiteral("effectType"), effectType},
             {QStringLiteral("name"), rgbEffectTypeToString(type)},
             {QStringLiteral("supported"), supported},
             {QStringLiteral("speed"), speed},
@@ -283,8 +271,8 @@ QJsonObject permissionResultsToJson(const RgbDevice& device)
 QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed)
 {
     QJsonArray zones;
-    for (const RgbZone& zone : device.zones()) {
-        zones.append(zoneToJson(zone));
+    for (int zoneIndex = 0; zoneIndex < device.zones().size(); ++zoneIndex) {
+        zones.append(zoneToJson(device, zoneIndex));
     }
     QJsonObject permissions = permissionResultsToJson(device);
     const BackendCapabilities capabilities = device.capabilities();
@@ -323,6 +311,13 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
         {QStringLiteral("type"), device.typeName()},
         {QStringLiteral("backendId"), device.backendId()},
         {QStringLiteral("realBackendId"), device.backendId()},
+        {QStringLiteral("discoveryIdentity"), device.discoveryIdentity()},
+        {QStringLiteral("discoverySupportStage"), device.discoverySupportStage()},
+        {QStringLiteral("discoverySupportStatus"), device.discoverySupportStatus()},
+        {QStringLiteral("discoverySupportFamily"), device.discoverySupportFamily()},
+        {QStringLiteral("discoverySupportNotes"), device.discoverySupportNotes()},
+        {QStringLiteral("discoveryCataloged"), device.discoveryCataloged()},
+        {QStringLiteral("discoveryWriteCapableBackend"), device.discoveryWriteCapableBackend()},
         {QStringLiteral("capabilities"), capabilitiesToJson(capabilities)},
         {QStringLiteral("permission"), permissionResultToJson(colorPermission)},
         {QStringLiteral("permissions"), permissions},

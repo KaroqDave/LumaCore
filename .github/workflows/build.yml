@@ -47,6 +47,17 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: Stage Linux install tree
+        run: DESTDIR="$PWD/dist/linux-stage" cmake --install build --prefix /usr
+
+      - name: Verify Linux install tree
+        run: |
+          test -x dist/linux-stage/usr/bin/lumacore
+          test -x dist/linux-stage/usr/bin/lumacore-daemon
+          test -f dist/linux-stage/usr/share/applications/lumacore.desktop
+          test -f dist/linux-stage/usr/share/icons/hicolor/scalable/apps/lumacore.svg
+          test -f dist/linux-stage/usr/lib/systemd/system/lumacore-daemon.service
+
   windows-preview:
     name: Windows preview package
     runs-on: windows-latest

@@ -42,11 +42,15 @@ Item {
             selectedTextColor: Theme.primaryText
             selectionColor: Theme.accent
             font.family: "monospace"
-            font.pixelSize: 12
+            font.pixelSize: 11
+            leftPadding: 10
+            rightPadding: 10
+            topPadding: 8
+            bottomPadding: 8
 
             background: Rectangle {
                 color: Theme.inputBg
-                radius: 12
+                radius: 8
                 border.color: Theme.border
             }
 
@@ -65,6 +69,7 @@ Item {
         width: 120
         height: 28
         variant: "secondary"
+        compact: true
         text: qsTr("Jump to latest")
         onClicked: panel.scrollToBottom()
     }

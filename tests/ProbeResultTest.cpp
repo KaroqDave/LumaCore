@@ -1,0 +1,133 @@
+#include "hardware/linux/ProbeResult.h"
+
+#include <QCoreApplication>
+#include <QDebug>
+
+#include <utility>
+
+namespace {
+
+bool require(bool condition, const char* message)
+{
+    if (!condition) {
+        qCritical().noquote() << message;
+    }
+    return condition;
+}
+
+lumacore::hardware::linux::ProbeDevice probeDevice(
+    QString vendorId,
+    QString productId,
+    QString vendor,
+    QString name,
+    QString details = {}
+)
+{
+    return {
+        QStringLiteral("test"),
+        lumacore::hardware::linux::stableProbeId(
+            QStringLiteral("test"),
+            QStringLiteral("%1-%2").arg(vendorId, productId)
+        ),
+        std::move(name),
+        std::move(vendor),
+        QStringLiteral("test-path"),
+        std::move(details),
+        std::move(vendorId),
+        std::move(productId),
+        -1,
+        0,
+        0,
+        lumacore::RgbDeviceType::Controller,
+    };
+}
+
+} // namespace
+
+int main(int argc, char* argv[])
+{
+    QCoreApplication application(argc, argv);
+    Q_UNUSED(application)
+
+    using namespace lumacore::hardware::linux;
+
+    const ProbeDevice validatedAsus = probeDevice(
+        QStringLiteral("0b05"),
+        QStringLiteral("19af"),
+        QStringLiteral("ASUSTek Computer, Inc."),
+        QStringLiteral("AURA LED Controller")
+    );
+    const DiscoverySupportInfo validatedSupport = discoverySupportInfo(validatedAsus);
+
+    const ProbeDevice researchedAsus = probeDevice(
+        QStringLiteral("0B05"),
+        QStringLiteral("18F3"),
+        QStringLiteral("ASUSTek Computer, Inc."),
+        QStringLiteral("AURA LED Controller")
+    );
+    const DiscoverySupportInfo researchedSupport = discoverySupportInfo(researchedAsus);
+
+    const ProbeDevice heuristicController = probeDevice(
+        QStringLiteral("1234"),
+        QStringLiteral("5678"),
+        QStringLiteral("Example"),
+        QStringLiteral("Example RGB Controller")
+    );
+    const DiscoverySupportInfo heuristicSupport = discoverySupportInfo(heuristicController);
+
+    const ProbeDevice unrelated = probeDevice(
+        QStringLiteral("1234"),
+        QStringLiteral("9999"),
+        QStringLiteral("Example"),
+        QStringLiteral("Keyboard")
+    );
+    const DiscoverySupportInfo unrelatedSupport = discoverySupportInfo(unrelated);
+
+    if (!require(
+            stableProbeId(QStringLiteral("hid"), QStringLiteral("0B05:19AF /dev/hidraw0"))
+                == QStringLiteral("hid-0b05-19af-dev-hidraw0"),
+            "stable probe IDs should be lowercase and path-safe"
+        )
+        || !require(
+            usbVidPidKey(validatedAsus) == QStringLiteral("0B05:19AF"),
+            "VID:PID keys should be normalized to uppercase"
+        )
+        || !require(validatedSupport.cataloged, "validated ASUS identity should be cataloged")
+        || !require(
+            validatedSupport.stage == QStringLiteral("guarded-write-backend"),
+            "validated ASUS identity should point at the guarded write backend stage"
+        )
+        || !require(
+            validatedSupport.writeCapableBackend,
+            "validated ASUS identity should record that a separate guarded backend exists"
+        )
+        || !require(researchedSupport.cataloged, "research ASUS identity should be cataloged")
+        || !require(
+            researchedSupport.stage == QStringLiteral("research-only"),
+            "research ASUS identity should remain research-only"
+        )
+        || !require(
+            !researchedSupport.writeCapableBackend,
+            "research-only identities must not advertise write-capable backends"
+        )
+        || !require(
+            heuristicSupport.stage == QStringLiteral("heuristic"),
+            "keyword matches should be marked as heuristic only"
+        )
+        || !require(
+            !heuristicSupport.cataloged && heuristicSupport.likelyRgbController,
+            "heuristic matches should be likely RGB without becoming cataloged"
+        )
+        || !require(
+            unrelatedSupport.stage == QStringLiteral("unclassified"),
+            "unrelated inventory should remain unclassified"
+        )
+        || !require(
+            !isLikelyRgbController(unrelated),
+            "unrelated inventory should not be marked likely RGB"
+        )) {
+        return 1;
+    }
+
+    return 0;
+}

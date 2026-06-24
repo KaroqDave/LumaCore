@@ -26,31 +26,40 @@ std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::createDevices() const
 
 std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::discoverDevices() const
 {
-    std::vector<std::unique_ptr<RgbDevice>> devices;
     if (m_client == nullptr) {
-        return devices;
+        return {};
     }
 
     const DaemonCallResult response = m_client->call(daemonMethodName(DaemonMethod::ListDevices));
     if (!response.ok) {
-        return devices;
+        return {};
     }
 
-    const BackendDescriptor daemonDescriptor = backendDescriptorFromJson(response.result.value(QStringLiteral("backend")).toObject());
+    return devicesFromPayload(response.result);
+}
+
+std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::devicesFromPayload(const QJsonObject& payload) const
+{
+    updateDescriptor(payload);
+    std::vector<std::unique_ptr<RgbDevice>> devices;
+    const QJsonArray snapshots = payload.value(QStringLiteral("devices")).toArray();
+    devices.reserve(static_cast<std::size_t>(snapshots.size()));
+    for (const QJsonValue& snapshot : snapshots) {
+        devices.push_back(std::make_unique<DaemonRgbDevice>(snapshot.toObject(), m_client));
+    }
+    return devices;
+}
+
+void DaemonBackend::updateDescriptor(const QJsonObject& payload) const
+{
+    const BackendDescriptor daemonDescriptor =
+        backendDescriptorFromJson(payload.value(QStringLiteral("backend")).toObject());
     if (!daemonDescriptor.id.isEmpty()) {
         m_descriptor.displayName = QStringLiteral("Daemon: %1").arg(daemonDescriptor.displayName);
         m_descriptor.description = QStringLiteral("%1 Socket: %2")
                                        .arg(daemonDescriptor.description, m_client->socketPath());
         m_descriptor.capabilities = daemonDescriptor.capabilities;
     }
-
-    const QJsonArray snapshots = response.result.value(QStringLiteral("devices")).toArray();
-    devices.reserve(static_cast<std::size_t>(snapshots.size()));
-    for (const QJsonValue& snapshot : snapshots) {
-        devices.push_back(std::make_unique<DaemonRgbDevice>(snapshot.toObject(), m_client));
-    }
-
-    return devices;
 }
 
 PermissionResult DaemonBackend::probe() const
@@ -64,13 +73,7 @@ PermissionResult DaemonBackend::probe() const
         return {PermissionStatus::Denied, response.error};
     }
 
-    const BackendDescriptor daemonDescriptor = backendDescriptorFromJson(response.result.value(QStringLiteral("backend")).toObject());
-    if (!daemonDescriptor.id.isEmpty()) {
-        m_descriptor.displayName = QStringLiteral("Daemon: %1").arg(daemonDescriptor.displayName);
-        m_descriptor.description = QStringLiteral("%1 Socket: %2")
-                                       .arg(daemonDescriptor.description, m_client->socketPath());
-        m_descriptor.capabilities = daemonDescriptor.capabilities;
-    }
+    updateDescriptor(response.result);
 
     return {PermissionStatus::Granted, {}};
 }

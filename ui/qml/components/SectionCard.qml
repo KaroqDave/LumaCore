@@ -10,11 +10,12 @@ Rectangle {
     property string subtitle: ""
     property color surfaceColor: Theme.surface
     property bool animationsEnabled: true
-    property int cardPadding: 16
+    property bool compact: false
+    property int cardPadding: compact ? 12 : 16
     default property alias content: body.data
 
     color: surfaceColor
-    radius: 16
+    radius: 8
     border.color: Theme.border
     border.width: 1
     implicitHeight: body.implicitHeight + cardPadding * 2
@@ -30,19 +31,19 @@ Rectangle {
 
         anchors.fill: parent
         anchors.margins: card.cardPadding
-        spacing: 12
+        spacing: card.compact ? 8 : 12
 
         ColumnLayout {
             Layout.fillWidth: true
             visible: card.title.length > 0 || card.subtitle.length > 0
-            spacing: 4
+            spacing: card.compact ? 2 : 4
 
             Label {
                 Layout.fillWidth: true
                 text: card.title
                 visible: card.title.length > 0
                 color: Theme.primaryText
-                font.pixelSize: 15
+                font.pixelSize: card.compact ? 14 : 15
                 font.bold: true
                 elide: Text.ElideRight
             }

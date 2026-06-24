@@ -1,0 +1,45 @@
+#pragma once
+
+#include <QDate>
+#include <QDateTime>
+#include <QObject>
+#include <QTime>
+#include <QTimer>
+
+namespace lumacore {
+
+class AppController;
+class SettingsController;
+
+class ProfileScheduleRunner final : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit ProfileScheduleRunner(
+        SettingsController* settingsController,
+        AppController* appController,
+        QObject* parent = nullptr
+    );
+
+    [[nodiscard]] static QTime parseScheduledTime(const QString& value);
+    [[nodiscard]] static qint64 millisecondsUntilNextRun(
+        const QDateTime& now,
+        const QTime& scheduledTime
+    );
+
+public slots:
+    void evaluateNow();
+
+private:
+    void resetAndSchedule();
+    void scheduleNextCheck();
+
+    SettingsController* m_settingsController {nullptr};
+    AppController* m_appController {nullptr};
+    QTimer m_timer;
+    QDate m_lastAttemptDate;
+    bool m_skipMissedRun {true};
+};
+
+} // namespace lumacore
