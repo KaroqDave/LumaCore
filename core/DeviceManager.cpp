@@ -869,12 +869,13 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
 
             const RgbZone& currentZone = matchedDevice->zones().at(matchedZoneIndex);
             const RgbEffect currentEffect = currentZone.effect();
+            const RgbEffect targetEffect = normalizedProfileEffect(*matchedDevice, matchedZoneIndex, effect);
             const int targetLedCount = qMax(
                 1,
                 zoneObject.value(QStringLiteral("ledCount")).toInt(currentZone.ledCount())
             );
             const QStringList changes =
-                profilePreviewChanges(currentZone, currentEffect, effect, targetLedCount);
+                profilePreviewChanges(currentZone, currentEffect, targetEffect, targetLedCount);
             const bool changed = !changes.isEmpty();
             if (changed) {
                 ++changedZones;
@@ -895,11 +896,11 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
                 changed ? changes.join(QStringLiteral("; ")) : QStringLiteral("No changes needed.")
             );
             item.insert(QStringLiteral("currentSummary"), profileEffectSummary(currentEffect));
-            item.insert(QStringLiteral("targetSummary"), profileEffectSummary(effect));
+            item.insert(QStringLiteral("targetSummary"), profileEffectSummary(targetEffect));
             item.insert(QStringLiteral("currentLedCount"), currentZone.ledCount());
             item.insert(QStringLiteral("targetLedCount"), targetLedCount);
             item.insert(QStringLiteral("currentEffect"), profileEffectPreview(currentEffect));
-            item.insert(QStringLiteral("targetEffect"), profileEffectPreview(effect));
+            item.insert(QStringLiteral("targetEffect"), profileEffectPreview(targetEffect));
             previewItems.append(item);
         }
     }
