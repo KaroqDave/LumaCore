@@ -138,6 +138,11 @@ qt_add_executable(lumacore MANUAL_FINALIZATION)
 add_subdirectory(app)
 
 set_source_files_properties(ui/qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(
+    ui/qml/components/BackendInfoDialog.qml
+    ui/qml/components/ProfileManager.qml
+    PROPERTIES QT_QML_SKIP_QMLLINT TRUE
+)
 
 qt_add_qml_module(lumacore
     URI LumaCore
