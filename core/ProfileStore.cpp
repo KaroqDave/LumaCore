@@ -249,10 +249,6 @@ QString ProfileStore::normalizeName(const QString& profileName)
 void ProfileStore::migrateLegacyProfilesIfNeeded()
 {
     const QDir destinationDirectory(m_directoryPath);
-    if (destinationDirectory.exists()) {
-        return;
-    }
-
     const QDir legacyDirectory(QDir::current().filePath(QStringLiteral("profiles")));
     if (!legacyDirectory.exists()
         || QDir::cleanPath(legacyDirectory.absolutePath()) == QDir::cleanPath(destinationDirectory.absolutePath())) {

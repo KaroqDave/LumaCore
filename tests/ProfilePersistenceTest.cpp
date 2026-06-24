@@ -44,6 +44,15 @@ bool writeProfileFile(const QString& path, const QByteArray& contents)
         && file.write(contents) == contents.size();
 }
 
+QByteArray readFile(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    return file.readAll();
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -59,9 +68,11 @@ int main(int argc, char* argv[])
     }
 
     const QString profilesDirectory = temporaryDirectory.filePath(QStringLiteral("app-data/profiles"));
+    const QByteArray legacyProfile = QByteArrayLiteral("{\"profileName\":\"legacy\"}");
     QDir().mkpath(QStringLiteral("profiles"));
+    QDir().mkpath(profilesDirectory);
     if (!require(
-            writeProfileFile(QStringLiteral("profiles/legacy.json"), QByteArrayLiteral("{}")),
+            writeProfileFile(QStringLiteral("profiles/legacy.json"), legacyProfile),
             "legacy profile fixture should be written"
         )) {
         return 1;
@@ -77,19 +88,30 @@ int main(int argc, char* argv[])
         )
         || !require(
             QFile::exists(QDir(profilesDirectory).filePath(QStringLiteral("legacy.json"))),
-            "legacy profiles should migrate when the application-data directory is first created"
+            "legacy profiles should migrate when the application-data directory was already created"
+        )
+        || !require(
+            readFile(QDir(profilesDirectory).filePath(QStringLiteral("legacy.json"))) == legacyProfile,
+            "legacy profile contents should be copied to the application-data directory"
         )) {
         return 1;
     }
 
-    QFile::remove(QDir(profilesDirectory).filePath(QStringLiteral("legacy.json")));
+    writeProfileFile(QStringLiteral("profiles/legacy.json"), QByteArrayLiteral("{\"profileName\":\"changed\"}"));
     const lumacore::ProfileStore reopenedStore(profilesDirectory);
     if (!require(
-            reopenedStore.names().isEmpty(),
-            "legacy profiles should not return after migration once the new directory exists"
+            reopenedStore.names() == QStringList {QStringLiteral("legacy")},
+            "legacy profiles should remain listed after reopening the pre-created directory"
+        )
+        || !require(
+            readFile(QDir(profilesDirectory).filePath(QStringLiteral("legacy.json"))) == legacyProfile,
+            "legacy migration should not overwrite profiles that were already copied"
         )) {
         return 1;
     }
+
+    QFile::remove(QStringLiteral("profiles/legacy.json"));
+    QFile::remove(QDir(profilesDirectory).filePath(QStringLiteral("legacy.json")));
 
     const lumacore::RgbColor savedColor(17, 34, 51);
     const lumacore::RgbColor changedColor(170, 187, 204);

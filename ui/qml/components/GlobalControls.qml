@@ -807,7 +807,7 @@ Item {
 
             Layout.fillWidth: true
             visible: controls.selectedZoneMode
-                     && controls.selectedDeviceRequiresConfirmation
+                     && (controls.selectedDeviceRequiresConfirmation || controls.selectedDeviceWriteConfirmed)
                      && controls.appController
                      && !controls.appController.dryRunEnabled
             Layout.preferredHeight: visible ? confirmationColumn.implicitHeight + 20 : 0
