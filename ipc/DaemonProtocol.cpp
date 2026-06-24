@@ -233,12 +233,7 @@ QJsonObject zoneToJson(const RgbDevice& device, int zoneIndex)
 QJsonArray effectSupportToJson(const RgbDevice& device, int zoneIndex)
 {
     QJsonArray effects;
-    for (const RgbEffectType type : {
-             RgbEffectType::Static,
-             RgbEffectType::Rainbow,
-             RgbEffectType::Breathing,
-             RgbEffectType::ColorCycle,
-         }) {
+    for (const RgbEffectType type : allRgbEffectTypes()) {
         const int effectType = static_cast<int>(type);
         const bool supported = zoneIndex >= 0
             ? device.supportsZoneEffect(zoneIndex, effectType)

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 1.1.6.3
+    VERSION 1.1.6.8
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
@@ -146,6 +146,7 @@ qt_add_qml_module(lumacore
         ui/qml/AboutDialog.qml
         ui/qml/Theme.qml
         ui/qml/components/ActivityLogPanel.qml
+        ui/qml/components/AllOffConfirmationDialog.qml
         ui/qml/components/AppButton.qml
         ui/qml/components/AppSlider.qml
         ui/qml/components/AppSwitch.qml
@@ -159,6 +160,7 @@ qt_add_qml_module(lumacore
         ui/qml/components/NavIcon.qml
         ui/qml/components/NavItem.qml
         ui/qml/components/NavRail.qml
+        ui/qml/components/OperationResultDialog.qml
         ui/qml/components/ProfileManager.qml
         ui/qml/components/SectionCard.qml
         ui/qml/components/SettingsPage.qml

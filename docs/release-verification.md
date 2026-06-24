@@ -1,6 +1,9 @@
 # Release Verification
 
-Use this checklist before tagging a focused v1.1 reliability release.
+Use this checklist before tagging a focused release.
+
+For behavior-preserving refactors, pair these commands with the golden checks in
+`docs/refactor-parity.md` and call out any intentionally deferred migration-only work in the PR.
 
 ## Linux debug verification
 

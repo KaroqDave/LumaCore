@@ -1,6 +1,7 @@
 #include "core/DeviceManager.h"
 
 #include "core/PermissionGate.h"
+#include "core/ProfilePlan.h"
 #include "core/WriteGate.h"
 
 #include <QDir>
@@ -12,172 +13,6 @@
 #include <utility>
 
 namespace lumacore {
-
-namespace {
-
-int storedEffectType(const QJsonObject& zoneObject)
-{
-    const QJsonObject effectObject = zoneObject.value(QStringLiteral("effect")).toObject();
-    if (effectObject.isEmpty()) {
-        return static_cast<int>(RgbEffectType::Static);
-    }
-
-    const QString effectName = effectObject.value(QStringLiteral("type")).toString();
-    const QStringList knownEffects {
-        QStringLiteral("Static"),
-        QStringLiteral("Rainbow"),
-        QStringLiteral("Breathing"),
-        QStringLiteral("ColorCycle"),
-    };
-    for (int index = 0; index < knownEffects.size(); ++index) {
-        if (effectName.compare(knownEffects.at(index), Qt::CaseInsensitive) == 0) {
-            return index;
-        }
-    }
-    return -1;
-}
-
-bool storedZoneEffect(const QJsonObject& zoneObject, RgbEffect* effect, int* effectType = nullptr)
-{
-    const int typeValue = storedEffectType(zoneObject);
-    if (effectType != nullptr) {
-        *effectType = typeValue;
-    }
-    if (typeValue < 0) {
-        return false;
-    }
-
-    if (!zoneObject.contains(QStringLiteral("effect"))) {
-        bool colorOk = false;
-        const RgbColor color = RgbColor::fromHexString(zoneObject.value(QStringLiteral("color")).toString(), &colorOk);
-        if (!colorOk) {
-            return false;
-        }
-        if (effect != nullptr) {
-            *effect = RgbEffect(RgbEffectType::Static, color);
-        }
-        return true;
-    }
-
-    const QJsonValue effectValue = zoneObject.value(QStringLiteral("effect"));
-    if (!effectValue.isObject()) {
-        return false;
-    }
-
-    const QJsonObject effectObject = effectValue.toObject();
-    bool colorOk = false;
-    const RgbColor color = RgbColor::fromHexString(effectObject.value(QStringLiteral("color")).toString(), &colorOk);
-    if (!colorOk) {
-        return false;
-    }
-
-    if (effect != nullptr) {
-        *effect = RgbEffect(
-            static_cast<RgbEffectType>(typeValue),
-            color,
-            effectObject.value(QStringLiteral("speed")).toDouble(1.0),
-            effectObject.value(QStringLiteral("brightness")).toInt(100)
-        );
-    }
-    return true;
-}
-
-QString effectSummary(const RgbEffect& effect)
-{
-    const QString base = QStringLiteral("%1 %2, brightness %3")
-        .arg(rgbEffectTypeToString(effect.type()), effect.color().toHexString())
-        .arg(effect.brightness());
-    if (!effect.isAnimated()) {
-        return base;
-    }
-
-    return QStringLiteral("%1, speed %2")
-        .arg(base)
-        .arg(effect.speed(), 0, 'f', 1);
-}
-
-QVariantMap effectPreview(const RgbEffect& effect)
-{
-    return {
-        {QStringLiteral("type"), rgbEffectTypeToString(effect.type())},
-        {QStringLiteral("color"), effect.color().toHexString()},
-        {QStringLiteral("brightness"), effect.brightness()},
-        {QStringLiteral("speed"), effect.speed()},
-        {QStringLiteral("summary"), effectSummary(effect)},
-    };
-}
-
-QStringList profilePreviewChanges(
-    const RgbZone& currentZone,
-    const RgbEffect& currentEffect,
-    const RgbEffect& targetEffect,
-    int targetLedCount
-)
-{
-    QStringList changes;
-    if (currentEffect.type() != targetEffect.type()) {
-        changes.append(
-            QStringLiteral("Effect: %1 -> %2")
-                .arg(rgbEffectTypeToString(currentEffect.type()), rgbEffectTypeToString(targetEffect.type()))
-        );
-    }
-    if (currentEffect.color() != targetEffect.color()) {
-        changes.append(
-            QStringLiteral("Color: %1 -> %2")
-                .arg(currentEffect.color().toHexString(), targetEffect.color().toHexString())
-        );
-    }
-    if (currentEffect.brightness() != targetEffect.brightness()) {
-        changes.append(
-            QStringLiteral("Brightness: %1 -> %2")
-                .arg(currentEffect.brightness())
-                .arg(targetEffect.brightness())
-        );
-    }
-    if (!qFuzzyCompare(currentEffect.speed(), targetEffect.speed())) {
-        changes.append(
-            QStringLiteral("Speed: %1 -> %2")
-                .arg(currentEffect.speed(), 0, 'f', 1)
-                .arg(targetEffect.speed(), 0, 'f', 1)
-        );
-    }
-    if (currentZone.ledCount() != targetLedCount) {
-        changes.append(
-            QStringLiteral("LED count: %1 -> %2")
-                .arg(currentZone.ledCount())
-                .arg(targetLedCount)
-        );
-    }
-    return changes;
-}
-
-QVariantMap profilePreviewItem(
-    QString status,
-    QString statusText,
-    QString deviceName,
-    QString zoneName,
-    QString reason = {}
-)
-{
-    return {
-        {QStringLiteral("status"), std::move(status)},
-        {QStringLiteral("statusText"), std::move(statusText)},
-        {QStringLiteral("deviceName"), std::move(deviceName)},
-        {QStringLiteral("zoneName"), std::move(zoneName)},
-        {QStringLiteral("reason"), std::move(reason)},
-        {QStringLiteral("changed"), false},
-        {QStringLiteral("changes"), QStringList {}},
-        {QStringLiteral("changeSummary"), QString()},
-        {QStringLiteral("currentSummary"), QString()},
-        {QStringLiteral("targetSummary"), QString()},
-        {QStringLiteral("currentLedCount"), 0},
-        {QStringLiteral("targetLedCount"), 0},
-        {QStringLiteral("currentEffect"), QVariantMap {}},
-        {QStringLiteral("targetEffect"), QVariantMap {}},
-    };
-}
-
-} // namespace
 
 DeviceManager::DeviceManager(QObject* parent, QString profilesDirectory)
     : QObject(parent)
@@ -790,123 +625,42 @@ QVariantMap DeviceManager::applyProfileWithReport(const QString& profileName)
         };
     }
 
-    int totalZones = 0;
-    int appliedZones = 0;
-    int skippedMissingDeviceZones = 0;
-    int skippedMissingZones = 0;
-    int skippedInvalidZones = 0;
-    int skippedUnsupportedZones = 0;
-    int failedZones = 0;
-    QStringList details;
+    QVector<ProfileDeviceRef> deviceRefs;
+    deviceRefs.reserve(deviceCount());
+    for (int deviceIndex = 0; deviceIndex < deviceCount(); ++deviceIndex) {
+        deviceRefs.append(ProfileDeviceRef {deviceIndex, deviceAt(deviceIndex)});
+    }
 
-    const QJsonArray devicesJson = profile.value(QStringLiteral("devices")).toArray();
-    for (const QJsonValue& deviceValue : devicesJson) {
-        const QJsonObject deviceObject = deviceValue.toObject();
-        const QString deviceId = deviceObject.value(QStringLiteral("id")).toString();
-        const QString storedDeviceName = deviceObject.value(QStringLiteral("name")).toString(deviceId);
-        const QJsonArray zonesJson = deviceObject.value(QStringLiteral("zones")).toArray();
-        totalZones += zonesJson.size();
-
-        int deviceIndex = -1;
-        for (int candidateIndex = 0; candidateIndex < deviceCount(); ++candidateIndex) {
-            RgbDevice* device = deviceAt(candidateIndex);
-            if (device != nullptr && device->id() == deviceId) {
-                deviceIndex = candidateIndex;
-                break;
-            }
-        }
-
-        if (deviceIndex < 0) {
-            skippedMissingDeviceZones += zonesJson.size();
-            details.append(QStringLiteral("Skipped missing device: %1 (%2 zone(s))").arg(storedDeviceName).arg(zonesJson.size()));
+    const ProfileApplyPlan plan = buildProfileApplyPlan(normalizedName, profile, deviceRefs);
+    ProfileApplySummary summary = plan.summary;
+    for (const ProfileApplyStep& step : plan.steps) {
+        if (step.kind == ProfileApplyStepKind::Skip) {
+            appendProfileApplySkip(&summary, step.skipReason, step.skippedZoneCount, step.detail);
             continue;
         }
 
-        RgbDevice* device = deviceAt(deviceIndex);
-        for (const QJsonValue& zoneValue : zonesJson) {
-            const QJsonObject zoneObject = zoneValue.toObject();
-            const QString zoneName = zoneObject.value(QStringLiteral("name")).toString();
-            int effectType = -1;
-            RgbEffect effect;
-            if (!storedZoneEffect(zoneObject, &effect, &effectType)) {
-                ++skippedInvalidZones;
-                details.append(QStringLiteral("Skipped invalid zone: %1 / %2").arg(storedDeviceName, zoneName));
-                continue;
-            }
-
-            int matchedZoneIndex = -1;
-            for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
-                if (device->zones().at(zoneIndex).name() == zoneName) {
-                    matchedZoneIndex = zoneIndex;
-                    break;
-                }
-            }
-            if (matchedZoneIndex < 0) {
-                const int storedZoneIndex = zoneObject.value(QStringLiteral("index")).toInt(-1);
-                if (storedZoneIndex >= 0 && storedZoneIndex < device->zones().size()) {
-                    matchedZoneIndex = storedZoneIndex;
-                }
-            }
-            if (matchedZoneIndex < 0) {
-                ++skippedMissingZones;
-                details.append(QStringLiteral("Skipped missing zone: %1 / %2").arg(storedDeviceName, zoneName));
-                continue;
-            }
-            if (!device->supportsZoneEffect(matchedZoneIndex, effectType)) {
-                ++skippedUnsupportedZones;
-                details.append(QStringLiteral("Skipped unsupported effect: %1 / %2").arg(storedDeviceName, zoneName));
-                continue;
-            }
-
-            const int ledCount =
-                zoneObject.value(QStringLiteral("ledCount")).toInt(device->zones().at(matchedZoneIndex).ledCount());
-            if (!updateZone(deviceIndex, matchedZoneIndex, zoneName, qMax(1, ledCount))
-                || !applyZoneEffect(deviceIndex, matchedZoneIndex, effect)) {
-                ++failedZones;
-                details.append(QStringLiteral("Failed to apply zone: %1 / %2").arg(storedDeviceName, zoneName));
-                continue;
-            }
-            ++appliedZones;
+        const ProfileApplyTarget& target = step.target;
+        if (!updateZone(target.deviceIndex, target.zoneIndex, target.zoneName, target.ledCount)
+            || !applyZoneEffect(target.deviceIndex, target.zoneIndex, target.effect)) {
+            ++summary.failedZones;
+            summary.details.append(QStringLiteral("Failed to apply zone: %1 / %2").arg(target.deviceName, target.zoneName));
+            continue;
         }
+        ++summary.appliedZones;
     }
 
-    const int skippedZones =
-        skippedMissingDeviceZones + skippedMissingZones + skippedInvalidZones + skippedUnsupportedZones + failedZones;
-    const bool success = appliedZones > 0;
-    const bool partial = success && skippedZones > 0;
-    const QString summary = success
-        ? QStringLiteral("Applied %1 of %2 zone(s); skipped or failed %3.")
-              .arg(appliedZones)
-              .arg(totalZones)
-              .arg(skippedZones)
-        : QStringLiteral("Applied 0 of %1 zone(s).").arg(totalZones);
-    const QString failureError = QStringLiteral("Profile did not match any available device zones.");
-
-    if (appliedZones == 0) {
-        m_activityLog.error(LogCategory::Profile, summary);
+    const QVariantMap report = profileApplyReport(summary);
+    const QString reportSummary = report.value(QStringLiteral("summary")).toString();
+    if (summary.appliedZones == 0) {
+        m_activityLog.error(LogCategory::Profile, reportSummary);
     } else {
         m_activityLog.info(
             LogCategory::Profile,
-            QStringLiteral("Loaded profile '%1'. %2").arg(normalizedName, summary)
+            QStringLiteral("Loaded profile '%1'. %2").arg(normalizedName, reportSummary)
         );
     }
 
-    return {
-        {QStringLiteral("success"), success},
-        {QStringLiteral("partial"), partial},
-        {QStringLiteral("profileName"), normalizedName},
-        {QStringLiteral("totalZones"), totalZones},
-        {QStringLiteral("appliedZones"), appliedZones},
-        {QStringLiteral("skippedZones"), skippedZones},
-        {QStringLiteral("missingDeviceZones"), skippedMissingDeviceZones},
-        {QStringLiteral("missingZones"), skippedMissingZones},
-        {QStringLiteral("invalidZones"), skippedInvalidZones},
-        {QStringLiteral("unsupportedZones"), skippedUnsupportedZones},
-        {QStringLiteral("failedZones"), failedZones},
-        {QStringLiteral("summary"), summary},
-        {QStringLiteral("error"), success ? QString() : failureError},
-        {QStringLiteral("details"), details},
-    };
+    return report;
 }
 
 bool DeviceManager::deleteProfile(const QString& profileName, QString* errorMessage)
@@ -1033,7 +787,7 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
             details.append(QStringLiteral("Missing device: %1").arg(storedDeviceName));
             for (const QJsonValue& zoneValue : zonesJson) {
                 const QJsonObject zoneObject = zoneValue.toObject();
-                previewItems.append(profilePreviewItem(
+                previewItems.append(makeProfilePreviewItem(
                     QStringLiteral("missing-device"),
                     QStringLiteral("Missing device"),
                     storedDeviceName,
@@ -1048,24 +802,12 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
         for (const QJsonValue& zoneValue : zonesJson) {
             const QJsonObject zoneObject = zoneValue.toObject();
             const QString zoneName = zoneObject.value(QStringLiteral("name")).toString();
-            int matchedZoneIndex = -1;
-            for (int zoneIndex = 0; zoneIndex < matchedDevice->zones().size(); ++zoneIndex) {
-                if (matchedDevice->zones().at(zoneIndex).name() == zoneName) {
-                    matchedZoneIndex = zoneIndex;
-                    break;
-                }
-            }
-            if (matchedZoneIndex < 0) {
-                const int storedZoneIndex = zoneObject.value(QStringLiteral("index")).toInt(-1);
-                if (storedZoneIndex >= 0 && storedZoneIndex < matchedDevice->zones().size()) {
-                    matchedZoneIndex = storedZoneIndex;
-                }
-            }
+            const int matchedZoneIndex = matchedProfileZoneIndex(*matchedDevice, zoneObject);
 
             if (matchedZoneIndex < 0) {
                 ++missingZones;
                 details.append(QStringLiteral("Missing zone: %1 / %2").arg(storedDeviceName, zoneName));
-                previewItems.append(profilePreviewItem(
+                previewItems.append(makeProfilePreviewItem(
                     QStringLiteral("missing-zone"),
                     QStringLiteral("Missing zone"),
                     storedDeviceName,
@@ -1082,7 +824,7 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
                 : effectObject.value(QStringLiteral("type")).toString(QStringLiteral("Static"));
             int effectType = -1;
             RgbEffect effect;
-            if (!storedZoneEffect(zoneObject, &effect, &effectType)) {
+            if (!storedProfileZoneEffect(zoneObject, &effect, &effectType)) {
                 if (effectType < 0) {
                     ++unsupportedEffects;
                     details.append(
@@ -1096,7 +838,7 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
                             .arg(storedDeviceName, zoneName, effectName)
                     );
                 }
-                previewItems.append(profilePreviewItem(
+                previewItems.append(makeProfilePreviewItem(
                     effectType < 0 ? QStringLiteral("unsupported") : QStringLiteral("invalid"),
                     effectType < 0 ? QStringLiteral("Unsupported effect") : QStringLiteral("Invalid effect"),
                     storedDeviceName,
@@ -1114,7 +856,7 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
                     QStringLiteral("Unsupported effect: %1 / %2 (%3)")
                         .arg(storedDeviceName, zoneName, effectName)
                 );
-                previewItems.append(profilePreviewItem(
+                previewItems.append(makeProfilePreviewItem(
                     QStringLiteral("unsupported"),
                     QStringLiteral("Unsupported effect"),
                     storedDeviceName,
@@ -1140,7 +882,7 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
                 ++unchangedZones;
             }
 
-            QVariantMap item = profilePreviewItem(
+            QVariantMap item = makeProfilePreviewItem(
                 changed ? QStringLiteral("changed") : QStringLiteral("unchanged"),
                 changed ? QStringLiteral("Will change") : QStringLiteral("Already matches"),
                 matchedDevice->name(),
@@ -1152,12 +894,12 @@ QVariantMap DeviceManager::profileCompatibility(const QString& profileName) cons
                 QStringLiteral("changeSummary"),
                 changed ? changes.join(QStringLiteral("; ")) : QStringLiteral("No changes needed.")
             );
-            item.insert(QStringLiteral("currentSummary"), effectSummary(currentEffect));
-            item.insert(QStringLiteral("targetSummary"), effectSummary(effect));
+            item.insert(QStringLiteral("currentSummary"), profileEffectSummary(currentEffect));
+            item.insert(QStringLiteral("targetSummary"), profileEffectSummary(effect));
             item.insert(QStringLiteral("currentLedCount"), currentZone.ledCount());
             item.insert(QStringLiteral("targetLedCount"), targetLedCount);
-            item.insert(QStringLiteral("currentEffect"), effectPreview(currentEffect));
-            item.insert(QStringLiteral("targetEffect"), effectPreview(effect));
+            item.insert(QStringLiteral("currentEffect"), profileEffectPreview(currentEffect));
+            item.insert(QStringLiteral("targetEffect"), profileEffectPreview(effect));
             previewItems.append(item);
         }
     }

@@ -53,4 +53,13 @@ QtObject {
     readonly property color warningBg: dark ? "#352A13" : "#FFF4D6"
     readonly property color error: "#EF4444"
     readonly property color errorBg: dark ? "#3A1717" : "#FEE2E2"
+
+    // Format a QML color as an uppercase #RRGGBB string. Shared so the various
+    // panels and dialogs do not each carry their own copy of this conversion.
+    function colorToHex(value) {
+        const red = Math.round(value.r * 255).toString(16).padStart(2, "0")
+        const green = Math.round(value.g * 255).toString(16).padStart(2, "0")
+        const blue = Math.round(value.b * 255).toString(16).padStart(2, "0")
+        return ("#" + red + green + blue).toUpperCase()
+    }
 }

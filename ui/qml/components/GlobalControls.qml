@@ -24,8 +24,19 @@ Item {
     property var editDeviceIds: []
     property int supportRevision: 0
     property bool zoneEffectsEnabled: false
+    property int confirmationRevision: 0
     readonly property bool operationPending: appController
         ? appController.pendingDaemonOperations > 0
+        : false
+    // Confirmation is granted per device; the affordance is offered in zone mode
+    // where a single device is selected (matches the legacy ZoneEditor flow).
+    readonly property bool selectedDeviceRequiresConfirmation: confirmationRevision >= 0
+            && appController && selectedZoneMode && selectedDeviceIndex >= 0
+        ? appController.deviceRequiresConfirmation(selectedDeviceIndex)
+        : false
+    readonly property bool selectedDeviceWriteConfirmed: confirmationRevision >= 0
+            && appController && selectedZoneMode && selectedDeviceIndex >= 0
+        ? appController.deviceWriteConfirmed(selectedDeviceIndex)
         : false
     readonly property bool zoneSelected: selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
     readonly property bool selectedZoneMode: zoneSelected && zoneEffectsEnabled
@@ -70,11 +81,6 @@ Item {
             }
         }
         return -1
-    }
-
-    function targetLabel() {
-        const index = targetIndex()
-        return index >= 0 ? targetOptions[index].label : qsTr("All devices")
     }
 
     function targetSupportsEffect(index) {
@@ -149,19 +155,6 @@ Item {
         }
     }
 
-    function previewLabel() {
-        if (!selectedEffectSupported) {
-            return qsTr("No compatible zones")
-        }
-        if (effectType === 0) {
-            return colorHex(selectedColor)
-        }
-        if (effectType === 2) {
-            return qsTr("%1 breathing").arg(colorHex(selectedColor))
-        }
-        return effectType === 1 ? qsTr("Rainbow preview") : qsTr("Cycle preview")
-    }
-
     function openGroupEditor() {
         groupNameField.text = selectedTargetName
         editDeviceIds = selectedTargetName.length > 0 && appController
@@ -231,13 +224,10 @@ Item {
             return
         }
         if (selectedZoneMode) {
-            appController.applyEffect(
-                selectedDeviceIndex,
-                selectedZoneIndex,
-                0,
-                Qt.rgba(0, 0, 0, 1),
-                1.0,
-                0)
+            // Use the dedicated device all-off command rather than writing a
+            // Static(black) effect: All Off must work even for zones that do
+            // not support the Static effect type.
+            appController.allOffDevice(selectedDeviceIndex)
             return
         }
         if (groupTargetSelected) {
@@ -247,18 +237,29 @@ Item {
         appController.allOffAllDevices()
     }
 
+    function confirmHardwareWrites() {
+        if (!appController || selectedDeviceIndex < 0) {
+            return
+        }
+        if (appController.confirmDeviceWrites(selectedDeviceIndex)) {
+            confirmationRevision += 1
+        }
+    }
+
+    function revokeHardwareWrites() {
+        if (!appController || selectedDeviceIndex < 0) {
+            return
+        }
+        if (appController.revokeDeviceWrites(selectedDeviceIndex)) {
+            confirmationRevision += 1
+        }
+    }
+
     function resultSummary(result) {
         return qsTr("%1 applied, %2 skipped, %3 failed.")
             .arg(result.applied || 0)
             .arg(result.skipped || 0)
             .arg(result.failed || 0)
-    }
-
-    function colorHex(value) {
-        const red = Math.round(value.r * 255).toString(16).padStart(2, "0")
-        const green = Math.round(value.g * 255).toString(16).padStart(2, "0")
-        const blue = Math.round(value.b * 255).toString(16).padStart(2, "0")
-        return ("#" + red + green + blue).toUpperCase()
     }
 
     function contrastOn(c) {
@@ -282,93 +283,21 @@ Item {
         }
     }
 
-    Dialog {
+    OperationResultDialog {
         id: resultDialog
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        title: controls.lastResult.operation || qsTr("Global operation")
-        standardButtons: Dialog.Ok
-
-        contentItem: ColumnLayout {
-            spacing: 10
-
-            Label {
-                Layout.fillWidth: true
-                text: controls.resultSummary(controls.lastResult)
-                color: Theme.primaryText
-                font.bold: true
-                wrapMode: Text.WordWrap
-            }
-
-            Label {
-                Layout.fillWidth: true
-                visible: controls.lastResult.details
-                    && controls.lastResult.details.length > 0
-                text: visible ? controls.lastResult.details.join("\n") : ""
-                color: Theme.secondaryText
-                font.pixelSize: 11
-                wrapMode: Text.WordWrap
-            }
-        }
+        operationResult: controls.lastResult
+        summary: controls.resultSummary(controls.lastResult)
     }
 
-    Dialog {
+    AllOffConfirmationDialog {
         id: allOffDialog
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        title: controls.selectedZoneMode
-               ? qsTr("Turn off %1?").arg(controls.selectedZoneName)
-               : controls.groupTargetSelected
-               ? qsTr("Turn off %1?").arg(controls.selectedTargetName)
-               : qsTr("Turn off all devices?")
-        standardButtons: Dialog.NoButton
-        width: Math.min(540, parent ? parent.width - 48 : 540)
-
-        contentItem: ColumnLayout {
-            spacing: 10
-
-            Label {
-                Layout.fillWidth: true
-                text: controls.selectedZoneMode
-                      ? qsTr("This sends All Off to the selected writable zone. Existing write-confirmation and dry-run rules still apply.")
-                      : controls.groupTargetSelected
-                      ? qsTr("This sends All Off to writable devices in the selected group. Existing write-confirmation and dry-run rules still apply.")
-                      : qsTr("This sends All Off to every writable device. Existing write-confirmation and dry-run rules still apply.")
-                color: Theme.primaryText
-                wrapMode: Text.WordWrap
-            }
-        }
-
-        footer: RowLayout {
-            spacing: 8
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            AppButton {
-                variant: "secondary"
-                text: qsTr("Cancel")
-                compact: true
-                animationsEnabled: controls.animationsEnabled
-                onClicked: allOffDialog.close()
-            }
-
-            AppButton {
-                variant: "primary"
-                text: qsTr("All Off")
-                compact: true
-                animationsEnabled: controls.animationsEnabled
-                onClicked: {
-                    allOffDialog.close()
-                    controls.allOffSelectedTarget()
-                }
-            }
-        }
+        selectedZoneMode: controls.selectedZoneMode
+        groupTargetSelected: controls.groupTargetSelected
+        selectedTargetName: controls.selectedTargetName
+        animationsEnabled: controls.animationsEnabled
+        onConfirmed: controls.allOffSelectedTarget()
     }
 
     Dialog {
@@ -603,7 +532,7 @@ Item {
                 variant: "secondary"
                 text: qsTr("All Off")
                 compact: true
-                enabled: !controls.operationPending && (!controls.selectedZoneMode || controls.targetSupportsEffect(0))
+                enabled: !controls.operationPending
                 animationsEnabled: controls.animationsEnabled
                 onClicked: allOffDialog.open()
             }
@@ -783,7 +712,7 @@ Item {
 
                 Label {
                     visible: controls.usesBaseColor
-                    text: controls.colorHex(controls.selectedColor)
+                    text: Theme.colorToHex(controls.selectedColor)
                     color: controls.contrastOn(globalPreviewBar.staticColor)
                     font.family: "monospace"
                     font.pixelSize: 11
@@ -873,6 +802,57 @@ Item {
             }
         }
 
+        Rectangle {
+            id: confirmationBanner
+
+            Layout.fillWidth: true
+            visible: controls.selectedZoneMode
+                     && controls.selectedDeviceRequiresConfirmation
+                     && controls.appController
+                     && !controls.appController.dryRunEnabled
+            Layout.preferredHeight: visible ? confirmationColumn.implicitHeight + 20 : 0
+            radius: 8
+            color: controls.selectedDeviceWriteConfirmed ? Theme.inputBg : Theme.warningBg
+            border.color: controls.selectedDeviceWriteConfirmed ? Theme.accent : Theme.warning
+            border.width: 1
+
+            ColumnLayout {
+                id: confirmationColumn
+
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 8
+
+                Label {
+                    Layout.fillWidth: true
+                    text: controls.selectedDeviceWriteConfirmed
+                          ? qsTr("Hardware writes are confirmed for this device.")
+                          : qsTr("This device requires confirmation before real hardware writes are sent.")
+                    color: Theme.primaryText
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: 11
+                }
+
+                AppButton {
+                    Layout.fillWidth: true
+                    variant: controls.selectedDeviceWriteConfirmed ? "secondary" : "primary"
+                    text: controls.selectedDeviceWriteConfirmed
+                          ? qsTr("Revoke Confirmation")
+                          : qsTr("Confirm Hardware Writes")
+                    compact: true
+                    enabled: !controls.operationPending
+                    animationsEnabled: controls.animationsEnabled
+                    onClicked: {
+                        if (controls.selectedDeviceWriteConfirmed) {
+                            controls.revokeHardwareWrites()
+                        } else {
+                            controls.confirmHardwareWrites()
+                        }
+                    }
+                }
+            }
+        }
+
         RowLayout {
             Layout.fillWidth: true
             spacing: 10
@@ -928,6 +908,13 @@ Item {
         function onDaemonDevicesRefreshed() {
             controls.refreshSupport()
             controls.loadZoneEffectsToggle()
+            controls.confirmationRevision += 1
+        }
+
+        function onWriteConfirmationChanged(deviceIndex) {
+            if (deviceIndex === controls.selectedDeviceIndex) {
+                controls.confirmationRevision += 1
+            }
         }
 
         function onZoneDataChanged(deviceIndex, zoneIndex) {

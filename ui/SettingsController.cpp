@@ -1,6 +1,6 @@
 #include "ui/SettingsController.h"
 
-#include <QTime>
+#include "core/ScheduleTime.h"
 
 namespace lumacore {
 
@@ -144,16 +144,6 @@ void SettingsController::setScheduledProfile(const QString& profileName)
     }
     emit scheduledProfileChanged();
 }
-
-namespace {
-
-QString normalizeScheduleTime(const QString& value)
-{
-    const QTime parsed = QTime::fromString(value.trimmed(), QStringLiteral("HH:mm"));
-    return parsed.isValid() ? parsed.toString(QStringLiteral("HH:mm")) : QStringLiteral("18:00");
-}
-
-} // namespace
 
 QString SettingsController::scheduledProfileTime() const
 {

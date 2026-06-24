@@ -24,9 +24,7 @@ QString effectDisplayName(RgbEffectType type)
 
 bool deviceWritable(const RgbDevice& device)
 {
-    const BackendCapabilities capabilities = device.capabilities();
-    return capabilities.testFlag(BackendCapability::ZoneColorWrite)
-        || capabilities.testFlag(BackendCapability::ZoneEffectWrite);
+    return device.isWritable();
 }
 
 QString deviceBadgeText(const RgbDevice& device)

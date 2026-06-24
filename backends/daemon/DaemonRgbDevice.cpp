@@ -35,6 +35,23 @@ QHash<int, DaemonRgbDevice::EffectSupport> effectSupportFromJson(const QJsonArra
     return supportByType;
 }
 
+bool daemonCallSucceeded(const DaemonCallResult& result)
+{
+    return result.ok && result.result.value(QStringLiteral("success")).toBool(false);
+}
+
+QString daemonCallError(const DaemonCallResult& result)
+{
+    return result.ok
+        ? result.result.value(QStringLiteral("error")).toString()
+        : result.error;
+}
+
+QString daemonHardwareStatus(const DaemonCallResult& result)
+{
+    return result.result.value(QStringLiteral("hardwareStatus")).toString(daemonCallError(result));
+}
+
 } // namespace
 
 DaemonRgbDevice::DaemonRgbDevice(QJsonObject snapshot, std::shared_ptr<DaemonClient> client, QObject* parent)
@@ -153,20 +170,12 @@ bool DaemonRgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
         {QStringLiteral("zoneIndex"), zoneIndex},
         {QStringLiteral("effect"), effect.toJson()},
     });
-    m_lastHardwareWriteStatus = result.result.value(QStringLiteral("hardwareStatus")).toString(
-        result.ok ? result.result.value(QStringLiteral("error")).toString() : result.error
-    );
-    if (!result.ok || !result.result.value(QStringLiteral("success")).toBool(false)) {
+    m_lastHardwareWriteStatus = daemonHardwareStatus(result);
+    if (!daemonCallSucceeded(result)) {
         return false;
     }
 
-    setZoneEffect(zoneIndex, effect);
-    if (!effect.isAnimated()) {
-        const bool colorApplied = setZoneStaticColor(zoneIndex, effect.color());
-        Q_UNUSED(colorApplied)
-    } else {
-        emit zoneChanged(zoneIndex);
-    }
+    applyLocalZoneEffect(zoneIndex, effect);
     return true;
 }
 
@@ -195,19 +204,12 @@ quint64 DaemonRgbDevice::applyZoneEffectAsync(
             {QStringLiteral("effect"), effect.toJson()},
         },
         [self, zoneIndex, effect, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
-            const bool success = result.ok && result.result.value(QStringLiteral("success")).toBool(false);
-            QString error = result.ok
-                ? result.result.value(QStringLiteral("error")).toString()
-                : result.error;
+            const bool success = daemonCallSucceeded(result);
+            QString error = daemonCallError(result);
             if (self != nullptr) {
-                self->m_lastHardwareWriteStatus =
-                    result.result.value(QStringLiteral("hardwareStatus")).toString(error);
+                self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
                 if (success && updateLocalState) {
-                    self->setZoneEffect(zoneIndex, effect);
-                    if (!effect.isAnimated()) {
-                        self->mutableZones()[zoneIndex].setColor(effect.color());
-                    }
-                    emit self->zoneChanged(zoneIndex);
+                    self->applyLocalZoneEffect(zoneIndex, effect);
                 } else if (error.isEmpty()) {
                     error = self->m_lastHardwareWriteStatus;
                 }
@@ -237,19 +239,12 @@ bool DaemonRgbDevice::applyAllOff()
     const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::AllOff), {
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
     });
-    m_lastHardwareWriteStatus = result.result.value(QStringLiteral("hardwareStatus")).toString(
-        result.ok ? result.result.value(QStringLiteral("error")).toString() : result.error
-    );
-    if (!result.ok || !result.result.value(QStringLiteral("success")).toBool(false)) {
+    m_lastHardwareWriteStatus = daemonHardwareStatus(result);
+    if (!daemonCallSucceeded(result)) {
         return false;
     }
 
-    const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
-    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
-        setZoneEffect(zoneIndex, offEffect);
-        mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
-        emit zoneChanged(zoneIndex);
-    }
+    applyLocalAllOff();
     return true;
 }
 
@@ -269,20 +264,12 @@ quint64 DaemonRgbDevice::applyAllOffAsync(bool updateLocalState, OperationHandle
         daemonMethodName(DaemonMethod::AllOff),
         {{QStringLiteral("deviceIndex"), m_daemonDeviceIndex}},
         [self, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
-            const bool success = result.ok && result.result.value(QStringLiteral("success")).toBool(false);
-            QString error = result.ok
-                ? result.result.value(QStringLiteral("error")).toString()
-                : result.error;
+            const bool success = daemonCallSucceeded(result);
+            QString error = daemonCallError(result);
             if (self != nullptr) {
-                self->m_lastHardwareWriteStatus =
-                    result.result.value(QStringLiteral("hardwareStatus")).toString(error);
+                self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
                 if (success && updateLocalState) {
-                    const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
-                    for (int zoneIndex = 0; zoneIndex < self->zones().size(); ++zoneIndex) {
-                        self->setZoneEffect(zoneIndex, offEffect);
-                        self->mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
-                        emit self->zoneChanged(zoneIndex);
-                    }
+                    self->applyLocalAllOff();
                 } else if (error.isEmpty()) {
                     error = self->m_lastHardwareWriteStatus;
                 }
@@ -306,7 +293,7 @@ bool DaemonRgbDevice::updateZoneMetadata(int zoneIndex, const QString& name, int
         {QStringLiteral("name"), name.trimmed()},
         {QStringLiteral("ledCount"), ledCount},
     });
-    if (!result.ok || !result.result.value(QStringLiteral("success")).toBool(false)) {
+    if (!daemonCallSucceeded(result)) {
         return false;
     }
 
@@ -340,10 +327,8 @@ quint64 DaemonRgbDevice::updateZoneMetadataAsync(
             {QStringLiteral("ledCount"), ledCount},
         },
         [self, zoneIndex, sanitizedName, ledCount, handler = std::move(handler)](DaemonCallResult result) mutable {
-            const bool success = result.ok && result.result.value(QStringLiteral("success")).toBool(false);
-            QString error = result.ok
-                ? result.result.value(QStringLiteral("error")).toString()
-                : result.error;
+            const bool success = daemonCallSucceeded(result);
+            QString error = daemonCallError(result);
             if (success && self != nullptr) {
                 const bool changedName = self->setZoneName(zoneIndex, sanitizedName);
                 const bool changedLedCount = self->setZoneLedCount(zoneIndex, ledCount);
@@ -374,7 +359,7 @@ QString DaemonRgbDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect& 
         {QStringLiteral("zoneIndex"), zoneIndex},
         {QStringLiteral("effect"), effect.toJson()},
     });
-    if (!result.ok || !result.result.value(QStringLiteral("success")).toBool(false)) {
+    if (!daemonCallSucceeded(result)) {
         return {};
     }
 
@@ -448,6 +433,25 @@ bool DaemonRgbDevice::supportsZoneEffectBrightness(int zoneIndex, int effectType
 void DaemonRgbDevice::setWriteConfirmed(bool confirmed)
 {
     m_writeConfirmed = confirmed;
+}
+
+void DaemonRgbDevice::applyLocalZoneEffect(int zoneIndex, const RgbEffect& effect)
+{
+    setZoneEffect(zoneIndex, effect);
+    if (!effect.isAnimated()) {
+        mutableZones()[zoneIndex].setColor(effect.color());
+    }
+    emit zoneChanged(zoneIndex);
+}
+
+void DaemonRgbDevice::applyLocalAllOff()
+{
+    const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        setZoneEffect(zoneIndex, offEffect);
+        mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
+        emit zoneChanged(zoneIndex);
+    }
 }
 
 BackendCapabilities DaemonRgbDevice::capabilities() const

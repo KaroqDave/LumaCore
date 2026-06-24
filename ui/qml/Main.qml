@@ -63,13 +63,6 @@ ApplicationWindow {
         value: root.settings.theme
     }
 
-    function colorToHex(value) {
-        const red = Math.round(value.r * 255).toString(16).padStart(2, "0")
-        const green = Math.round(value.g * 255).toString(16).padStart(2, "0")
-        const blue = Math.round(value.b * 255).toString(16).padStart(2, "0")
-        return ("#" + red + green + blue).toUpperCase()
-    }
-
     function selectDevice(deviceIndex) {
         if (deviceIndex < 0 || deviceIndex >= controller.backendDeviceCount) {
             return

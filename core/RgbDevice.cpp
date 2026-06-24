@@ -263,6 +263,13 @@ BackendCapabilities RgbDevice::capabilities() const
     return BackendCapability::None;
 }
 
+bool RgbDevice::isWritable() const
+{
+    const BackendCapabilities caps = capabilities();
+    return caps.testFlag(BackendCapability::ZoneColorWrite)
+        || caps.testFlag(BackendCapability::ZoneEffectWrite);
+}
+
 PermissionResult RgbDevice::checkRuntimePermission(BackendCapability capability) const
 {
     Q_UNUSED(capability)
@@ -274,12 +281,11 @@ PermissionResult RgbDevice::checkRuntimePermission(BackendCapability capability)
 
 bool RgbDevice::supportsEffect(int effectType) const
 {
-    if (effectType < static_cast<int>(RgbEffectType::Static)
-        || effectType > static_cast<int>(RgbEffectType::ColorCycle)) {
+    if (!isValidRgbEffectType(effectType)) {
         return false;
     }
 
-    const bool animated = effectType != static_cast<int>(RgbEffectType::Static);
+    const bool animated = isAnimatedRgbEffectType(effectType);
     return capabilities().testFlag(
         animated ? BackendCapability::ZoneEffectWrite : BackendCapability::ZoneColorWrite
     );
@@ -287,7 +293,7 @@ bool RgbDevice::supportsEffect(int effectType) const
 
 bool RgbDevice::supportsEffectSpeed(int effectType) const
 {
-    return effectType != static_cast<int>(RgbEffectType::Static) && supportsEffect(effectType);
+    return isAnimatedRgbEffectType(effectType) && supportsEffect(effectType);
 }
 
 bool RgbDevice::supportsEffectBrightness(int effectType) const

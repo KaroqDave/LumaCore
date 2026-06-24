@@ -63,6 +63,7 @@ public:
     [[nodiscard]] virtual QString previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const;
     [[nodiscard]] virtual QString lastHardwareWriteStatus() const;
     [[nodiscard]] virtual BackendCapabilities capabilities() const;
+    [[nodiscard]] bool isWritable() const;
     [[nodiscard]] virtual PermissionResult checkRuntimePermission(BackendCapability capability) const;
     [[nodiscard]] virtual bool supportsEffect(int effectType) const;
     [[nodiscard]] virtual bool supportsEffectSpeed(int effectType) const;

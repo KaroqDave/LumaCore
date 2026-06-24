@@ -1,8 +1,8 @@
 #include "ipc/DaemonClient.h"
 
+#include "ipc/DaemonFrameCodec.h"
+
 #include <QEventLoop>
-#include <QJsonDocument>
-#include <QJsonParseError>
 
 #include <utility>
 
@@ -211,7 +211,11 @@ DaemonCallResult DaemonClient::call(const QString& method, const QJsonObject& pa
     );
     Q_UNUSED(requestId)
     if (!finished) {
-        waitLoop.exec();
+        // Exclude user-input events while blocking so a click/keypress cannot
+        // re-enter call() (or start another write) on top of this nested event
+        // loop. Socket I/O and the timeout timer still run, so the response
+        // still arrives and the loop terminates.
+        waitLoop.exec(QEventLoop::ExcludeUserInputEvents);
     }
     return result;
 }
@@ -385,50 +389,38 @@ void DaemonClient::sendPendingCalls()
 
 void DaemonClient::readAsyncResponses()
 {
-    const qint64 remainingCapacity = static_cast<qint64>(kDaemonMaxFrameBytes) - m_buffer.size();
+    const qint64 remainingCapacity = daemonFrameReadCapacity(m_buffer);
     if (remainingCapacity > 0) {
         m_buffer.append(m_socket.read(remainingCapacity));
     }
 
-    if (m_buffer.size() > kDaemonMaxMessageBytes && !m_buffer.contains('\n')) {
-        const QString error = QStringLiteral("LumaCore daemon response exceeds the maximum message size.");
-        setLastError(error);
-        failPendingCalls(error);
-        m_socket.abort();
-        return;
-    }
-
     while (true) {
-        const qsizetype newlineIndex = m_buffer.indexOf('\n');
-        if (newlineIndex < 0) {
+        const DaemonFrameResult frame = takeNextDaemonFrame(&m_buffer);
+        if (frame.status == DaemonFrameStatus::NeedMoreData) {
             return;
         }
-        if (newlineIndex > kDaemonMaxMessageBytes) {
+        if (frame.status == DaemonFrameStatus::OversizedFrame) {
             const QString error = QStringLiteral("LumaCore daemon response exceeds the maximum message size.");
             setLastError(error);
             failPendingCalls(error);
             m_socket.abort();
             return;
         }
-
-        const QByteArray line = m_buffer.left(newlineIndex);
-        m_buffer.remove(0, newlineIndex + 1);
-        if (line.trimmed().isEmpty()) {
+        if (frame.status == DaemonFrameStatus::EmptyFrame) {
             continue;
         }
 
-        QJsonParseError parseError;
-        const QJsonDocument document = QJsonDocument::fromJson(line, &parseError);
-        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        QJsonObject object;
+        QString parseError;
+        if (!parseDaemonFrameObject(frame.payload, &object, &parseError)) {
             const QString error =
-                QStringLiteral("Invalid daemon response: %1").arg(parseError.errorString());
+                QStringLiteral("Invalid daemon response: %1").arg(parseError);
             setLastError(error);
             failPendingCalls(error);
             m_socket.abort();
             return;
         }
 
-        const QJsonObject object = document.object();
         const quint64 requestId = object.value(QStringLiteral("id")).toString().toULongLong();
         if (!m_pendingCalls.contains(requestId)) {
             continue;

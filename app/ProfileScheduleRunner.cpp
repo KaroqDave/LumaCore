@@ -1,5 +1,6 @@
 #include "app/ProfileScheduleRunner.h"
 
+#include "core/ScheduleTime.h"
 #include "ui/AppController.h"
 #include "ui/SettingsController.h"
 
@@ -55,8 +56,7 @@ ProfileScheduleRunner::ProfileScheduleRunner(
 
 QTime ProfileScheduleRunner::parseScheduledTime(const QString& value)
 {
-    const QTime parsed = QTime::fromString(value.trimmed(), QStringLiteral("HH:mm"));
-    return parsed.isValid() ? parsed : QTime(18, 0);
+    return parseScheduleTime(value);
 }
 
 qint64 ProfileScheduleRunner::millisecondsUntilNextRun(

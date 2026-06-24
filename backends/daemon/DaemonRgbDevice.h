@@ -67,6 +67,9 @@ public:
     );
 
 private:
+    void applyLocalZoneEffect(int zoneIndex, const RgbEffect& effect);
+    void applyLocalAllOff();
+
     int m_daemonDeviceIndex {-1};
     QString m_discoveryIdentity;
     QString m_discoverySupportStage;

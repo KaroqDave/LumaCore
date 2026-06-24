@@ -1,10 +1,14 @@
 qt_add_library(lumacore_ui STATIC
     AppController.cpp
     AppController.h
+    DeviceGroupStore.cpp
+    DeviceGroupStore.h
     DeviceTreeModel.cpp
     DeviceTreeModel.h
     SettingsController.cpp
     SettingsController.h
+    ZoneEffectPreferenceStore.cpp
+    ZoneEffectPreferenceStore.h
 )
 
 target_include_directories(lumacore_ui

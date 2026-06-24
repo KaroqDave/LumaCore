@@ -2,6 +2,7 @@
 
 `lumacore` talks to `lumacore-daemon` over a local IPC endpoint. Messages are newline-delimited JSON objects with protocol version `1`.
 Each request or response is limited to 1 MiB. Oversized requests are rejected by closing the connection. The daemon replaces oversized responses with a matching protocol error; the client closes the connection if a peer sends an oversized response.
+The client and server share one internal frame codec for newline extraction, exact-limit handling, empty frames, and JSON parse errors so both sides keep the same protocol boundary.
 
 ## Boundary
 

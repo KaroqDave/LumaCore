@@ -3,7 +3,7 @@
 #include <QString>
 
 #ifndef LUMACORE_VERSION
-#define LUMACORE_VERSION "1.1.6.3"
+#define LUMACORE_VERSION "1.1.6.8"
 #endif
 
 namespace lumacore {

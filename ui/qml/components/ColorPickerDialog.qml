@@ -80,10 +80,7 @@ Dialog {
     }
 
     function colorToHex(color) {
-        const red = Math.round(color.r * 255).toString(16).padStart(2, "0")
-        const green = Math.round(color.g * 255).toString(16).padStart(2, "0")
-        const blue = Math.round(color.b * 255).toString(16).padStart(2, "0")
-        return ("#" + red + green + blue).toUpperCase()
+        return Theme.colorToHex(color)
     }
 
     function parseHex(text) {

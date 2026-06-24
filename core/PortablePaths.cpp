@@ -6,9 +6,71 @@
 #include <QSettings>
 #include <QStandardPaths>
 
+#ifdef Q_OS_LINUX
+#include <unistd.h>
+#endif
+
 namespace lumacore {
 
 namespace {
+
+QString cleanedAbsolutePath(const QString& path)
+{
+    return QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+}
+
+QString executableRelativeDataRoot()
+{
+    QString baseDirectory = QCoreApplication::applicationDirPath().trimmed();
+    if (baseDirectory.isEmpty()) {
+        baseDirectory = QDir::currentPath();
+    }
+
+    return QDir::cleanPath(QDir(baseDirectory).filePath(QStringLiteral("data")));
+}
+
+QString standardDataRoot()
+{
+#ifdef Q_OS_LINUX
+    if (::geteuid() == 0) {
+        return QStringLiteral("/var/lib/lumacore");
+    }
+#endif
+
+    QString dataRoot = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (dataRoot.isEmpty()) {
+        const QString genericDataRoot = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+        if (!genericDataRoot.isEmpty()) {
+            dataRoot = QDir(genericDataRoot).filePath(QStringLiteral("LumaCore"));
+        }
+    }
+    if (dataRoot.isEmpty()) {
+        dataRoot = QDir(QDir::homePath()).filePath(QStringLiteral(".local/share/LumaCore"));
+    }
+    return cleanedAbsolutePath(dataRoot);
+}
+
+#ifndef Q_OS_WIN
+bool isSystemBinaryDirectory(const QString& directory)
+{
+    const QString path = cleanedAbsolutePath(directory);
+    return path == QStringLiteral("/bin")
+        || path == QStringLiteral("/sbin")
+        || path == QStringLiteral("/usr/bin")
+        || path == QStringLiteral("/usr/sbin")
+        || path == QStringLiteral("/usr/local/bin")
+        || path == QStringLiteral("/usr/local/sbin");
+}
+#endif
+
+bool useExecutableRelativeStorage()
+{
+#ifdef Q_OS_WIN
+    return true;
+#else
+    return !isSystemBinaryDirectory(QCoreApplication::applicationDirPath());
+#endif
+}
 
 void removeLegacyQtPipelineCaches(const QString& portableRoot)
 {
@@ -19,7 +81,14 @@ void removeLegacyQtPipelineCaches(const QString& portableRoot)
 
     const QString legacyCacheDirectory = QDir::cleanPath(QFileInfo(legacyCachePath).absoluteFilePath());
     const QString normalizedPortableRoot = QDir::cleanPath(QFileInfo(portableRoot).absoluteFilePath());
-    if (legacyCacheDirectory.startsWith(normalizedPortableRoot, Qt::CaseInsensitive)) {
+    // Only skip when the cache directory is the portable root itself or a child
+    // of it. A plain startsWith() would also match a sibling that merely shares
+    // a name prefix (e.g. ".../data" vs ".../database"). QDir::cleanPath()
+    // normalizes separators to '/', so the boundary check uses '/'.
+    const bool insidePortableRoot =
+        legacyCacheDirectory.compare(normalizedPortableRoot, Qt::CaseInsensitive) == 0
+        || legacyCacheDirectory.startsWith(normalizedPortableRoot + QLatin1Char('/'), Qt::CaseInsensitive);
+    if (insidePortableRoot) {
         return;
     }
 
@@ -45,12 +114,7 @@ void removeLegacyQtPipelineCaches(const QString& portableRoot)
 
 QString portableDataRoot()
 {
-    QString baseDirectory = QCoreApplication::applicationDirPath().trimmed();
-    if (baseDirectory.isEmpty()) {
-        baseDirectory = QDir::currentPath();
-    }
-
-    return QDir::cleanPath(QDir(baseDirectory).filePath(QStringLiteral("data")));
+    return useExecutableRelativeStorage() ? executableRelativeDataRoot() : standardDataRoot();
 }
 
 QString portableSettingsDirectory()

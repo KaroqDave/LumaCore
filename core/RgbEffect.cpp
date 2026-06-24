@@ -44,6 +44,32 @@ RgbEffectType rgbEffectTypeFromString(const QString& value)
     return RgbEffectType::Static;
 }
 
+QVector<RgbEffectType> allRgbEffectTypes()
+{
+    return {
+        RgbEffectType::Static,
+        RgbEffectType::Rainbow,
+        RgbEffectType::Breathing,
+        RgbEffectType::ColorCycle,
+    };
+}
+
+bool isValidRgbEffectType(int effectType)
+{
+    for (const RgbEffectType knownEffect : allRgbEffectTypes()) {
+        if (effectType == static_cast<int>(knownEffect)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isAnimatedRgbEffectType(int effectType)
+{
+    return isValidRgbEffectType(effectType)
+        && effectType != static_cast<int>(RgbEffectType::Static);
+}
+
 RgbEffect::RgbEffect(RgbEffectType type, RgbColor color, double speed, int brightness)
     : m_type(type)
     , m_color(color)

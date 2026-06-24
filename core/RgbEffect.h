@@ -4,6 +4,7 @@
 
 #include <QJsonObject>
 #include <QString>
+#include <QVector>
 
 namespace lumacore {
 
@@ -16,6 +17,9 @@ enum class RgbEffectType {
 
 [[nodiscard]] QString rgbEffectTypeToString(RgbEffectType type);
 [[nodiscard]] RgbEffectType rgbEffectTypeFromString(const QString& value);
+[[nodiscard]] QVector<RgbEffectType> allRgbEffectTypes();
+[[nodiscard]] bool isValidRgbEffectType(int effectType);
+[[nodiscard]] bool isAnimatedRgbEffectType(int effectType);
 
 class RgbEffect
 {

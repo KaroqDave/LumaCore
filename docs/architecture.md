@@ -21,17 +21,21 @@ Show/Hide, explicit Quit, and the opt-in close-to-tray window lifecycle.
 through the normal `AppController` profile path; it does not move scheduling into the daemon.
 Diagnostics export is assembled in `AppController` as a sanitized JSON report containing
 runtime state, backend/device summaries, profile names, and recent activity without profile contents.
+Profile preview, synchronous apply, and asynchronous apply paths share the internal profile
+planning helpers so compatibility reports and apply summaries are shaped in one place.
 
 ## Module responsibilities
 
-- `core/` owns backend-neutral RGB models, backend registration, write policy, effects, and the stable `DeviceManager` API.
-- `core/ProfileStore` owns profile naming, paths, JSON file I/O, atomic saves, listing, rename, and deletion. `DeviceManager` still owns matching a loaded profile to live devices.
-- `ipc/DaemonProtocol` owns protocol version 1 names, framing, and JSON conversion.
-- `ipc/DaemonServer` owns local-socket framing and request dispatch.
+- `core/` owns backend-neutral RGB models, backend registration, write policy, effects, schedule-time normalization, shared profile planning, and the stable `DeviceManager` API.
+- `core/ProfileStore` owns profile naming, paths, JSON file I/O, atomic saves, listing, rename, and deletion.
+- `core/ProfilePlan` owns internal profile JSON decoding, device/zone matching, effect normalization, preview item construction, and apply report shaping used by both `DeviceManager` and `AppController`.
+- `ipc/DaemonProtocol` owns protocol version 1 method names, payload conversion, and snapshot JSON conversion.
+- `ipc/DaemonFrameCodec` owns newline-delimited JSON frame extraction, the 1 MiB limit, empty-frame handling, and parse-error conversion shared by `DaemonClient` and `DaemonServer`.
+- `ipc/DaemonServer` owns request dispatch after frames are decoded.
 - `backends/daemon/` adapts daemon snapshots and calls to the backend-neutral interfaces.
 - `backends/auto/` selects and aggregates concrete daemon-side backends.
 - `hardware/linux/` contains provider probes and protocol serializers; it does not make UI decisions.
-- `ui/` exposes stable QML-facing controllers and models.
+- `ui/` exposes stable QML-facing controllers and models. Private UI stores own QSettings-backed device groups and per-zone effect-panel preferences behind the `AppController` facade.
 
 ## Stable boundaries
 
@@ -43,6 +47,7 @@ Behavior-preserving refactors must keep these boundaries stable unless a dedicat
 - profile filename normalization and format version 1 loading behavior.
 - backend IDs, device IDs, device ordering, and permission semantics.
 - ASUS Aura packet bytes and hardware-write approval rules.
+- internal helper boundaries such as profile planning and daemon framing must not become public API or alter the public reports/protocol they support.
 
 ## Migration-only changes
 

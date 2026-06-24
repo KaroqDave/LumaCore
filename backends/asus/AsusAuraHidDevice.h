@@ -46,7 +46,12 @@ public:
 
 private:
     void initializeZones();
+    void applyLocalAllOff();
     [[nodiscard]] QString writeDisabledReason() const;
+    [[nodiscard]] bool sendApprovedPacket(
+        const hardware::linux::AsusAuraHidProtocolResult& protocol,
+        const QString& operation
+    );
     [[nodiscard]] int fixedZoneCount() const;
     [[nodiscard]] bool isAddressableZone(int zoneIndex) const;
 

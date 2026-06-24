@@ -1,14 +1,13 @@
 #include "ipc/DaemonServer.h"
 
 #include "app/Version.h"
+#include "ipc/DaemonFrameCodec.h"
 #include "ipc/DaemonProtocol.h"
 
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonParseError>
 #include <QLockFile>
 #include <QtGlobal>
 
@@ -159,16 +158,9 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
         }
         QByteArray& buffer = bufferIt.value();
 
-        const qsizetype newlineIndex = buffer.indexOf('\n');
-        if (newlineIndex < 0) {
-            if (buffer.size() > kDaemonMaxMessageBytes) {
-                buffer.clear();
-                socket->disconnectFromServer();
-                return;
-            }
-
-            const qint64 remainingCapacity =
-                static_cast<qint64>(kDaemonMaxFrameBytes) - buffer.size();
+        const DaemonFrameResult frame = takeNextDaemonFrame(&buffer);
+        if (frame.status == DaemonFrameStatus::NeedMoreData) {
+            const qint64 remainingCapacity = daemonFrameReadCapacity(buffer);
             if (socket->bytesAvailable() > 0 && remainingCapacity > 0) {
                 buffer.append(socket->read(remainingCapacity));
                 continue;
@@ -176,26 +168,24 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
             return;
         }
 
-        if (newlineIndex > kDaemonMaxMessageBytes) {
+        if (frame.status == DaemonFrameStatus::OversizedFrame) {
             buffer.clear();
             socket->disconnectFromServer();
             return;
         }
 
-        const QByteArray line = buffer.left(newlineIndex);
-        buffer.remove(0, newlineIndex + 1);
-        if (line.trimmed().isEmpty()) {
+        if (frame.status == DaemonFrameStatus::EmptyFrame) {
             continue;
         }
 
-        QJsonParseError parseError;
-        const QJsonDocument document = QJsonDocument::fromJson(line, &parseError);
-        const QJsonObject request = document.object();
+        QJsonObject request;
+        QString parseError;
+        const bool validRequest = parseDaemonFrameObject(frame.payload, &request, &parseError);
         const quint64 requestId = request.value(QStringLiteral("id")).toString().toULongLong();
 
         QJsonObject response;
-        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-            response = makeDaemonError(requestId, QStringLiteral("Invalid JSON request: %1").arg(parseError.errorString()));
+        if (!validRequest) {
+            response = makeDaemonError(requestId, QStringLiteral("Invalid JSON request: %1").arg(parseError));
         } else {
             response = handleRequest(request);
         }

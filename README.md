@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v1.1.6.3** - Linux-first RGB control with tray operation, denser day-to-day UI controls, selected-zone workspace polish, portable app-local settings/cache storage, grouped global controls, daily profile scheduling, profile apply previews, diagnostics export polish, expanded read-only discovery groundwork, Linux install staging, release verification hardening, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.6.8** - Linux-first RGB control with behavior-preserving modernization passes, shared profile planning, shared daemon frame handling, extracted UI preference stores, parity documentation, portable app-local settings/cache storage, grouped global controls, daily profile scheduling, profile apply previews, diagnostics export polish, expanded read-only discovery groundwork, Linux install staging, release verification hardening, and a mock-only Windows preview, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
@@ -185,15 +185,15 @@ cmake --build --preset linux-sanitizer
 ctest --preset linux-sanitizer
 ```
 
-Current tests cover write confirmation and gating, profile persistence and failure handling,
-auto-backend deduplication, daemon protocol framing and snapshots, option parsing, settings and
-application controllers, daemon launch behavior, and, when the ASUS backend is built, the ASUS
-Aura HID configuration parser and protocol serializer.
+Current tests cover write confirmation and gating, profile persistence, profile apply/preview
+reports, daemon frame limits and snapshots, auto-backend deduplication, option parsing, schedule
+settings, application controllers, daemon launch behavior, and, when the ASUS backend is built,
+the ASUS Aura HID configuration parser and protocol serializer.
 
 ## Project Layout
 
 - `app/` - application startup, version helper, and Qt/QML wiring.
-- `core/` - RGB model, effects, profile storage, activity log, backend registry, permission gate, and write gate.
+- `core/` - RGB model, effects, profile storage and planning, schedule-time parsing, activity log, backend registry, permission gate, and write gate.
 - `backends/auto/` - daemon-side hardware/discovery aggregation with mock fallback.
 - `backends/mock/` - safe simulated hardware backend.
 - `backends/daemon/` - GUI-facing backend that talks to `lumacore-daemon`.
@@ -201,18 +201,18 @@ Aura HID configuration parser and protocol serializer.
 - `backends/asus/` - ASUS Aura USB HID backend.
 - `daemon/` - privileged daemon entry point and backend registration.
 - `hardware/linux/` - Linux provider probes, HID writer, and ASUS Aura protocol helpers.
-- `ipc/` - local daemon protocol, client, and server.
-- `ui/` and `ui/qml/` - QML-facing controllers, models, and Qt Quick UI.
-- `docs/` - daemon protocol, ASUS hardware notes, and systemd packaging notes.
+- `ipc/` - local daemon protocol, shared frame codec, client, and server.
+- `ui/` and `ui/qml/` - QML-facing controllers, models, private UI preference stores, and Qt Quick UI.
+- `docs/` - architecture, daemon protocol, refactor parity, release verification, hardware notes, Windows preview, and systemd packaging notes.
 - `packaging/` - desktop entry, systemd unit template, and Windows preview packaging.
 - `tests/` - focused unit tests.
 - `assets/` - icons and screenshots. After editing `assets/icons/lumacore.svg`, run `python scripts/generate-icons.py` (requires PySide6 and Pillow).
 
 ## Profiles
 
-Profiles are JSON files stored in the portable `data/profiles` directory beside the running executable. App settings use `data/settings`, and Qt/QML caches use `data/cache`, so the Windows preview does not write registry settings or AppData state for normal operation. On first use, LumaCore migrates JSON profiles from the legacy `./profiles` directory when the new directory does not yet exist. Saves use `QSaveFile` for atomic replacement.
+Profiles are JSON files stored under LumaCore's application data root. Portable and local builds use `data/profiles` beside the running executable; installed Linux builds use the platform data location for the GUI and `/var/lib/lumacore` for the root daemon service. App settings and Qt/QML caches live under the same root, so the Windows preview does not write registry settings or AppData state for normal operation. On first use, LumaCore migrates JSON profiles from the legacy `./profiles` directory when the new directory does not yet exist. Saves use `QSaveFile` for atomic replacement.
 
-Devices match by `id`; zones match by `name` with their stored index as a fallback. Profiles restore zone names, LED counts, colors, effect types, speed, and brightness. Legacy color-only zones still load. Unknown devices or zones are skipped, invalid colors are reported in the activity log, and a profile that matches no available zones is rejected.
+Devices match by `id`; zones match by `name` with their stored index as a fallback. Profiles restore zone names, LED counts, colors, effect types, speed, and brightness. Legacy color-only zones still load. Unknown devices or zones are skipped, invalid colors are reported in the activity log, and a profile that matches no available zones is rejected. Synchronous startup/scheduled applies and asynchronous interactive applies share the same internal profile planner so report keys, skip counts, details, and preview item shapes stay aligned.
 
 ## Documentation
 
@@ -220,6 +220,7 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 - `docs/architecture.md` documents runtime boundaries and stable APIs.
 - `docs/refactor-parity.md` is the behavior-preservation checklist for structural changes.
 - `docs/release-verification.md` documents repeatable build, test, lint, sanitizer, install-staging, and Windows preview checks.
+- `docs/windows-preview.md` documents mock-only Windows preview behavior and limitations.
 - `docs/hardware/asus-aura-hid.md` documents the guarded ASUS Aura HID support and protocol research boundaries.
 - `docs/hardware/discovery-catalog.md` documents read-only discovery classification stages and cataloged research identities.
 - `docs/hardware/contributing-hardware.md` documents the staged workflow and PR checklist for new hardware support.

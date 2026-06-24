@@ -145,6 +145,34 @@ QString AsusAuraHidDevice::writeDisabledReason() const
         : QStringLiteral("ASUS Aura HID writes are disabled: %1").arg(m_configSummary);
 }
 
+bool AsusAuraHidDevice::sendApprovedPacket(
+    const hardware::linux::AsusAuraHidProtocolResult& protocol,
+    const QString& operation
+)
+{
+    if (!protocol.ok || !protocol.packet.hardwareWriteApproved) {
+        m_lastHardwareWriteStatus = !protocol.ok
+            ? QStringLiteral("ASUS Aura HID %1 skipped: %2").arg(operation, protocol.error)
+            : QStringLiteral("ASUS Aura HID %1 skipped: packet was not hardware-approved.").arg(operation);
+        return false;
+    }
+
+    const hardware::linux::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
+    if (!write.success) {
+        m_lastHardwareWriteStatus =
+            QStringLiteral("ASUS Aura HID %1 failed on %2: %3").arg(operation, m_device.path, write.error);
+        return false;
+    }
+    m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID %1 sent on interface %2 path %3: %4 report(s), %5 byte(s). %6")
+                                    .arg(operation)
+                                    .arg(m_device.interfaceNumber)
+                                    .arg(m_device.path)
+                                    .arg(protocol.packet.reports.size())
+                                    .arg(write.bytesWritten)
+                                    .arg(protocol.packet.summary);
+    return true;
+}
+
 bool AsusAuraHidDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)
 {
     return applyZoneEffect(zoneIndex, RgbEffect(RgbEffectType::Static, color, 1.0, 25));
@@ -177,24 +205,9 @@ bool AsusAuraHidDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
               zones().at(zoneIndex).ledCount(),
               effect.brightness()
           );
-    if (!protocol.ok || !protocol.packet.hardwareWriteApproved) {
-        m_lastHardwareWriteStatus = !protocol.ok
-            ? QStringLiteral("ASUS Aura HID write skipped: %1").arg(protocol.error)
-            : QStringLiteral("ASUS Aura HID write skipped: packet was not hardware-approved.");
+    if (!sendApprovedPacket(protocol, QStringLiteral("write"))) {
         return false;
     }
-
-    const hardware::linux::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
-    if (!write.success) {
-        m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID write failed on %1: %2").arg(m_device.path, write.error);
-        return false;
-    }
-    m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID write sent on interface %1 path %2: %3 report(s), %4 byte(s). %5")
-                                    .arg(m_device.interfaceNumber)
-                                    .arg(m_device.path)
-                                    .arg(protocol.packet.reports.size())
-                                    .arg(write.bytesWritten)
-                                    .arg(protocol.packet.summary);
 
     setZoneEffect(zoneIndex, effect);
     mutableZones()[zoneIndex].setColor(effect.color());
@@ -218,32 +231,22 @@ bool AsusAuraHidDevice::applyAllOff()
     }
 
     const hardware::linux::AsusAuraHidProtocolResult protocol = hardware::linux::buildAsusAuraAllOffWrite(m_configTable);
-    if (!protocol.ok || !protocol.packet.hardwareWriteApproved) {
-        m_lastHardwareWriteStatus = !protocol.ok
-            ? QStringLiteral("ASUS Aura HID all-off skipped: %1").arg(protocol.error)
-            : QStringLiteral("ASUS Aura HID all-off skipped: packet was not hardware-approved.");
+    if (!sendApprovedPacket(protocol, QStringLiteral("all-off"))) {
         return false;
     }
 
-    const hardware::linux::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
-    if (!write.success) {
-        m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID all-off failed on %1: %2").arg(m_device.path, write.error);
-        return false;
-    }
-    m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID all-off sent on interface %1 path %2: %3 report(s), %4 byte(s). %5")
-                                    .arg(m_device.interfaceNumber)
-                                    .arg(m_device.path)
-                                    .arg(protocol.packet.reports.size())
-                                    .arg(write.bytesWritten)
-                                    .arg(protocol.packet.summary);
+    applyLocalAllOff();
+    return true;
+}
 
+void AsusAuraHidDevice::applyLocalAllOff()
+{
     const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
     for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
         setZoneEffect(zoneIndex, offEffect);
         mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
         emit zoneChanged(zoneIndex);
     }
-    return true;
 }
 
 bool AsusAuraHidDevice::updateZoneMetadata(int zoneIndex, const QString& name, int ledCount)

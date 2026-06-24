@@ -79,6 +79,23 @@ const DiscoveryCatalogEntry* catalogEntryFor(const ProbeDevice& device)
     return nullptr;
 }
 
+bool matchesControllerKeywords(const ProbeDevice& device)
+{
+    static const QStringList kControllerKeywords {
+        QStringLiteral("aura"),
+        QStringLiteral("rgb controller"),
+        QStringLiteral("led controller"),
+        QStringLiteral("lighting controller"),
+        QStringLiteral("lighting node"),
+        QStringLiteral("commander core"),
+        QStringLiteral("commander pro"),
+        QStringLiteral("rgb hub"),
+        QStringLiteral("argb"),
+        QStringLiteral("addressable"),
+    };
+    return containsAny(searchableText(device), kControllerKeywords);
+}
+
 } // namespace
 
 QString stableProbeId(const QString& source, const QString& key)
@@ -118,20 +135,7 @@ DiscoverySupportInfo discoverySupportInfo(const ProbeDevice& device)
         };
     }
 
-    const QString text = searchableText(device);
-    static const QStringList kControllerKeywords {
-        QStringLiteral("aura"),
-        QStringLiteral("rgb controller"),
-        QStringLiteral("led controller"),
-        QStringLiteral("lighting controller"),
-        QStringLiteral("lighting node"),
-        QStringLiteral("commander core"),
-        QStringLiteral("commander pro"),
-        QStringLiteral("rgb hub"),
-        QStringLiteral("argb"),
-        QStringLiteral("addressable"),
-    };
-    if (containsAny(text, kControllerKeywords)) {
+    if (matchesControllerKeywords(device)) {
         return {
             QStringLiteral("heuristic"),
             QStringLiteral("heuristic RGB candidate"),
@@ -158,7 +162,9 @@ DiscoverySupportInfo discoverySupportInfo(const ProbeDevice& device)
 
 bool isCatalogedRgbController(const ProbeDevice& device)
 {
-    return discoverySupportInfo(device).cataloged;
+    // Cheap catalog lookup instead of building a full DiscoverySupportInfo
+    // (which allocates five QStrings) only to read a single bool.
+    return catalogEntryFor(device) != nullptr;
 }
 
 bool isKnownRgbController(const ProbeDevice& device)
@@ -168,7 +174,7 @@ bool isKnownRgbController(const ProbeDevice& device)
 
 bool isLikelyRgbController(const ProbeDevice& device)
 {
-    return discoverySupportInfo(device).likelyRgbController;
+    return catalogEntryFor(device) != nullptr || matchesControllerKeywords(device);
 }
 
 } // namespace lumacore::hardware::linux
