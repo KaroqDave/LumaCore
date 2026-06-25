@@ -1,7 +1,10 @@
 #include "app/VrrFlickerGuard.h"
 
 #include <QCoreApplication>
+#include <QDebug>
+#include <QEvent>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QWindow>
 
 #ifdef Q_OS_WIN
@@ -9,6 +12,49 @@
 #endif
 
 namespace lumacore {
+
+namespace {
+
+QString boolText(bool value)
+{
+    return value ? QStringLiteral("true") : QStringLiteral("false");
+}
+
+QString visibilityText(QWindow::Visibility visibility)
+{
+    switch (visibility) {
+    case QWindow::Hidden:
+        return QStringLiteral("hidden");
+    case QWindow::AutomaticVisibility:
+        return QStringLiteral("automatic");
+    case QWindow::Windowed:
+        return QStringLiteral("windowed");
+    case QWindow::Minimized:
+        return QStringLiteral("minimized");
+    case QWindow::Maximized:
+        return QStringLiteral("maximized");
+    case QWindow::FullScreen:
+        return QStringLiteral("fullscreen");
+    }
+
+    return QStringLiteral("unknown");
+}
+
+QString refreshRateText(const QQuickWindow* window)
+{
+    if (window == nullptr || window->screen() == nullptr) {
+        return QStringLiteral("unknown");
+    }
+
+    return QStringLiteral("%1 Hz").arg(window->screen()->refreshRate(), 0, 'f', 2);
+}
+
+QString guardModeText(bool enabled)
+{
+    return enabled ? QStringLiteral("maximum-stability") : QStringLiteral("off");
+}
+
+} // namespace
 
 VrrFlickerGuard::VrrFlickerGuard(QQuickWindow* window, QObject* parent)
     : QObject(parent)
@@ -27,6 +73,7 @@ VrrFlickerGuard::VrrFlickerGuard(QQuickWindow* window, QObject* parent)
         m_window.clear();
         stopContinuousRendering();
     });
+    m_window->installEventFilter(this);
 
 #ifdef Q_OS_WIN
     if (QCoreApplication* app = QCoreApplication::instance()) {
@@ -62,6 +109,15 @@ bool VrrFlickerGuard::isEnabled() const
     return m_enabled;
 }
 
+bool VrrFlickerGuard::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_window.data() && event->type() == QEvent::Expose) {
+        reevaluate();
+    }
+
+    return QObject::eventFilter(watched, event);
+}
+
 void VrrFlickerGuard::reevaluate()
 {
     if (m_window.isNull()) {
@@ -71,6 +127,7 @@ void VrrFlickerGuard::reevaluate()
 
 #ifdef Q_OS_WIN
     const bool onScreen = m_window->isVisible()
+        && m_window->isExposed()
         && m_window->visibility() != QWindow::Minimized
         && m_window->visibility() != QWindow::Hidden;
     const bool shouldRun = m_enabled && onScreen && m_window->isActive() && !m_interactiveMoveResize;
@@ -110,6 +167,7 @@ void VrrFlickerGuard::startContinuousRendering()
     );
 
     m_running = true;
+    logContinuousRenderingTransition("started");
     m_window->update();
 }
 
@@ -122,6 +180,29 @@ void VrrFlickerGuard::stopContinuousRendering()
     QObject::disconnect(m_renderConnection);
     m_renderConnection = {};
     m_running = false;
+    logContinuousRenderingTransition("stopped");
+}
+
+void VrrFlickerGuard::logContinuousRenderingTransition(const char* action) const
+{
+    if (m_window.isNull()) {
+        qInfo().noquote()
+            << QStringLiteral("VRR flicker guard %1: mode=%2 window=destroyed")
+                   .arg(QString::fromLatin1(action), guardModeText(m_enabled));
+        return;
+    }
+
+    qInfo().noquote()
+        << QStringLiteral(
+               "VRR flicker guard %1: mode=%2 refreshRate=%3 visible=%4 exposed=%5 active=%6 visibility=%7"
+           )
+               .arg(QString::fromLatin1(action),
+                    guardModeText(m_enabled),
+                    refreshRateText(m_window.data()),
+                    boolText(m_window->isVisible()),
+                    boolText(m_window->isExposed()),
+                    boolText(m_window->isActive()),
+                    visibilityText(m_window->visibility()));
 }
 
 bool VrrFlickerGuard::nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result)

@@ -177,7 +177,7 @@ Item {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Keeps the window drawing at a steady rate so G-Sync/FreeSync displays do not flicker. Disable if you prefer lower GPU and power usage.")
+                        text: qsTr("Keeps the window presenting at a steady rate for maximum G-Sync/FreeSync stability. This can increase GPU and power usage; disable it to favor lower power.")
                         color: Theme.secondaryText
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap

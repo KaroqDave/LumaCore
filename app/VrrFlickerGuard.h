@@ -7,6 +7,7 @@
 #include <QPointer>
 
 class QQuickWindow;
+class QEvent;
 
 namespace lumacore {
 
@@ -42,9 +43,12 @@ public:
     bool nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) override;
 
 private:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
     void reevaluate();
     void startContinuousRendering();
     void stopContinuousRendering();
+    void logContinuousRenderingTransition(const char* action) const;
 
     QPointer<QQuickWindow> m_window;
     QMetaObject::Connection m_renderConnection;
