@@ -2619,17 +2619,45 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
 void AppController::syncDaemonDryRun()
 {
     if (m_daemonClient == nullptr || !m_daemonClient->isConnected()) {
+        m_pendingDaemonDryRunSync = false;
+        return;
+    }
+    if (m_daemonDryRunSyncInProgress) {
+        m_pendingDaemonDryRunSync = true;
         return;
     }
 
+    const bool requestedDryRun = dryRunEnabled();
+    m_daemonDryRunSyncInProgress = true;
+    m_pendingDaemonDryRunSync = false;
+    beginDaemonOperation();
     const QPointer<AppController> self(this);
     const quint64 requestId = m_daemonClient->callAsync(
         daemonMethodName(DaemonMethod::SetDryRun),
-        {{QStringLiteral("enabled"), dryRunEnabled()}},
-        [self](DaemonCallResult response) {
-            if (self != nullptr && response.ok) {
+        {{QStringLiteral("enabled"), requestedDryRun}},
+        [self, requestedDryRun](DaemonCallResult response) {
+            if (self == nullptr) {
+                return;
+            }
+
+            self->m_daemonDryRunSyncInProgress = false;
+            self->endDaemonOperation();
+            const bool success = response.ok
+                && response.result.value(QStringLiteral("success")).toBool(false)
+                && response.result.value(QStringLiteral("dryRunEnabled")).toBool(!requestedDryRun) == requestedDryRun;
+            if (success) {
                 emit self->daemonInfoChanged();
                 self->refreshDaemonActivityLog();
+            } else {
+                self->setStatusMessage(
+                    response.ok
+                        ? QStringLiteral("Could not synchronize daemon dry-run mode.")
+                        : response.error
+                );
+            }
+
+            if (self->m_pendingDaemonDryRunSync || self->dryRunEnabled() != requestedDryRun) {
+                self->syncDaemonDryRun();
             }
         }
     );

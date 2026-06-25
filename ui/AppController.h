@@ -192,6 +192,8 @@ private:
     bool m_daemonRecoveryEnabled {false};
     bool m_daemonRefreshInProgress {false};
     bool m_profileApplyInProgress {false};
+    bool m_daemonDryRunSyncInProgress {false};
+    bool m_pendingDaemonDryRunSync {false};
 };
 
 } // namespace lumacore

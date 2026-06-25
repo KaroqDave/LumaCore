@@ -18,7 +18,9 @@
 #include <algorithm>
 #include <functional>
 #include <future>
+#include <memory>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -447,7 +449,6 @@ int main(int argc, char* argv[])
     boundarySocket.disconnectFromServer();
     server.close();
 
-#ifdef Q_OS_WIN
     DeviceManager exclusiveManager;
     DaemonServer firstExclusiveServer(&exclusiveManager);
     DaemonServer secondExclusiveServer(&exclusiveManager);
@@ -456,15 +457,15 @@ int main(int argc, char* argv[])
     QString secondExclusiveError;
     if (!require(
             firstExclusiveServer.listen(exclusiveServerName, &firstExclusiveError),
-            "first Windows daemon server should acquire the endpoint"
+            "first daemon server should acquire the endpoint"
         )
         || !require(
             !secondExclusiveServer.listen(exclusiveServerName, &secondExclusiveError),
-            "second Windows daemon server should be rejected"
+            "second daemon server should be rejected"
         )
         || !require(
             secondExclusiveError.contains(QStringLiteral("already using endpoint")),
-            "duplicate Windows endpoint should report an actionable error"
+            "duplicate endpoint should report an actionable error"
         )) {
         return 1;
     }
@@ -472,12 +473,105 @@ int main(int argc, char* argv[])
     secondExclusiveError.clear();
     if (!require(
             secondExclusiveServer.listen(exclusiveServerName, &secondExclusiveError),
-            "Windows endpoint lock should be released when the first server closes"
+            "endpoint lock should be released when the first server closes"
         )) {
         return 1;
     }
     secondExclusiveServer.close();
+
+#ifndef Q_OS_WIN
+    DeviceManager caseSensitiveEndpointManager;
+    DaemonServer lowerCaseEndpointServer(&caseSensitiveEndpointManager);
+    DaemonServer upperCaseEndpointServer(&caseSensitiveEndpointManager);
+    const QString lowerCaseEndpointName = testSocketName(QStringLiteral("case-sensitive"));
+    const QString upperCaseEndpointName = lowerCaseEndpointName.toUpper();
+    QString lowerCaseEndpointError;
+    QString upperCaseEndpointError;
+    if (!require(
+            lowerCaseEndpointName != upperCaseEndpointName,
+            "case-sensitive endpoint fixture should use distinct names"
+        )
+        || !require(
+            lowerCaseEndpointServer.listen(lowerCaseEndpointName, &lowerCaseEndpointError),
+            "lowercase Unix endpoint should listen"
+        )
+        || !require(
+            upperCaseEndpointServer.listen(upperCaseEndpointName, &upperCaseEndpointError),
+            "distinct uppercase Unix endpoint should listen"
+        )) {
+        return 1;
+    }
+    lowerCaseEndpointServer.close();
+    upperCaseEndpointServer.close();
 #endif
+
+    DeviceManager dryRunGuardManager;
+    std::vector<std::unique_ptr<RgbDevice>> dryRunGuardDevices;
+    dryRunGuardDevices.push_back(std::make_unique<SnapshotDevice>(SnapshotDevice::Mode::ConfirmableAsus));
+    dryRunGuardManager.replaceDevices(std::move(dryRunGuardDevices));
+    dryRunGuardManager.setDryRunEnabled(true);
+    DaemonServer dryRunGuardServer(&dryRunGuardManager);
+    const QString dryRunGuardServerName = testSocketName(QStringLiteral("dryrun-guard"));
+    QString dryRunGuardError;
+    if (!require(
+            dryRunGuardServer.listen(dryRunGuardServerName, &dryRunGuardError),
+            "dry-run guard daemon server should listen"
+        )) {
+        return 1;
+    }
+    DaemonClient dryRunGuardClient(dryRunGuardServerName);
+    const QJsonObject dryRunGuardEffect = RgbEffect(
+        RgbEffectType::Static,
+        RgbColor(1, 2, 3)
+    ).toJson();
+    const DaemonCallResult mismatchedApply = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::ApplyEffect),
+        {
+            {QStringLiteral("deviceIndex"), 0},
+            {QStringLiteral("zoneIndex"), 0},
+            {QStringLiteral("effect"), dryRunGuardEffect},
+            {QStringLiteral("dryRunEnabled"), false},
+        },
+        3000
+    );
+    const DaemonCallResult matchedApply = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::ApplyEffect),
+        {
+            {QStringLiteral("deviceIndex"), 0},
+            {QStringLiteral("zoneIndex"), 0},
+            {QStringLiteral("effect"), dryRunGuardEffect},
+            {QStringLiteral("dryRunEnabled"), true},
+        },
+        3000
+    );
+    const DaemonCallResult mismatchedAllOff = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::AllOff),
+        {
+            {QStringLiteral("deviceIndex"), 0},
+            {QStringLiteral("dryRunEnabled"), false},
+        },
+        3000
+    );
+    if (!require(
+            mismatchedApply.ok
+                && !mismatchedApply.result.value(QStringLiteral("success")).toBool(true)
+                && mismatchedApply.result.value(QStringLiteral("error")).toString().contains(QStringLiteral("dry-run mode")),
+            "daemon should reject effect writes when dry-run state differs from the client"
+        )
+        || !require(
+            matchedApply.ok && matchedApply.result.value(QStringLiteral("success")).toBool(false),
+            "daemon should allow dry-run effect requests when dry-run state matches the client"
+        )
+        || !require(
+            mismatchedAllOff.ok
+                && !mismatchedAllOff.result.value(QStringLiteral("success")).toBool(true)
+                && mismatchedAllOff.result.value(QStringLiteral("error")).toString().contains(QStringLiteral("dry-run mode")),
+            "daemon should reject all-off writes when dry-run state differs from the client"
+        )) {
+        return 1;
+    }
+    dryRunGuardClient.disconnectFromDaemon();
+    dryRunGuardServer.close();
 
     const ClientExchange oversizedResponseExchange = runClientExchange(
         QStringLiteral("oversized-response"),
@@ -822,8 +916,15 @@ int main(int argc, char* argv[])
         const QString deviceServerName = testSocketName(QStringLiteral("async-device"));
         std::promise<bool> listeningPromise;
         std::future<bool> listeningFuture = listeningPromise.get_future();
+        bool asyncRequestIncludedDryRun = false;
+        bool asyncRequestDryRunEnabled = true;
         std::jthread deviceServerThread(
-            [deviceServerName, promise = std::move(listeningPromise)]() mutable {
+            [
+                deviceServerName,
+                &asyncRequestIncludedDryRun,
+                &asyncRequestDryRunEnabled,
+                promise = std::move(listeningPromise)
+            ]() mutable {
                 QLocalServer::removeServer(deviceServerName);
                 QLocalServer localServer;
                 const bool listening = localServer.listen(deviceServerName);
@@ -840,6 +941,9 @@ int main(int argc, char* argv[])
                 }
                 if (socket->canReadLine()) {
                     const QJsonObject request = QJsonDocument::fromJson(socket->readLine()).object();
+                    const QJsonObject params = request.value(QStringLiteral("params")).toObject();
+                    asyncRequestIncludedDryRun = params.value(QStringLiteral("dryRunEnabled")).isBool();
+                    asyncRequestDryRunEnabled = params.value(QStringLiteral("dryRunEnabled")).toBool(true);
                     QThread::msleep(100);
                     socket->write(encodeDaemonMessage(makeDaemonResult(
                         request.value(QStringLiteral("id")).toString().toULongLong(),
@@ -931,6 +1035,12 @@ int main(int argc, char* argv[])
 
         deviceClient->disconnectFromDaemon();
         deviceServerThread.join();
+        if (!require(
+                asyncRequestIncludedDryRun && !asyncRequestDryRunEnabled,
+                "asynchronous proxy writes should include the GUI dry-run expectation"
+            )) {
+            return 1;
+        }
 
         DaemonBackend snapshotBackend(deviceClient);
         DeviceManager refreshedManager;

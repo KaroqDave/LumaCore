@@ -82,6 +82,12 @@ qt_add_executable(lumacore_daemon_launcher_test
 )
 target_include_directories(lumacore_daemon_launcher_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_daemon_launcher_test PRIVATE lumacore_ipc Qt6::Core)
+add_dependencies(
+    lumacore_daemon_launcher_test
+    lumacore-daemon
+    lumacore_daemon_launch_exit_fixture
+    lumacore_daemon_launch_sleep_fixture
+)
 add_test(
     NAME daemon_launcher
     COMMAND lumacore_daemon_launcher_test

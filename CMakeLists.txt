@@ -147,6 +147,7 @@ set_source_files_properties(
 qt_add_qml_module(lumacore
     URI LumaCore
     VERSION 1.0
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/qml/LumaCore"
     QML_FILES
         ui/qml/AboutDialog.qml
         ui/qml/Theme.qml

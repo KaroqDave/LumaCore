@@ -169,6 +169,7 @@ bool DaemonRgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
         {QStringLiteral("zoneIndex"), zoneIndex},
         {QStringLiteral("effect"), effect.toJson()},
+        {QStringLiteral("dryRunEnabled"), false},
     });
     m_lastHardwareWriteStatus = daemonHardwareStatus(result);
     if (!daemonCallSucceeded(result)) {
@@ -202,6 +203,7 @@ quint64 DaemonRgbDevice::applyZoneEffectAsync(
             {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
             {QStringLiteral("zoneIndex"), zoneIndex},
             {QStringLiteral("effect"), effect.toJson()},
+            {QStringLiteral("dryRunEnabled"), !updateLocalState},
         },
         [self, zoneIndex, effect, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
             const bool success = daemonCallSucceeded(result);
@@ -238,6 +240,7 @@ bool DaemonRgbDevice::applyAllOff()
 
     const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::AllOff), {
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
+        {QStringLiteral("dryRunEnabled"), false},
     });
     m_lastHardwareWriteStatus = daemonHardwareStatus(result);
     if (!daemonCallSucceeded(result)) {
@@ -262,7 +265,10 @@ quint64 DaemonRgbDevice::applyAllOffAsync(bool updateLocalState, OperationHandle
     const QPointer<DaemonRgbDevice> self(this);
     return m_client->callAsync(
         daemonMethodName(DaemonMethod::AllOff),
-        {{QStringLiteral("deviceIndex"), m_daemonDeviceIndex}},
+        {
+            {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
+            {QStringLiteral("dryRunEnabled"), !updateLocalState},
+        },
         [self, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);

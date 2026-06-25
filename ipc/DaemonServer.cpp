@@ -13,18 +13,42 @@
 
 namespace {
 
-#ifdef Q_OS_WIN
 QString endpointLockPath(const QString& socketPath)
 {
+    QString normalizedSocketPath = QDir::cleanPath(socketPath);
+#ifdef Q_OS_WIN
+    normalizedSocketPath = normalizedSocketPath.toLower();
+#endif
     const QByteArray endpointHash = QCryptographicHash::hash(
-        socketPath.toLower().toUtf8(),
+        normalizedSocketPath.toUtf8(),
         QCryptographicHash::Sha256
     ).toHex();
     return QDir(QDir::tempPath()).filePath(
         QStringLiteral("lumacore-daemon-%1.lock").arg(QString::fromLatin1(endpointHash))
     );
 }
-#endif
+
+bool dryRunMatchesClientExpectation(
+    const QJsonObject& params,
+    const lumacore::DeviceManager* deviceManager,
+    QString* errorMessage
+)
+{
+    const QJsonValue expectedDryRun = params.value(QStringLiteral("dryRunEnabled"));
+    if (!expectedDryRun.isBool() || deviceManager == nullptr) {
+        return true;
+    }
+    if (expectedDryRun.toBool() == deviceManager->dryRunEnabled()) {
+        return true;
+    }
+
+    if (errorMessage != nullptr) {
+        *errorMessage = QStringLiteral(
+            "Daemon dry-run mode is not synchronized with the GUI; refusing hardware write."
+        );
+    }
+    return false;
+}
 
 } // namespace
 
@@ -48,9 +72,10 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
     m_socketPath = socketPath.isEmpty() ? defaultDaemonSocketPath() : socketPath;
     m_acceptedConnection = false;
 
-#ifdef Q_OS_WIN
     m_endpointLock = std::make_unique<QLockFile>(endpointLockPath(m_socketPath));
+#ifdef Q_OS_WIN
     m_endpointLock->setStaleLockTime(0);
+#endif
     if (!m_endpointLock->tryLock(0)) {
         const QString message = QStringLiteral(
             "Another LumaCore daemon is already using endpoint %1."
@@ -61,7 +86,8 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
         m_endpointLock.reset();
         return false;
     }
-#else
+
+#ifndef Q_OS_WIN
     const QFileInfo socketInfo(m_socketPath);
     QDir socketDir(socketInfo.absolutePath());
     if (!socketDir.exists() && !socketDir.mkpath(QStringLiteral("."))) {
@@ -69,6 +95,7 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
         if (errorMessage != nullptr) {
             *errorMessage = message;
         }
+        m_endpointLock.reset();
         return false;
     }
 #endif
@@ -90,9 +117,11 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
             *errorMessage = message;
         }
         m_endpointLock.reset();
+        m_ownsSocketEndpoint = false;
         return false;
     }
 
+    m_ownsSocketEndpoint = true;
     return true;
 }
 
@@ -109,9 +138,10 @@ void DaemonServer::close()
     if (m_server.isListening()) {
         m_server.close();
     }
-    if (!m_socketPath.isEmpty()) {
+    if (m_ownsSocketEndpoint && !m_socketPath.isEmpty()) {
         QLocalServer::removeServer(m_socketPath);
     }
+    m_ownsSocketEndpoint = false;
     m_endpointLock.reset();
     m_closing = false;
 }
@@ -316,6 +346,15 @@ QJsonObject DaemonServer::applyEffect(const QJsonObject& params)
     const int zoneIndex = params.value(QStringLiteral("zoneIndex")).toInt(-1);
     const RgbEffect effect = effectFromJson(params.value(QStringLiteral("effect")).toObject());
     const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
+    QString dryRunError;
+    if (!dryRunMatchesClientExpectation(params, m_deviceManager, &dryRunError)) {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("hardwareStatus"), dryRunError},
+            {QStringLiteral("error"), dryRunError},
+            {QStringLiteral("dryRunEnabled"), m_deviceManager->dryRunEnabled()},
+        };
+    }
     const bool success = m_deviceManager->applyZoneEffect(deviceIndex, zoneIndex, effect);
     const QString hardwareStatus = device == nullptr ? QString() : device->lastHardwareWriteStatus();
     return {
@@ -379,6 +418,15 @@ QJsonObject DaemonServer::allOff(const QJsonObject& params)
     QString errorMessage;
     const int deviceIndex = params.value(QStringLiteral("deviceIndex")).toInt(-1);
     const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
+    QString dryRunError;
+    if (!dryRunMatchesClientExpectation(params, m_deviceManager, &dryRunError)) {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("error"), dryRunError},
+            {QStringLiteral("hardwareStatus"), dryRunError},
+            {QStringLiteral("dryRunEnabled"), m_deviceManager->dryRunEnabled()},
+        };
+    }
     const bool success = m_deviceManager->applyAllOff(deviceIndex, &errorMessage);
     const QString hardwareStatus = device == nullptr ? QString() : device->lastHardwareWriteStatus();
     return {

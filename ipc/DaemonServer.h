@@ -57,6 +57,7 @@ private:
     bool m_exitWhenIdle {false};
     bool m_acceptedConnection {false};
     bool m_closing {false};
+    bool m_ownsSocketEndpoint {false};
 };
 
 } // namespace lumacore
