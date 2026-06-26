@@ -5,6 +5,8 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QEvent>
+#include <QGuiApplication>
+#include <QLoggingCategory>
 #include <QQuickWindow>
 #include <QScreen>
 #include <QWindow>
@@ -14,6 +16,8 @@
 #endif
 
 namespace lumacore {
+
+Q_LOGGING_CATEGORY(lcVrrFlickerGuard, "lumacore.app.vrrFlickerGuard", QtWarningMsg)
 
 namespace {
 
@@ -56,6 +60,31 @@ QString guardModeText(bool enabled)
     return enabled ? QStringLiteral("maximum-stability") : QStringLiteral("off");
 }
 
+bool isWindowOrTransientChild(QWindow* candidate, const QWindow* window)
+{
+    for (QWindow* current = candidate; current != nullptr; current = current->transientParent()) {
+        if (current == window) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool isWindowOrTransientChildActive(const QWindow* window)
+{
+    if (window == nullptr) {
+        return false;
+    }
+
+    if (window->isActive()) {
+        return true;
+    }
+
+    return isWindowOrTransientChild(QGuiApplication::modalWindow(), window)
+        || isWindowOrTransientChild(QGuiApplication::focusWindow(), window);
+}
+
 } // namespace
 
 VrrFlickerGuard::VrrFlickerGuard(QQuickWindow* window, QObject* parent)
@@ -71,6 +100,7 @@ VrrFlickerGuard::VrrFlickerGuard(QQuickWindow* window, QObject* parent)
     // for the whole lifetime of the process.
     QObject::connect(m_window, &QWindow::visibilityChanged, this, [this]() { reevaluate(); });
     QObject::connect(m_window, &QWindow::activeChanged, this, [this]() { reevaluate(); });
+    QObject::connect(m_window, &QWindow::screenChanged, this, [this]() { reevaluate(); });
     QObject::connect(m_window, &QObject::destroyed, this, [this]() {
         m_window.clear();
         stopContinuousRendering();
@@ -132,7 +162,10 @@ void VrrFlickerGuard::reevaluate()
         && m_window->isExposed()
         && m_window->visibility() != QWindow::Minimized
         && m_window->visibility() != QWindow::Hidden;
-    const bool shouldRun = m_enabled && onScreen && m_window->isActive() && !m_interactiveMoveResize;
+    const bool shouldRun = m_enabled
+        && onScreen
+        && isWindowOrTransientChildActive(m_window.data())
+        && !m_interactiveMoveResize;
 #else
     constexpr bool shouldRun = false;
 #endif
@@ -188,13 +221,13 @@ void VrrFlickerGuard::stopContinuousRendering()
 void VrrFlickerGuard::logContinuousRenderingTransition(const char* action) const
 {
     if (m_window.isNull()) {
-        qInfo().noquote()
+        qCInfo(lcVrrFlickerGuard).noquote()
             << QStringLiteral("VRR flicker guard %1: mode=%2 window=destroyed")
                    .arg(QString::fromLatin1(action), guardModeText(m_enabled));
         return;
     }
 
-    qInfo().noquote()
+    qCInfo(lcVrrFlickerGuard).noquote()
         << QStringLiteral(
                "VRR flicker guard %1: mode=%2 refreshRate=%3 visible=%4 exposed=%5 active=%6 visibility=%7"
            )
@@ -207,11 +240,11 @@ void VrrFlickerGuard::logContinuousRenderingTransition(const char* action) const
                     visibilityText(m_window->visibility()));
 }
 
+#ifdef Q_OS_WIN
 bool VrrFlickerGuard::nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result)
 {
     Q_UNUSED(result)
 
-#ifdef Q_OS_WIN
     if (m_window.isNull() || eventType != QByteArrayLiteral("windows_generic_MSG")) {
         return false;
     }
@@ -224,18 +257,21 @@ bool VrrFlickerGuard::nativeEventFilter(const QByteArray& eventType, void* messa
     // Pause continuous rendering for the duration of the modal move/resize loop so
     // the drag stays smooth, then restore it once the loop ends.
     if (msg->message == WM_ENTERSIZEMOVE) {
+        if (m_interactiveMoveResize) {
+            return false;
+        }
         m_interactiveMoveResize = true;
         reevaluate();
     } else if (msg->message == WM_EXITSIZEMOVE) {
+        if (!m_interactiveMoveResize) {
+            return false;
+        }
         m_interactiveMoveResize = false;
         reevaluate();
     }
-#else
-    Q_UNUSED(eventType)
-    Q_UNUSED(message)
-#endif
 
     return false;
 }
+#endif
 
 } // namespace lumacore

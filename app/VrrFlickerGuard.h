@@ -2,11 +2,14 @@
 
 #pragma once
 
-#include <QAbstractNativeEventFilter>
 #include <QByteArray>
 #include <QMetaObject>
 #include <QObject>
 #include <QPointer>
+
+#ifdef Q_OS_WIN
+#include <QAbstractNativeEventFilter>
+#endif
 
 class QQuickWindow;
 class QEvent;
@@ -25,7 +28,10 @@ namespace lumacore {
 // frame, pinning the present rate to the refresh rate so the panel stays at a
 // stable rate and stops flickering. It only runs while the window is on screen
 // and focused so a backgrounded window does not keep the GPU busy.
-class VrrFlickerGuard final : public QObject, public QAbstractNativeEventFilter
+class VrrFlickerGuard final : public QObject
+#ifdef Q_OS_WIN
+    , public QAbstractNativeEventFilter
+#endif
 {
     Q_OBJECT
 
@@ -42,7 +48,9 @@ public:
     // Catches the platform's interactive move/resize loop so continuous rendering
     // can be paused while the user drags the window. Forcing a frame every vsync
     // during the modal move loop fights the GUI thread and makes the drag stutter.
+#ifdef Q_OS_WIN
     bool nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) override;
+#endif
 
 private:
     bool eventFilter(QObject* watched, QEvent* event) override;
