@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Regenerate app icon raster assets from assets/icons/lumacore.svg."""
 
 from __future__ import annotations

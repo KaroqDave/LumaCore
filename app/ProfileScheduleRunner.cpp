@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include "app/ProfileScheduleRunner.h"
 
 #include "core/ScheduleTime.h"

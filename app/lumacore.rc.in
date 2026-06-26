@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #define IDI_ICON1 1
 
 IDI_ICON1 ICON "@LUMACORE_APP_ICON_ICO@"

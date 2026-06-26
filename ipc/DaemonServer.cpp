@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include "ipc/DaemonServer.h"
 
 #include "app/Version.h"

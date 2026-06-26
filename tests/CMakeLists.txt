@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 function(lumacore_add_test_executable target test_name)
     qt_add_executable(${target} ${ARGN})
     add_test(NAME ${test_name} COMMAND ${target})

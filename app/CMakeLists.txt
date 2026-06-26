@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 # The lumacore executable target and its QML module are created in the root scope so
 # the QML module's source-relative paths stay clean (ui/qml/...) and Qt writes the
 # target's metatypes where qmltyperegistrar expects them. This file keeps the

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include "backends/daemon/DaemonBackend.h"
 
 #include "backends/daemon/DaemonRgbDevice.h"

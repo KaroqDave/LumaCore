@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 qt_add_library(lumacore_daemon_backend STATIC
     daemon/DaemonBackend.cpp
     daemon/DaemonBackend.h

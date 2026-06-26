@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include "backends/linux/LinuxDiscoveryBackend.h"
 
 #include "backends/linux/LinuxDiscoveredDevice.h"

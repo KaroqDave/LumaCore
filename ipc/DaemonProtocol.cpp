@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include "ipc/DaemonProtocol.h"
 
 #include "core/PortablePaths.h"

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include "hardware/linux/HidDeviceWriter.h"
 
 #ifdef LUMACORE_HAS_HIDAPI

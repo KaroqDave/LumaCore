@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include "hardware/linux/I2cDevProbe.h"
 
 #include <QDir>

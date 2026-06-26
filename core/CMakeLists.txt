@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 qt_add_library(lumacore_core STATIC
     ${PROJECT_SOURCE_DIR}/backends/mock/MockBackend.cpp
     ${PROJECT_SOURCE_DIR}/backends/mock/MockBackend.h
