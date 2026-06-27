@@ -77,4 +77,12 @@ Dialog {
             onClicked: dialog.close()
         }
     }
+
+    // The custom footer replaces the standard DialogButtonBox, which would otherwise make OK
+    // the default button. Restore Enter/Return as a dismiss affordance while the dialog is open.
+    Shortcut {
+        sequences: ["Return", "Enter"]
+        enabled: dialog.opened
+        onActivated: dialog.close()
+    }
 }

@@ -18,16 +18,33 @@ Item {
     property bool selectedZoneMode: true
     property string selectedTargetName: ""
     property int selectedZoneRevision: 0
-    property int activityRevision: 0
     readonly property bool hasZone: appController && selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
-    readonly property bool selectedDeviceWritable: selectedZoneRevision >= 0 && hasZone ? appController.deviceWritable(selectedDeviceIndex) : false
-    readonly property int selectedEffectType: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex) : 0
-    readonly property int selectedBrightness: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectBrightness(selectedDeviceIndex, selectedZoneIndex) : 100
-    readonly property real selectedSpeed: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex) : 1.0
-    readonly property color selectedEffectColor: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex) : Theme.defaultColor
-    readonly property string selectedColorHex: selectedZoneRevision >= 0 && hasZone ? appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex) : ""
-    readonly property string selectedDeviceName: selectedZoneRevision >= 0 && hasZone ? appController.deviceName(selectedDeviceIndex) : ""
-    readonly property int selectedLedCount: selectedZoneRevision >= 0 && hasZone ? appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex) : 0
+    // A single reactive token for the selected zone. It is -1 when no zone is selected and
+    // otherwise carries selectedZoneRevision, which refreshSelectedZone() bumps on every
+    // zone-data/backend/refresh event. Because its value changes on each bump, bindings that
+    // read it re-evaluate the (non-NOTIFY) zone invokables below and pick up fresh data, while
+    // `zoneTick >= 0` stays a genuine "has a valid zone" check rather than an always-true guard.
+    readonly property int zoneTick: hasZone ? selectedZoneRevision : -1
+    readonly property bool selectedDeviceWritable: zoneTick >= 0 ? appController.deviceWritable(selectedDeviceIndex) : false
+    readonly property int selectedEffectType: zoneTick >= 0 ? appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex) : 0
+    readonly property int selectedBrightness: zoneTick >= 0 ? appController.zoneEffectBrightness(selectedDeviceIndex, selectedZoneIndex) : 100
+    readonly property real selectedSpeed: zoneTick >= 0 ? appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex) : 1.0
+    readonly property color selectedEffectColor: zoneTick >= 0 ? appController.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex) : Theme.defaultColor
+    readonly property string selectedColorHex: zoneTick >= 0 ? appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex) : ""
+    readonly property string selectedDeviceName: zoneTick >= 0 ? appController.deviceName(selectedDeviceIndex) : ""
+    readonly property int selectedLedCount: zoneTick >= 0 ? appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex) : 0
+    // Last few non-empty activity lines, newest first. appController.logText has a NOTIFY, so
+    // this binding refreshes on its own; it is cached so the model and the empty-state check
+    // below do not each re-parse the log string.
+    readonly property var recentLogLinesModel: {
+        if (!appController || appController.logText.length === 0) {
+            return []
+        }
+        const lines = appController.logText.split("\n").filter(function(line) {
+            return line.trim().length > 0
+        })
+        return lines.slice(Math.max(0, lines.length - 5)).reverse()
+    }
     readonly property int columnSpacing: 12
     readonly property int dividerWidth: 1
     readonly property int wideLayoutReservedWidth: (columnSpacing * 4) + (dividerWidth * 2)
@@ -55,17 +72,6 @@ Item {
         }
     }
 
-    function recentLogLines() {
-        activityRevision
-        if (!appController || appController.logText.length === 0) {
-            return []
-        }
-        const lines = appController.logText.split("\n").filter(function(line) {
-            return line.trim().length > 0
-        })
-        return lines.slice(Math.max(0, lines.length - 5)).reverse()
-    }
-
     function presetSupported(effectType) {
         if (!appController) {
             return false
@@ -79,16 +85,7 @@ Item {
     }
 
     function effectStatusLabel(effectType) {
-        switch (effectType) {
-        case 1:
-            return qsTr("Rainbow active")
-        case 2:
-            return qsTr("Breathing active")
-        case 3:
-            return qsTr("Cycle active")
-        default:
-            return qsTr("Fixed")
-        }
+        return effectType === 0 ? qsTr("Fixed") : qsTr("%1 active").arg(effectLabel(effectType))
     }
 
     function applyPreset(effectType, colorValue, speedValue, brightnessValue) {
@@ -120,8 +117,21 @@ Item {
         }
     }
 
-    function effectSupported(effectType) {
-        return selectedZoneRevision >= 0 && presetSupported(effectType)
+    // Whether the hardware can do this effect, independent of whether the device is currently
+    // writable. The preset buttons gate on presetSupported() (which also requires a writable,
+    // confirmed device); the capability badges use this so a read-only zone still advertises
+    // which effects it supports rather than showing nothing.
+    function effectCapable(effectType) {
+        if (!appController) {
+            return false
+        }
+        if (selectedZoneMode) {
+            return zoneTick >= 0
+                && appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, effectType)
+        }
+        // Touch selectedZoneRevision so the badge re-evaluates when the backend/target refreshes.
+        return selectedZoneRevision >= 0
+            && appController.globalTargetSupportsEffect(selectedTargetName, effectType)
     }
 
     function allOffPresetLabel() {
@@ -242,15 +252,7 @@ Item {
                             anchors.fill: parent
                             visible: panel.hasZone && (panel.selectedEffectType === 1 || panel.selectedEffectType === 3)
                             radius: parent.radius
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#FF0000" }
-                                GradientStop { position: 0.2; color: "#FFFF00" }
-                                GradientStop { position: 0.4; color: "#00FF00" }
-                                GradientStop { position: 0.6; color: "#00FFFF" }
-                                GradientStop { position: 0.8; color: "#0000FF" }
-                                GradientStop { position: 1.0; color: "#FF00FF" }
-                            }
+                            gradient: RainbowGradient {}
                         }
                     }
 
@@ -320,25 +322,25 @@ Item {
                 spacing: 6
 
                 StatusBadge {
-                    visible: panel.effectSupported(0)
+                    visible: panel.effectCapable(0)
                     text: qsTr("Static")
                     colorValue: Theme.success
                 }
 
                 StatusBadge {
-                    visible: panel.effectSupported(1)
+                    visible: panel.effectCapable(1)
                     text: qsTr("Rainbow")
                     colorValue: Theme.success
                 }
 
                 StatusBadge {
-                    visible: panel.effectSupported(2)
+                    visible: panel.effectCapable(2)
                     text: qsTr("Breathing")
                     colorValue: Theme.success
                 }
 
                 StatusBadge {
-                    visible: panel.effectSupported(3)
+                    visible: panel.effectCapable(3)
                     text: qsTr("Cycle")
                     colorValue: Theme.success
                 }
@@ -457,7 +459,7 @@ Item {
                         spacing: 5
 
                         Repeater {
-                            model: panel.recentLogLines()
+                            model: panel.recentLogLinesModel
 
                             delegate: Label {
                                 required property string modelData
@@ -484,7 +486,7 @@ Item {
 
                         Label {
                             Layout.fillWidth: true
-                            visible: panel.recentLogLines().length === 0
+                            visible: panel.recentLogLinesModel.length === 0
                             text: qsTr("No activity yet.")
                             color: Theme.secondaryText
                             font.pixelSize: 10
@@ -517,10 +519,6 @@ Item {
 
         function onDaemonDevicesRefreshed() {
             panel.refreshSelectedZone()
-        }
-
-        function onLogTextChanged() {
-            panel.activityRevision += 1
         }
     }
 

@@ -60,6 +60,7 @@ QString guardModeText(bool enabled)
     return enabled ? QStringLiteral("maximum-stability") : QStringLiteral("off");
 }
 
+#ifdef Q_OS_WIN
 bool isWindowOrTransientChild(QWindow* candidate, const QWindow* window)
 {
     for (QWindow* current = candidate; current != nullptr; current = current->transientParent()) {
@@ -84,6 +85,7 @@ bool isWindowOrTransientChildActive(const QWindow* window)
     return isWindowOrTransientChild(QGuiApplication::modalWindow(), window)
         || isWindowOrTransientChild(QGuiApplication::focusWindow(), window);
 }
+#endif
 
 } // namespace
 

@@ -488,15 +488,7 @@ Item {
                             radius: 7
                             border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : Theme.border
                             border.width: treeDelegate.selectedNode ? 2 : 1
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#FF0000" }
-                                GradientStop { position: 0.2; color: "#FFFF00" }
-                                GradientStop { position: 0.4; color: "#00FF00" }
-                                GradientStop { position: 0.6; color: "#00FFFF" }
-                                GradientStop { position: 0.8; color: "#0000FF" }
-                                GradientStop { position: 1.0; color: "#FF00FF" }
-                            }
+                            gradient: RainbowGradient {}
                         }
 
                         Rectangle {
