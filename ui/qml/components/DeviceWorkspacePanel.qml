@@ -15,16 +15,20 @@ Item {
     property int selectedZoneIndex: -1
     property string selectedZoneName: ""
     property bool animationsEnabled: true
+    property int selectedZoneRevision: 0
+    property int activityRevision: 0
     readonly property bool hasZone: appController && selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
-    readonly property bool selectedDeviceWritable: hasZone ? appController.deviceWritable(selectedDeviceIndex) : false
-    readonly property int selectedEffectType: hasZone ? appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex) : 0
-    readonly property int selectedBrightness: hasZone ? appController.zoneEffectBrightness(selectedDeviceIndex, selectedZoneIndex) : 100
-    readonly property real selectedSpeed: hasZone ? appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex) : 1.0
-    readonly property string selectedColorHex: hasZone ? appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex) : ""
-    readonly property string selectedDeviceName: hasZone ? appController.deviceName(selectedDeviceIndex) : ""
-    readonly property int selectedLedCount: hasZone ? appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex) : 0
+    readonly property bool selectedDeviceWritable: selectedZoneRevision >= 0 && hasZone ? appController.deviceWritable(selectedDeviceIndex) : false
+    readonly property int selectedEffectType: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex) : 0
+    readonly property int selectedBrightness: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectBrightness(selectedDeviceIndex, selectedZoneIndex) : 100
+    readonly property real selectedSpeed: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex) : 1.0
+    readonly property string selectedColorHex: selectedZoneRevision >= 0 && hasZone ? appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex) : ""
+    readonly property string selectedDeviceName: selectedZoneRevision >= 0 && hasZone ? appController.deviceName(selectedDeviceIndex) : ""
+    readonly property int selectedLedCount: selectedZoneRevision >= 0 && hasZone ? appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex) : 0
     readonly property bool wideLayout: width >= 700
     readonly property int columnWidth: wideLayout ? Math.max(0, Math.floor((width - 26) / 3)) : width
+
+    signal presetApplied(int effectType, color colorValue, real speedValue, int brightnessValue)
 
     implicitHeight: content.implicitHeight
 
@@ -42,6 +46,7 @@ Item {
     }
 
     function recentLogLines() {
+        activityRevision
         if (!appController || appController.logText.length === 0) {
             return []
         }
@@ -61,19 +66,25 @@ Item {
         if (!presetSupported(effectType)) {
             return
         }
-        appController.applyEffect(
-            selectedDeviceIndex,
-            selectedZoneIndex,
-            effectType,
-            colorValue,
-            speedValue,
-            brightnessValue)
+        if (appController.applyEffect(
+                selectedDeviceIndex,
+                selectedZoneIndex,
+                effectType,
+                colorValue,
+                speedValue,
+                brightnessValue)) {
+            presetApplied(effectType, colorValue, speedValue, brightnessValue)
+        }
     }
 
-    function supportsLabel(effectType) {
-        return hasZone && appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, effectType)
-            ? qsTr("Yes")
-            : qsTr("No")
+    function effectSupported(effectType) {
+        return selectedZoneRevision >= 0
+            && hasZone
+            && appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, effectType)
+    }
+
+    function refreshSelectedZone() {
+        selectedZoneRevision += 1
     }
 
     GridLayout {
@@ -193,8 +204,15 @@ Item {
                 spacing: 6
 
                 StatusBadge {
+                    visible: panel.selectedDeviceWritable
                     text: panel.selectedDeviceWritable ? qsTr("Writable") : qsTr("Read-only")
                     colorValue: panel.selectedDeviceWritable ? Theme.success : Theme.warning
+                }
+
+                StatusBadge {
+                    visible: !panel.selectedDeviceWritable
+                    text: qsTr("Read-only")
+                    colorValue: Theme.warning
                 }
 
                 StatusBadge {
@@ -284,18 +302,33 @@ Item {
                 }
             }
 
-            RowLayout {
+            Flow {
                 Layout.fillWidth: true
+                visible: panel.hasZone
                 spacing: 6
 
                 StatusBadge {
-                    text: qsTr("Static %1").arg(panel.supportsLabel(0))
-                    colorValue: panel.presetSupported(0) ? Theme.success : Theme.secondaryText
+                    visible: panel.effectSupported(0)
+                    text: qsTr("Static")
+                    colorValue: Theme.success
                 }
 
                 StatusBadge {
-                    text: qsTr("Rainbow %1").arg(panel.supportsLabel(1))
-                    colorValue: panel.presetSupported(1) ? Theme.success : Theme.secondaryText
+                    visible: panel.effectSupported(1)
+                    text: qsTr("Rainbow")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectSupported(2)
+                    text: qsTr("Breathing")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectSupported(3)
+                    text: qsTr("Cycle")
+                    colorValue: Theme.success
                 }
             }
         }
@@ -321,32 +354,96 @@ Item {
                 elide: Text.ElideRight
             }
 
-            Repeater {
-                model: panel.recentLogLines()
-
-                delegate: Label {
-                    required property string modelData
-
-                    Layout.fillWidth: true
-                    text: modelData
-                    color: Theme.secondaryText
-                    font.pixelSize: 10
-                    elide: Text.ElideRight
-                }
-            }
-
-            Label {
+            Rectangle {
                 Layout.fillWidth: true
-                visible: panel.recentLogLines().length === 0
-                text: qsTr("No activity yet.")
-                color: Theme.secondaryText
-                font.pixelSize: 10
-                elide: Text.ElideRight
+                Layout.fillHeight: true
+                Layout.minimumHeight: 92
+                Layout.preferredHeight: panel.wideLayout ? 118 : 132
+                radius: 8
+                color: Theme.inputBg
+                border.color: Theme.border
+                border.width: 1
+                clip: true
+
+                ScrollView {
+                    id: recentActivityScroll
+
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    clip: true
+                    contentWidth: availableWidth
+
+                    ColumnLayout {
+                        width: recentActivityScroll.availableWidth
+                        spacing: 5
+
+                        Repeater {
+                            model: panel.recentLogLines()
+
+                            delegate: Label {
+                                required property string modelData
+
+                                Layout.fillWidth: true
+                                text: modelData
+                                color: Theme.secondaryText
+                                font.family: "monospace"
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                                ToolTip.visible: activityMouse.containsMouse && truncated
+                                ToolTip.text: text
+
+                                MouseArea {
+                                    id: activityMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.NoButton
+                                }
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: panel.recentLogLines().length === 0
+                            text: qsTr("No activity yet.")
+                            color: Theme.secondaryText
+                            font.pixelSize: 10
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
             }
 
             Item {
                 Layout.fillHeight: true
             }
+        }
+    }
+
+    onSelectedDeviceIndexChanged: refreshSelectedZone()
+    onSelectedZoneIndexChanged: refreshSelectedZone()
+    onAppControllerChanged: refreshSelectedZone()
+
+    Connections {
+        target: panel.appController
+
+        function onZoneDataChanged(deviceIndex, zoneIndex) {
+            if (deviceIndex === panel.selectedDeviceIndex
+                    && (zoneIndex < 0 || zoneIndex === panel.selectedZoneIndex)) {
+                panel.refreshSelectedZone()
+            }
+        }
+
+        function onBackendInfoChanged() {
+            panel.refreshSelectedZone()
+        }
+
+        function onDaemonDevicesRefreshed() {
+            panel.refreshSelectedZone()
+        }
+
+        function onLogTextChanged() {
+            panel.activityRevision += 1
         }
     }
 
@@ -356,8 +453,12 @@ Item {
         property string text: ""
         property color colorValue: Theme.pillText
 
-        Layout.preferredWidth: Math.min(130, badgeText.implicitWidth + 18)
-        Layout.preferredHeight: 22
+        width: implicitWidth
+        height: implicitHeight
+        implicitWidth: Math.min(130, badgeText.implicitWidth + 18)
+        implicitHeight: 22
+        Layout.preferredWidth: implicitWidth
+        Layout.preferredHeight: implicitHeight
         radius: 8
         color: Qt.rgba(colorValue.r, colorValue.g, colorValue.b, Theme.dark ? 0.16 : 0.11)
         border.color: colorValue

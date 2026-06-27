@@ -433,6 +433,8 @@ ApplicationWindow {
                                 compact: true
 
                                 GlobalControls {
+                                    id: globalControls
+
                                     Layout.fillWidth: true
                                     appController: root.controller
                                     selectedDeviceIndex: root.selectedDeviceIndex
@@ -461,6 +463,10 @@ ApplicationWindow {
                                     selectedZoneIndex: root.selectedZoneIndex
                                     selectedZoneName: root.selectedZoneName
                                     animationsEnabled: root.animationsEnabled
+                                    onPresetApplied: function(effectType, colorValue, speedValue, brightnessValue) {
+                                        root.selectedColor = colorValue
+                                        globalControls.syncDraftEffect(effectType, colorValue, speedValue, brightnessValue)
+                                    }
                                 }
                             }
                         }

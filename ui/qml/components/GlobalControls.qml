@@ -145,6 +145,14 @@ Item {
         refreshSupport()
     }
 
+    function syncDraftEffect(nextEffectType, colorValue, speedValue, brightnessValue) {
+        effectType = nextEffectType
+        effectSpeed = speedValue
+        brightness = brightnessValue
+        selectedColorSyncRequested(colorValue)
+        ++supportRevision
+    }
+
     function loadZoneEffectsToggle() {
         zoneEffectsEnabled = appController && zoneSelected
             ? appController.zoneEffectsPanelEnabled(selectedDeviceIndex, selectedZoneIndex)
