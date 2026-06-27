@@ -27,7 +27,7 @@ Dialog {
            : (setupStatusLevel === "ready" ? Theme.success : Theme.accent))
     readonly property color setupStatusBackground: setupStatusLevel === "error"
         ? Theme.errorBg
-        : (setupStatusLevel === "warning" ? Theme.warningBg : Theme.inputBg)
+        : (setupStatusLevel === "warning" ? Theme.warningBg : Theme.subtleSurface)
 
     standardButtons: Dialog.NoButton
 
@@ -236,8 +236,8 @@ Dialog {
                         required property string modelData
 
                         radius: 999
-                        color: Theme.elevated
-                        border.color: Theme.border
+                        color: Theme.accentSoft
+                        border.color: Theme.accentSoftBorder
                         implicitWidth: capLabel.implicitWidth + 16
                         implicitHeight: 24
 
@@ -355,7 +355,7 @@ Dialog {
             Layout.fillWidth: true
             implicitHeight: noteLabel.implicitHeight + 16
             radius: 8
-            color: Theme.inputBg
+            color: Theme.sunken
             border.color: Theme.border
 
             Label {

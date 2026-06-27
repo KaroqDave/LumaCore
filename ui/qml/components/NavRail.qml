@@ -26,15 +26,16 @@ Rectangle {
     signal navSelected(int index)
     signal aboutRequested()
 
-    color: Theme.surface
+    color: Theme.subtleSurface
     radius: 8
     border.color: Theme.border
     border.width: 1
+    antialiasing: true
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: rail.collapsed ? 10 : 12
-        spacing: 10
+        anchors.margins: rail.collapsed ? 9 : 11
+        spacing: 9
 
         Item {
             Layout.fillWidth: true
@@ -50,11 +51,11 @@ Rectangle {
             Rectangle {
                 id: logo
 
-                width: 46
-                height: 46
+                width: 44
+                height: 44
                 radius: 8
-                color: Theme.elevated
-                border.color: Theme.accent
+                color: Theme.surface
+                border.color: Theme.accentSoftBorder
                 border.width: 1
                 y: 0
                 x: rail.collapsed ? (parent.width - width) / 2 : 0
@@ -70,8 +71,8 @@ Rectangle {
                     id: logoImage
 
                     anchors.centerIn: parent
-                    width: 36
-                    height: 36
+                    width: 34
+                    height: 34
                     source: "qrc:///icons/lumacore-256.png"
                     sourceSize.width: 72
                     sourceSize.height: 72
@@ -96,8 +97,8 @@ Rectangle {
                 width: 34
                 height: 34
                 radius: 8
-                color: toggleArea.containsMouse ? Theme.hover : Theme.elevated
-                border.color: toggleArea.containsMouse ? Theme.accent : Theme.border
+                color: toggleArea.containsMouse ? Theme.hover : Theme.surface
+                border.color: toggleArea.containsMouse ? Theme.accentSoftBorder : Theme.border
                 border.width: 1
                 x: rail.collapsed ? (parent.width - width) / 2 : (parent.width - width)
                 y: rail.collapsed ? (logo.height + 12) : (logo.height - height) / 2
@@ -158,12 +159,12 @@ Rectangle {
             Layout.preferredHeight: 1
             Layout.topMargin: 2
             color: Theme.divider
-            opacity: 0.7
+            opacity: 0.75
         }
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 5
+            spacing: 4
 
             Repeater {
                 model: rail.navModel

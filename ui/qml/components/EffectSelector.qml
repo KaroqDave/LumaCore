@@ -14,7 +14,7 @@ Item {
     property int currentIndex: 0
     property bool animationsEnabled: true
     property bool compact: false
-    property real gap: 4
+    property real gap: 3
 
     signal selected(int index)
 
@@ -33,7 +33,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 8
-        color: Theme.inputBg
+        color: Theme.sunken
         border.color: Theme.border
         border.width: 1
     }
@@ -80,7 +80,7 @@ Item {
                     font.bold: true
                     color: !control.segmentEnabled(segment.index) ? Theme.secondaryText
                         : control.currentIndex === segment.index ? "#FFFFFF"
-                        : Theme.secondaryText
+                        : Theme.mutedText
                     opacity: control.segmentEnabled(segment.index) ? 1.0 : 0.45
 
                     Behavior on color {

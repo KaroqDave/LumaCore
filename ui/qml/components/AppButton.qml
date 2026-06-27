@@ -15,10 +15,13 @@ Button {
     property int controlHeight: compact ? 34 : 40
     readonly property bool primary: variant === "primary"
     readonly property int animationDuration: animationsEnabled ? 140 : 0
+    readonly property color foregroundColor: control.primary
+        ? Theme.accentText
+        : (control.enabled ? Theme.primaryText : Theme.mutedText)
 
     implicitHeight: controlHeight
-    leftPadding: compact ? 12 : 16
-    rightPadding: compact ? 12 : 16
+    leftPadding: iconName.length > 0 && text.length === 0 ? 10 : (compact ? 12 : 16)
+    rightPadding: iconName.length > 0 && text.length === 0 ? 10 : (compact ? 12 : 16)
     font.pixelSize: compact ? 12 : 13
     font.bold: true
     hoverEnabled: true
@@ -39,17 +42,16 @@ Button {
                 width: 18
                 height: 18
                 name: control.iconName
-                color: control.primary ? Theme.accentText : Theme.primaryText
+                color: control.foregroundColor
                 strokeWidth: 2
             }
 
             Label {
                 anchors.verticalCenter: parent.verticalCenter
+                visible: control.text.length > 0
                 text: control.text
                 font: control.font
-                color: control.primary
-                       ? Theme.accentText
-                       : (control.enabled ? Theme.primaryText : Theme.secondaryText)
+                color: control.foregroundColor
             }
         }
     }
@@ -58,34 +60,19 @@ Button {
         id: bg
 
         radius: 8
-        border.width: control.primary ? 0 : 1
-        border.color: control.hovered ? Theme.accent : Theme.border
+        border.width: 1
+        border.color: control.primary
+                      ? (control.hovered ? Theme.accentSoftBorder : Theme.accentBottom)
+                      : (control.hovered ? Theme.accentSoftBorder : Theme.border)
         opacity: control.enabled ? 1.0 : 0.45
+        scale: control.down ? 0.985 : 1.0
 
         color: control.primary
-               ? "transparent"
-               : (control.down ? Theme.hover
-                                : (control.hovered ? Qt.lighter(Theme.elevated, Theme.dark ? 1.18 : 1.03)
-                                                   : Theme.elevated))
+               ? (control.down ? Theme.accentPressedBottom
+                                : (control.hovered ? Theme.accentTop : Theme.accent))
+               : (control.down ? Theme.hoverStrong
+                                : (control.hovered ? Theme.elevated : Theme.subtleSurface))
 
-        gradient: control.primary ? primaryGradient : null
-
-        Gradient {
-            id: primaryGradient
-
-            GradientStop {
-                position: 0.0
-                color: control.down ? Theme.accentPressedTop
-                                     : (control.hovered ? Qt.lighter(Theme.accentTop, 1.06) : Theme.accentTop)
-            }
-            GradientStop {
-                position: 1.0
-                color: control.down ? Theme.accentPressedBottom
-                                     : (control.hovered ? Qt.lighter(Theme.accentBottom, 1.06) : Theme.accentBottom)
-            }
-        }
-
-        // Subtle top highlight for depth on the primary variant.
         Rectangle {
             visible: control.primary
             anchors.left: parent.left
@@ -97,7 +84,7 @@ Button {
             height: parent.height / 2
             radius: parent.radius - 2
             color: "#FFFFFF"
-            opacity: 0.12
+            opacity: control.hovered ? 0.10 : 0.07
         }
 
         Behavior on color {
@@ -109,6 +96,13 @@ Button {
         Behavior on border.color {
             ColorAnimation {
                 duration: control.animationDuration
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: control.animationsEnabled ? 90 : 0
+                easing.type: Easing.OutCubic
             }
         }
     }

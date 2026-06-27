@@ -10,27 +10,27 @@ Slider {
     property bool animationsEnabled: true
     readonly property int animationDuration: animationsEnabled ? Theme.animationDuration : 0
 
+    hoverEnabled: true
+
     background: Item {
         x: control.leftPadding
         y: control.topPadding + (control.availableHeight - height) / 2
         width: control.availableWidth
-        height: 6
+        height: 4
         implicitWidth: 200
-        implicitHeight: 6
+        implicitHeight: 4
 
         Rectangle {
             anchors.fill: parent
-            radius: 3
-            color: Theme.inputBg
-            border.color: Theme.border
-            border.width: 1
+            radius: height / 2
+            color: Theme.sunken
             opacity: control.enabled ? 1.0 : 0.55
         }
 
         Rectangle {
             width: control.visualPosition * parent.width
             height: parent.height
-            radius: 3
+            radius: height / 2
             color: Theme.accent
             opacity: control.enabled ? 1.0 : 0.25
 
@@ -46,12 +46,12 @@ Slider {
     handle: Rectangle {
         x: control.leftPadding + control.visualPosition * (control.availableWidth - width)
         y: control.topPadding + (control.availableHeight - height) / 2
-        width: 18
-        height: 18
-        radius: 9
-        color: Theme.accent
-        border.color: Theme.accentBottom
-        border.width: 1
+        width: control.hovered || control.pressed ? 18 : 16
+        height: width
+        radius: width / 2
+        color: Theme.surface
+        border.color: control.enabled ? Theme.accent : Theme.border
+        border.width: 2
         opacity: control.enabled ? 1.0 : 0.35
 
         Rectangle {
@@ -59,8 +59,15 @@ Slider {
             width: 6
             height: 6
             radius: 3
-            color: "#FFFFFF"
-            opacity: 0.85
+            color: Theme.accent
+            opacity: control.enabled ? 0.95 : 0.35
+        }
+
+        Behavior on width {
+            NumberAnimation {
+                duration: control.animationDuration
+                easing.type: Easing.OutCubic
+            }
         }
     }
 }

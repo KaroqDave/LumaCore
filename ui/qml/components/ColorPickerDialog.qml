@@ -123,7 +123,7 @@ Dialog {
 
     background: Rectangle {
         color: Theme.surface
-        radius: 18
+        radius: 8
         border.color: Theme.border
         border.width: 1
     }

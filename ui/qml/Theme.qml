@@ -17,44 +17,51 @@ QtObject {
     readonly property int animationDuration: 160
 
     // Surfaces
-    readonly property color window:   dark ? "#15191D" : "#EDF1F6"
-    readonly property color surface:  dark ? "#1E242A" : "#FFFFFF"
-    readonly property color elevated: dark ? "#252B32" : "#F3F6FA"
-    readonly property color inputBg:  dark ? "#171C21" : "#E9EEF4"
-    readonly property color border:   dark ? "#343C44" : "#D5DBE3"
-    readonly property color divider:  dark ? "#343C44" : "#DCE2EA"
-    readonly property color treeLine:   dark ? "#3A424C" : "#C8D0DA"
+    readonly property color window:   dark ? "#11161C" : "#F4F7FB"
+    readonly property color surface:  dark ? "#1A2027" : "#FFFFFF"
+    readonly property color elevated: dark ? "#222A33" : "#F8FAFD"
+    readonly property color inputBg:  dark ? "#151B22" : "#EEF3F8"
+    readonly property color border:   dark ? "#2D3742" : "#D8E0EA"
+    readonly property color divider:  dark ? "#29323D" : "#E3E9F1"
+    readonly property color treeLine: dark ? "#354150" : "#C9D4E2"
+    readonly property color subtleSurface: dark ? "#171D24" : "#FBFCFE"
+    readonly property color sunken: dark ? "#10161D" : "#EAF0F7"
 
-    // Accent / primary (deep modern blue)
-    readonly property color accent:       "#1E54D6"
-    readonly property color accentTop:    "#2F6BED"
-    readonly property color accentBottom: "#163DA8"
-    readonly property color accentPressedTop:    "#1A4AC4"
-    readonly property color accentPressedBottom: "#123590"
+    // Accent / primary (clear modern blue)
+    readonly property color accent:       "#2F6FED"
+    readonly property color accentTop:    "#3F7DF2"
+    readonly property color accentBottom: "#2457C8"
+    readonly property color accentPressedTop:    "#245DD7"
+    readonly property color accentPressedBottom: "#1C46A8"
+    readonly property color accentSoft: dark ? "#1B3158" : "#E7F0FF"
+    readonly property color accentSoftHover: dark ? "#203A68" : "#DCE9FF"
+    readonly property color accentSoftBorder: dark ? "#315DA4" : "#BBD2FF"
     readonly property color accentText:   "#FFFFFF"
     readonly property color defaultColor: accent
 
     // Text
-    readonly property color primaryText:   dark ? "#F2F5F8" : "#1A1F25"
-    readonly property color secondaryText: dark ? "#AEB8C2" : "#5B6672"
+    readonly property color primaryText:   dark ? "#F4F7FA" : "#18212B"
+    readonly property color secondaryText: dark ? "#AAB6C2" : "#596878"
+    readonly property color mutedText: dark ? "#7F8B98" : "#7B8795"
 
     // States
-    readonly property color hover:           dark ? "#26323C" : "#E2E8F0"
-    readonly property color selectionBg:     dark ? "#1A4490" : "#2F6BED"
-    readonly property color selectionBorder: dark ? "#2F6BED" : "#5A9AFF"
+    readonly property color hover:           dark ? "#242D37" : "#E8EEF6"
+    readonly property color hoverStrong:     dark ? "#2A3541" : "#DDE7F3"
+    readonly property color selectionBg:     dark ? "#244F9D" : "#2F6FED"
+    readonly property color selectionBorder: dark ? "#4D86F7" : "#5D91F5"
     readonly property color selectionText:   "#FFFFFF"
-    readonly property color selectionSubText: dark ? "#C8DCFF" : "#EAF2FF"
+    readonly property color selectionSubText: dark ? "#D6E5FF" : "#EAF2FF"
 
     // Pills / badges
-    readonly property color pillFill:   dark ? "#1A2A3D" : "#E4ECFB"
-    readonly property color pillBorder: dark ? "#2A4470" : "#A8C4F0"
-    readonly property color pillText:   dark ? "#8BB8FF" : "#1E54D6"
+    readonly property color pillFill:   accentSoft
+    readonly property color pillBorder: accentSoftBorder
+    readonly property color pillText:   dark ? "#A8C7FF" : "#225ACD"
 
-    readonly property color success: "#4CAF50"
-    readonly property color warning: "#F59E0B"
-    readonly property color warningBg: dark ? "#352A13" : "#FFF4D6"
-    readonly property color error: "#EF4444"
-    readonly property color errorBg: dark ? "#3A1717" : "#FEE2E2"
+    readonly property color success: "#42B883"
+    readonly property color warning: "#E9A23B"
+    readonly property color warningBg: dark ? "#332817" : "#FFF5DD"
+    readonly property color error: "#EF5A5A"
+    readonly property color errorBg: dark ? "#351B1E" : "#FEE7E7"
 
     // Format a QML color as an uppercase #RRGGBB string. Shared so the various
     // panels and dialogs do not each carry their own copy of this conversion.

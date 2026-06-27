@@ -27,6 +27,7 @@ Rectangle {
     color: statusBackground
     border.color: statusColor
     border.width: 1
+    opacity: 0.98
 
     Behavior on color {
         ColorAnimation {
@@ -67,7 +68,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: panel.controller ? panel.controller.setupStatusDetail : ""
                 color: Theme.primaryText
-                opacity: 0.9
+                opacity: 0.86
                 font.pixelSize: panel.compact ? 11 : 12
                 wrapMode: Text.WordWrap
             }

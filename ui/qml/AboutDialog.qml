@@ -66,8 +66,8 @@ Dialog {
                 Layout.preferredWidth: 60
                 Layout.preferredHeight: 60
                 radius: 8
-                color: Theme.elevated
-                border.color: Theme.accent
+                color: Theme.subtleSurface
+                border.color: Theme.accentSoftBorder
                 border.width: 1
 
                 Image {

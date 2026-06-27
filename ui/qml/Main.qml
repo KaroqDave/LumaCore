@@ -15,10 +15,10 @@ ApplicationWindow {
     required property var settingsController
     required property bool startMinimized
 
-    width: 1180
-    height: 760
-    minimumWidth: 920
-    minimumHeight: 620
+    width: 1360
+    height: 840
+    minimumWidth: 1260
+    minimumHeight: 680
     // Resolve the launch window state declaratively so it is applied during component
     // completion, before the window is first shown, rather than minimizing after the fact.
     visibility: root.startMinimized ? Window.Minimized : Window.Windowed
@@ -33,7 +33,7 @@ ApplicationWindow {
     property string selectedDeviceId: ""
     property string selectedZoneName: ""
     property int selectedZoneFallbackIndex: -1
-    property real sidebarWidth: sidebarCollapsed ? 66 : 228
+    property real sidebarWidth: sidebarCollapsed ? 66 : 216
     readonly property var controller: root.appController
     readonly property var settings: root.settingsController
     readonly property bool animationsEnabled: settings.animationsEnabled
@@ -225,8 +225,8 @@ ApplicationWindow {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 10
+        anchors.margins: 10
+        spacing: 8
 
         NavRail {
             id: navRail
@@ -244,23 +244,24 @@ ApplicationWindow {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 10
+            spacing: 8
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
+                Layout.preferredHeight: 58
                 radius: 8
                 color: Theme.surface
                 border.color: Theme.border
                 border.width: 1
+                antialiasing: true
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 16
+                    anchors.leftMargin: 18
                     anchors.rightMargin: 12
                     anchors.topMargin: 8
                     anchors.bottomMargin: 8
-                    spacing: 10
+                    spacing: 12
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -286,10 +287,10 @@ ApplicationWindow {
 
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
-                        implicitWidth: statusRow.implicitWidth + 24
-                        implicitHeight: 30
+                        implicitWidth: statusRow.implicitWidth + 22
+                        implicitHeight: 28
                         radius: 999
-                        color: Theme.elevated
+                        color: Theme.subtleSurface
                         border.color: Theme.border
                         border.width: 1
 
@@ -300,9 +301,9 @@ ApplicationWindow {
                             spacing: 8
 
                             Rectangle {
-                                Layout.preferredWidth: 9
-                                Layout.preferredHeight: 9
-                                radius: 5
+                                Layout.preferredWidth: 8
+                                Layout.preferredHeight: 8
+                                radius: 4
                                 color: root.controller && root.controller.daemonRecoveryBusy
                                        ? Theme.accent
                                        : (root.controller && root.controller.daemonConnected
@@ -351,11 +352,12 @@ ApplicationWindow {
             Rectangle {
                 visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
-                Layout.preferredHeight: visible ? 48 : 0
+                Layout.preferredHeight: visible ? 44 : 0
                 radius: 8
                 color: Theme.warningBg
                 border.color: Theme.warning
                 border.width: 1
+                opacity: 0.95
 
                 RowLayout {
                     anchors.fill: parent
@@ -392,7 +394,7 @@ ApplicationWindow {
                         spacing: 10
 
                         SectionCard {
-                            Layout.preferredWidth: 292
+                            Layout.preferredWidth: root.sidebarCollapsed ? 292 : 306
                             Layout.minimumWidth: 250
                             Layout.fillHeight: true
                             animationsEnabled: root.animationsEnabled
@@ -419,7 +421,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 320
                             Layout.fillHeight: true
-                            spacing: 10
+                            spacing: 8
 
                             SetupStatusPanel {
                                 Layout.fillWidth: true
@@ -462,6 +464,8 @@ ApplicationWindow {
                                     selectedDeviceIndex: root.selectedDeviceIndex
                                     selectedZoneIndex: root.selectedZoneIndex
                                     selectedZoneName: root.selectedZoneName
+                                    selectedZoneMode: globalControls.selectedZoneMode
+                                    selectedTargetName: globalControls.selectedTargetName
                                     animationsEnabled: root.animationsEnabled
                                     onPresetApplied: function(effectType, colorValue, speedValue, brightnessValue) {
                                         root.selectedColor = colorValue

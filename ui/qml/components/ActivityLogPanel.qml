@@ -51,7 +51,7 @@ Item {
             bottomPadding: 8
 
             background: Rectangle {
-                color: Theme.inputBg
+                color: Theme.sunken
                 radius: 8
                 border.color: Theme.border
             }

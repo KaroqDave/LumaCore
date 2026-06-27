@@ -13,8 +13,8 @@ Control {
     property bool animationsEnabled: true
     readonly property int animationDuration: animationsEnabled ? Theme.animationDuration : 0
 
-    implicitWidth: 46
-    implicitHeight: 26
+    implicitWidth: 44
+    implicitHeight: 24
 
     padding: 0
 
@@ -27,8 +27,8 @@ Control {
 
             anchors.fill: parent
             radius: height / 2
-            color: control.checked ? Theme.accent : Theme.inputBg
-            border.color: control.checked ? Theme.accentBottom : Theme.border
+            color: control.checked ? Theme.accent : Theme.sunken
+            border.color: control.checked ? Theme.accentSoftBorder : Theme.border
             border.width: 1
 
             Behavior on color {
@@ -49,11 +49,11 @@ Control {
 
             x: control.checked ? track.width - width - 3 : 3
             anchors.verticalCenter: parent.verticalCenter
-            width: 20
-            height: 20
+            width: 18
+            height: 18
             radius: width / 2
-            color: "#FFFFFF"
-            border.color: control.checked ? Theme.accentBottom : Theme.border
+            color: control.checked ? "#FFFFFF" : Theme.elevated
+            border.color: control.checked ? "#FFFFFF" : Theme.border
             border.width: 1
 
             Behavior on x {

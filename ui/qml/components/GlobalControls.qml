@@ -52,6 +52,7 @@ Item {
     readonly property real brightnessFactor: brightness / 100.0
     readonly property int rainbowPeriodMs: Math.max(600, 6000 / effectSpeed)
     readonly property int breathingHalfPeriodMs: Math.max(150, 2000 / effectSpeed)
+    readonly property bool roomyHeader: width >= 760
     readonly property var disabledEffectSegments: [
         !targetSupportsEffect(0),
         !targetSupportsEffect(1),
@@ -438,39 +439,48 @@ Item {
         id: content
 
         anchors.fill: parent
-        spacing: 8
+        spacing: 7
 
-        RowLayout {
+        GridLayout {
             Layout.fillWidth: true
-            spacing: 8
+            columns: controls.roomyHeader ? 5 : 2
+            columnSpacing: 8
+            rowSpacing: 6
 
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 170
+                Layout.columnSpan: controls.roomyHeader ? 1 : 2
                 spacing: 1
 
                 Label {
+                    Layout.fillWidth: true
                     text: qsTr("Global Controls")
                     color: Theme.primaryText
-                    font.pixelSize: 14
+                    font.pixelSize: 13
                     font.bold: true
+                    elide: Text.ElideRight
                 }
 
                 Label {
+                    Layout.fillWidth: true
                     text: controls.selectedZoneMode
                           ? qsTr("Apply effects to the selected zone.")
                           : qsTr("Apply across every compatible writable zone.")
                     color: Theme.secondaryText
                     font.pixelSize: 10
+                    elide: Text.ElideRight
                 }
             }
 
             Rectangle {
                 visible: controls.zoneSelected
                 Layout.preferredWidth: 172
-                Layout.preferredHeight: 36
+                Layout.fillWidth: !controls.roomyHeader
+                Layout.preferredHeight: 34
                 radius: 8
-                color: controls.selectedZoneMode ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16) : Theme.inputBg
-                border.color: controls.selectedZoneMode ? Theme.selectionBorder : Theme.border
+                color: controls.selectedZoneMode ? Theme.accentSoft : Theme.sunken
+                border.color: controls.selectedZoneMode ? Theme.accentSoftBorder : Theme.border
                 border.width: 1
 
                 RowLayout {
@@ -486,7 +496,7 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: qsTr("Effects")
-                            color: controls.selectedZoneMode ? Theme.accent : Theme.primaryText
+                            color: controls.selectedZoneMode ? Theme.pillText : Theme.primaryText
                             font.pixelSize: 10
                             font.bold: true
                             elide: Text.ElideRight
@@ -529,6 +539,7 @@ Item {
 
                 visible: !controls.selectedZoneMode
                 Layout.preferredWidth: 190
+                Layout.fillWidth: !controls.roomyHeader
                 model: controls.targetOptions
                 textRole: "label"
                 currentIndex: Math.max(0, controls.targetIndex())
@@ -539,6 +550,7 @@ Item {
             }
 
             AppButton {
+                Layout.fillWidth: !controls.roomyHeader
                 variant: "secondary"
                 text: qsTr("All Off")
                 compact: true
@@ -549,6 +561,7 @@ Item {
 
             AppButton {
                 visible: !controls.selectedZoneMode
+                Layout.fillWidth: !controls.roomyHeader
                 variant: "secondary"
                 text: qsTr("Groups")
                 compact: true
@@ -577,9 +590,9 @@ Item {
             id: globalPreviewBar
 
             Layout.fillWidth: true
-            Layout.preferredHeight: 58
+            Layout.preferredHeight: 56
             radius: 8
-            border.color: previewMouse.containsMouse && controls.colorEditable ? Theme.accent : Theme.border
+            border.color: previewMouse.containsMouse && controls.colorEditable ? Theme.accentSoftBorder : Theme.border
             border.width: 1
             clip: true
             opacity: controls.selectedEffectSupported ? 1.0 : 0.5
@@ -598,7 +611,7 @@ Item {
             color: controls.effectType === 2 ? breathingColor
                  : controls.effectType === 3 ? Qt.hsva(cycleHue, 1, controls.brightnessFactor, 1)
                  : controls.effectType === 0 ? staticColor
-                 : Theme.inputBg
+                 : Theme.sunken
 
             Item {
                 id: globalRainbowClip
@@ -823,7 +836,7 @@ Item {
             Layout.preferredHeight: visible ? confirmationColumn.implicitHeight + 20 : 0
             radius: 8
             color: controls.selectedDeviceWriteConfirmed ? Theme.inputBg : Theme.warningBg
-            border.color: controls.selectedDeviceWriteConfirmed ? Theme.accent : Theme.warning
+            border.color: controls.selectedDeviceWriteConfirmed ? Theme.accentSoftBorder : Theme.warning
             border.width: 1
 
             ColumnLayout {

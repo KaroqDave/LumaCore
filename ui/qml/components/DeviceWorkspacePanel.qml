@@ -15,6 +15,8 @@ Item {
     property int selectedZoneIndex: -1
     property string selectedZoneName: ""
     property bool animationsEnabled: true
+    property bool selectedZoneMode: true
+    property string selectedTargetName: ""
     property int selectedZoneRevision: 0
     property int activityRevision: 0
     readonly property bool hasZone: appController && selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
@@ -22,11 +24,19 @@ Item {
     readonly property int selectedEffectType: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex) : 0
     readonly property int selectedBrightness: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectBrightness(selectedDeviceIndex, selectedZoneIndex) : 100
     readonly property real selectedSpeed: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex) : 1.0
+    readonly property color selectedEffectColor: selectedZoneRevision >= 0 && hasZone ? appController.zoneEffectColor(selectedDeviceIndex, selectedZoneIndex) : Theme.defaultColor
     readonly property string selectedColorHex: selectedZoneRevision >= 0 && hasZone ? appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex) : ""
     readonly property string selectedDeviceName: selectedZoneRevision >= 0 && hasZone ? appController.deviceName(selectedDeviceIndex) : ""
     readonly property int selectedLedCount: selectedZoneRevision >= 0 && hasZone ? appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex) : 0
-    readonly property bool wideLayout: width >= 700
-    readonly property int columnWidth: wideLayout ? Math.max(0, Math.floor((width - 26) / 3)) : width
+    readonly property int columnSpacing: 12
+    readonly property int dividerWidth: 1
+    readonly property int wideLayoutReservedWidth: (columnSpacing * 4) + (dividerWidth * 2)
+    readonly property int wideLayoutAvailableWidth: Math.max(0, width - wideLayoutReservedWidth)
+    readonly property bool wideLayout: width >= 760
+    readonly property int primaryColumnWidth: wideLayout ? Math.max(180, Math.floor(wideLayoutAvailableWidth * 0.25)) : width
+    readonly property int activityColumnWidth: wideLayout ? Math.min(300, Math.max(230, Math.floor(wideLayoutAvailableWidth * 0.31))) : width
+    readonly property int presetColumnWidth: wideLayout ? Math.max(220, wideLayoutAvailableWidth - primaryColumnWidth - activityColumnWidth) : width
+    readonly property bool groupTargetSelected: selectedTargetName.length > 0
 
     signal presetApplied(int effectType, color colorValue, real speedValue, int brightnessValue)
 
@@ -57,30 +67,68 @@ Item {
     }
 
     function presetSupported(effectType) {
-        return hasZone
-            && selectedDeviceWritable
-            && appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, effectType)
+        if (!appController) {
+            return false
+        }
+        if (selectedZoneMode) {
+            return hasZone
+                && selectedDeviceWritable
+                && appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, effectType)
+        }
+        return appController.globalTargetSupportsEffect(selectedTargetName, effectType)
+    }
+
+    function effectStatusLabel(effectType) {
+        switch (effectType) {
+        case 1:
+            return qsTr("Rainbow active")
+        case 2:
+            return qsTr("Breathing active")
+        case 3:
+            return qsTr("Cycle active")
+        default:
+            return qsTr("Fixed")
+        }
     }
 
     function applyPreset(effectType, colorValue, speedValue, brightnessValue) {
         if (!presetSupported(effectType)) {
             return
         }
-        if (appController.applyEffect(
-                selectedDeviceIndex,
-                selectedZoneIndex,
-                effectType,
-                colorValue,
-                speedValue,
-                brightnessValue)) {
+        const applied = selectedZoneMode
+            ? appController.applyEffect(
+                  selectedDeviceIndex,
+                  selectedZoneIndex,
+                  effectType,
+                  colorValue,
+                  speedValue,
+                  brightnessValue)
+            : (groupTargetSelected
+               ? appController.applyEffectToDeviceGroup(
+                     selectedTargetName,
+                     effectType,
+                     colorValue,
+                     speedValue,
+                     brightnessValue)
+               : appController.applyEffectGlobally(
+                     effectType,
+                     colorValue,
+                     speedValue,
+                     brightnessValue))
+        if (applied) {
             presetApplied(effectType, colorValue, speedValue, brightnessValue)
         }
     }
 
     function effectSupported(effectType) {
-        return selectedZoneRevision >= 0
-            && hasZone
-            && appController.zoneSupportsEffect(selectedDeviceIndex, selectedZoneIndex, effectType)
+        return selectedZoneRevision >= 0 && presetSupported(effectType)
+    }
+
+    function allOffPresetLabel() {
+        if (selectedZoneMode) {
+            return qsTr("All Off Selected Zone")
+        }
+        return groupTargetSelected ? qsTr("All Off Group") : qsTr("All Off All Devices")
     }
 
     function refreshSelectedZone() {
@@ -92,11 +140,12 @@ Item {
 
         anchors.fill: parent
         columns: panel.wideLayout ? 5 : 1
-        columnSpacing: 12
-        rowSpacing: 12
+        columnSpacing: panel.columnSpacing
+        rowSpacing: 10
 
         ColumnLayout {
-            Layout.preferredWidth: panel.columnWidth
+            Layout.preferredWidth: panel.primaryColumnWidth
+            Layout.maximumWidth: panel.wideLayout ? panel.primaryColumnWidth : 16777215
             Layout.fillWidth: !panel.wideLayout
             spacing: 8
 
@@ -183,16 +232,39 @@ Item {
                         Layout.preferredWidth: 16
                         Layout.preferredHeight: 16
                         radius: 5
-                        color: panel.hasZone && panel.selectedColorHex.length > 0 ? panel.selectedColorHex : Theme.inputBg
+                        color: panel.hasZone && panel.selectedEffectType !== 1 && panel.selectedEffectType !== 3
+                               ? panel.selectedEffectColor
+                               : Theme.sunken
                         border.color: Theme.border
+                        clip: true
+
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: panel.hasZone && (panel.selectedEffectType === 1 || panel.selectedEffectType === 3)
+                            radius: parent.radius
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: "#FF0000" }
+                                GradientStop { position: 0.2; color: "#FFFF00" }
+                                GradientStop { position: 0.4; color: "#00FF00" }
+                                GradientStop { position: 0.6; color: "#00FFFF" }
+                                GradientStop { position: 0.8; color: "#0000FF" }
+                                GradientStop { position: 1.0; color: "#FF00FF" }
+                            }
+                        }
                     }
 
                     Label {
                         Layout.fillWidth: true
-                        text: panel.hasZone ? panel.selectedColorHex : qsTr("-")
+                        text: panel.hasZone
+                              ? (panel.selectedEffectType === 0
+                                 ? panel.selectedColorHex
+                                 : panel.effectStatusLabel(panel.selectedEffectType))
+                              : qsTr("-")
                         color: Theme.primaryText
                         font.pixelSize: 11
-                        font.family: "monospace"
+                        font.family: panel.hasZone && panel.selectedEffectType === 0 ? "monospace" : "Segoe UI"
+                        font.bold: false
                         elide: Text.ElideRight
                     }
                 }
@@ -230,14 +302,47 @@ Item {
         Rectangle {
             visible: panel.wideLayout
             Layout.fillHeight: true
-            Layout.preferredWidth: 1
+            Layout.preferredWidth: panel.dividerWidth
+            Layout.maximumWidth: panel.dividerWidth
             color: Theme.divider
+            opacity: 0.8
         }
 
         ColumnLayout {
-            Layout.preferredWidth: panel.columnWidth
+            Layout.preferredWidth: panel.presetColumnWidth
+            Layout.maximumWidth: panel.wideLayout ? panel.presetColumnWidth : 16777215
             Layout.fillWidth: !panel.wideLayout
             spacing: 8
+
+            Flow {
+                Layout.fillWidth: true
+                visible: panel.hasZone
+                spacing: 6
+
+                StatusBadge {
+                    visible: panel.effectSupported(0)
+                    text: qsTr("Static")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectSupported(1)
+                    text: qsTr("Rainbow")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectSupported(2)
+                    text: qsTr("Breathing")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectSupported(3)
+                    text: qsTr("Cycle")
+                    colorValue: Theme.success
+                }
+            }
 
             Label {
                 Layout.fillWidth: true
@@ -293,7 +398,7 @@ Item {
                 AppButton {
                     Layout.fillWidth: true
                     Layout.columnSpan: 2
-                    text: qsTr("All Off Selected Zone")
+                    text: panel.allOffPresetLabel()
                     compact: true
                     variant: "secondary"
                     enabled: panel.presetSupported(0)
@@ -302,46 +407,20 @@ Item {
                 }
             }
 
-            Flow {
-                Layout.fillWidth: true
-                visible: panel.hasZone
-                spacing: 6
-
-                StatusBadge {
-                    visible: panel.effectSupported(0)
-                    text: qsTr("Static")
-                    colorValue: Theme.success
-                }
-
-                StatusBadge {
-                    visible: panel.effectSupported(1)
-                    text: qsTr("Rainbow")
-                    colorValue: Theme.success
-                }
-
-                StatusBadge {
-                    visible: panel.effectSupported(2)
-                    text: qsTr("Breathing")
-                    colorValue: Theme.success
-                }
-
-                StatusBadge {
-                    visible: panel.effectSupported(3)
-                    text: qsTr("Cycle")
-                    colorValue: Theme.success
-                }
-            }
         }
 
         Rectangle {
             visible: panel.wideLayout
             Layout.fillHeight: true
-            Layout.preferredWidth: 1
+            Layout.preferredWidth: panel.dividerWidth
+            Layout.maximumWidth: panel.dividerWidth
             color: Theme.divider
+            opacity: 0.8
         }
 
         ColumnLayout {
-            Layout.preferredWidth: panel.columnWidth
+            Layout.preferredWidth: panel.activityColumnWidth
+            Layout.maximumWidth: panel.wideLayout ? panel.activityColumnWidth : 16777215
             Layout.fillWidth: !panel.wideLayout
             spacing: 8
 
@@ -360,7 +439,7 @@ Item {
                 Layout.minimumHeight: 92
                 Layout.preferredHeight: panel.wideLayout ? 118 : 132
                 radius: 8
-                color: Theme.inputBg
+                color: Theme.sunken
                 border.color: Theme.border
                 border.width: 1
                 clip: true
@@ -384,6 +463,7 @@ Item {
                                 required property string modelData
 
                                 Layout.fillWidth: true
+                                width: recentActivityScroll.availableWidth
                                 text: modelData
                                 color: Theme.secondaryText
                                 font.family: "monospace"
@@ -414,9 +494,6 @@ Item {
                 }
             }
 
-            Item {
-                Layout.fillHeight: true
-            }
         }
     }
 
@@ -455,14 +532,15 @@ Item {
 
         width: implicitWidth
         height: implicitHeight
-        implicitWidth: Math.min(130, badgeText.implicitWidth + 18)
-        implicitHeight: 22
+        implicitWidth: Math.min(130, badgeText.implicitWidth + 16)
+        implicitHeight: 21
         Layout.preferredWidth: implicitWidth
         Layout.preferredHeight: implicitHeight
         radius: 8
         color: Qt.rgba(colorValue.r, colorValue.g, colorValue.b, Theme.dark ? 0.16 : 0.11)
         border.color: colorValue
         border.width: 1
+        antialiasing: true
 
         Label {
             id: badgeText

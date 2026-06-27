@@ -27,6 +27,26 @@ Dialog {
            : qsTr("Turn off all devices?")
     standardButtons: Dialog.NoButton
     width: Math.min(540, parent ? parent.width - 48 : 540)
+    padding: 18
+
+    background: Rectangle {
+        color: Theme.surface
+        radius: 8
+        border.color: Theme.border
+        border.width: 1
+    }
+
+    header: Label {
+        text: dialog.title
+        color: Theme.primaryText
+        font.pixelSize: 17
+        font.bold: true
+        padding: 18
+        leftPadding: 18
+        rightPadding: 18
+        topPadding: 18
+        bottomPadding: 0
+    }
 
     contentItem: ColumnLayout {
         spacing: 10
@@ -43,29 +63,34 @@ Dialog {
         }
     }
 
-    footer: RowLayout {
-        spacing: 8
+    footer: Item {
+        implicitWidth: footerRow.implicitWidth
+        implicitHeight: footerRow.implicitHeight + 12
 
-        Item {
-            Layout.fillWidth: true
-        }
+        RowLayout {
+            id: footerRow
 
-        AppButton {
-            variant: "secondary"
-            text: qsTr("Cancel")
-            compact: true
-            animationsEnabled: dialog.animationsEnabled
-            onClicked: dialog.close()
-        }
+            anchors.right: parent.right
+            anchors.rightMargin: 18
+            spacing: 8
 
-        AppButton {
-            variant: "primary"
-            text: qsTr("All Off")
-            compact: true
-            animationsEnabled: dialog.animationsEnabled
-            onClicked: {
-                dialog.close()
-                dialog.confirmed()
+            AppButton {
+                variant: "secondary"
+                text: qsTr("Cancel")
+                compact: true
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: dialog.close()
+            }
+
+            AppButton {
+                variant: "primary"
+                text: qsTr("All Off")
+                compact: true
+                animationsEnabled: dialog.animationsEnabled
+                onClicked: {
+                    dialog.close()
+                    dialog.confirmed()
+                }
             }
         }
     }

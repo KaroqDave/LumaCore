@@ -60,12 +60,12 @@ Item {
 
     function previewStatusBackground(status) {
         if (status === "changed" || status === "unchanged") {
-            return Theme.elevated
+            return Theme.subtleSurface
         }
         if (status === "invalid" || status === "unsupported") {
             return Theme.warningBg
         }
-        return Theme.inputBg
+        return Theme.sunken
     }
 
     implicitHeight: content.implicitHeight
@@ -164,8 +164,8 @@ Item {
 
                         Layout.fillWidth: true
                         Layout.preferredHeight: 54
-                        radius: 10
-                        color: Theme.elevated
+                        radius: 8
+                        color: Theme.subtleSurface
                         border.color: Theme.border
 
                         Column {
@@ -195,8 +195,8 @@ Item {
                 visible: manager.previewItems().length > 0
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(previewColumn.implicitHeight + 20, 260) : 0
-                radius: 10
-                color: Theme.inputBg
+                radius: 8
+                color: Theme.sunken
                 border.color: Theme.border
 
                 ScrollView {
@@ -313,8 +313,8 @@ Item {
                          && manager.compatibilityReport.details.length > 0
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(detailsLabel.implicitHeight + 20, 180) : 0
-                radius: 10
-                color: Theme.elevated
+                radius: 8
+                color: Theme.subtleSurface
                 border.color: Theme.border
 
                 ScrollView {
@@ -454,8 +454,8 @@ Item {
                          && manager.applyResultReport.details.length > 0
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(resultDetailsLabel.implicitHeight + 20, 180) : 0
-                radius: 10
-                color: Theme.elevated
+                radius: 8
+                color: Theme.subtleSurface
                 border.color: Theme.border
 
                 ScrollView {
@@ -690,7 +690,7 @@ Item {
                 radius: 8
                 color: manager.settingsController && manager.settingsController.activeProfile.length > 0
                        ? Theme.pillFill
-                       : Theme.inputBg
+                       : Theme.sunken
                 border.color: manager.settingsController && manager.settingsController.activeProfile.length > 0
                               ? Theme.pillBorder
                               : Theme.border

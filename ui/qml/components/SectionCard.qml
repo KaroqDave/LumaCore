@@ -21,6 +21,7 @@ Rectangle {
     border.color: Theme.border
     border.width: 1
     implicitHeight: body.implicitHeight + cardPadding * 2
+    antialiasing: true
 
     Behavior on color {
         ColorAnimation {

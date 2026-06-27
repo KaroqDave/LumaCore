@@ -42,7 +42,7 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: 7
 
         RowLayout {
             Layout.fillWidth: true
@@ -75,7 +75,7 @@ Item {
 
                 Layout.alignment: Qt.AlignRight
                 implicitWidth: filterButtonContent.implicitWidth + 28
-                implicitHeight: 32
+                implicitHeight: 30
                 hoverEnabled: true
                 text: panel.activeFilterLabel
 
@@ -109,8 +109,8 @@ Item {
                     radius: 8
                     color: filterButton.down
                            ? Theme.hover
-                           : (filterButton.hovered || filterPopup.opened ? Theme.elevated : Theme.inputBg)
-                    border.color: filterButton.hovered || filterPopup.opened ? Theme.selectionBorder : Theme.border
+                           : (filterButton.hovered || filterPopup.opened ? Theme.elevated : Theme.sunken)
+                    border.color: filterButton.hovered || filterPopup.opened ? Theme.accentSoftBorder : Theme.border
                     border.width: 1
 
                     Behavior on color {
@@ -316,7 +316,7 @@ Item {
                 readonly property color zoneSwatchColor: zoneEffectColorHex || Theme.accent
 
                 implicitWidth: tree.width
-                implicitHeight: deviceNode ? 42 : 34
+                implicitHeight: deviceNode ? 40 : 33
                 leftPadding: 8
                 rightPadding: 10
                 topPadding: 4
@@ -363,9 +363,9 @@ Item {
                     radius: 8
                     scale: treeDelegate.down ? 0.985 : 1
                     color: treeDelegate.selectedNode
-                           ? Theme.selectionBg
+                           ? Theme.accentSoft
                            : (treeDelegate.hovered ? Theme.hover : "transparent")
-                    border.color: treeDelegate.selectedNode ? Theme.selectionBorder : "transparent"
+                    border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : "transparent"
                     border.width: 1
 
                     Behavior on color {
@@ -415,7 +415,7 @@ Item {
                             NavIcon {
                                 anchors.fill: parent
                                 name: "chevron"
-                                color: treeDelegate.selectedNode ? Theme.selectionText : Theme.secondaryText
+                                color: treeDelegate.selectedNode ? Theme.pillText : Theme.secondaryText
                                 animationsEnabled: panel.animationsEnabled
                                 strokeWidth: 2
                             }
@@ -434,6 +434,7 @@ Item {
                             width: 1
                             height: parent.height
                             color: Theme.treeLine
+                            opacity: 0.8
                         }
 
                         Rectangle {
@@ -442,6 +443,7 @@ Item {
                             width: 12
                             height: 1
                             color: Theme.treeLine
+                            opacity: 0.8
                         }
                     }
 
@@ -456,7 +458,7 @@ Item {
                             width: 18
                             height: 18
                             name: "motherboard"
-                            color: treeDelegate.selectedNode ? Theme.selectionText : Theme.secondaryText
+                            color: treeDelegate.selectedNode ? Theme.pillText : Theme.secondaryText
                             animationsEnabled: panel.animationsEnabled
                             strokeWidth: 1.8
                         }
@@ -471,10 +473,10 @@ Item {
                         Rectangle {
                             anchors.fill: parent
                             visible: !treeDelegate.zoneEffectAnimated
-                            radius: 6
+                            radius: 7
                             color: treeDelegate.zoneSwatchColor
                             border.color: treeDelegate.selectedNode
-                                          ? Theme.selectionBorder
+                                          ? Theme.accentSoftBorder
                                           : Qt.darker(treeDelegate.zoneSwatchColor, 1.15)
                             border.width: treeDelegate.selectedNode ? 2 : 1
                         }
@@ -483,8 +485,8 @@ Item {
                             anchors.fill: parent
                             visible: treeDelegate.zoneEffectAnimated
                                      && (treeDelegate.zoneEffectType === 1 || treeDelegate.zoneEffectType === 3)
-                            radius: 6
-                            border.color: treeDelegate.selectedNode ? Theme.selectionBorder : Theme.border
+                            radius: 7
+                            border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : Theme.border
                             border.width: treeDelegate.selectedNode ? 2 : 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
@@ -502,11 +504,11 @@ Item {
                             visible: treeDelegate.zoneEffectAnimated
                                      && treeDelegate.zoneEffectType !== 1
                                      && treeDelegate.zoneEffectType !== 3
-                            radius: 6
+                            radius: 7
                             color: treeDelegate.zoneSwatchColor
                             opacity: 0.82
                             border.color: treeDelegate.selectedNode
-                                          ? Theme.selectionBorder
+                                          ? Theme.accentSoftBorder
                                           : Qt.darker(treeDelegate.zoneSwatchColor, 1.15)
                             border.width: treeDelegate.selectedNode ? 2 : 1
                         }
@@ -530,7 +532,7 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: treeDelegate.model.displayName || ""
-                            color: treeDelegate.selectedNode ? Theme.selectionText : Theme.primaryText
+                            color: treeDelegate.selectedNode ? Theme.pillText : Theme.primaryText
                             font.pixelSize: treeDelegate.deviceNode ? 12 : 11
                             font.bold: treeDelegate.deviceNode || treeDelegate.selectedNode
                             elide: Text.ElideRight
@@ -548,7 +550,8 @@ Item {
                             Layout.fillWidth: true
                             visible: (treeDelegate.model.description || "").length > 0
                             text: treeDelegate.model.description || ""
-                            color: treeDelegate.selectedNode ? Theme.selectionSubText : Theme.secondaryText
+                            color: treeDelegate.selectedNode ? Theme.pillText : Theme.secondaryText
+                            opacity: treeDelegate.selectedNode ? 0.8 : 1.0
                             font.pixelSize: 9
                             elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
@@ -604,8 +607,8 @@ Item {
                         Layout.preferredWidth: Math.min(104, effectBadgeLabel.implicitWidth + 26)
                         Layout.preferredHeight: 20
                         radius: 8
-                        color: treeDelegate.selectedNode ? Qt.rgba(1, 1, 1, 0.14) : Theme.inputBg
-                        border.color: treeDelegate.selectedNode ? Theme.selectionBorder : Theme.border
+                        color: treeDelegate.selectedNode ? Theme.surface : Theme.inputBg
+                        border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : Theme.border
                         border.width: 1
 
                         RowLayout {
@@ -632,7 +635,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.alignment: Qt.AlignVCenter
                                 text: treeDelegate.zoneEffectLabel
-                                color: treeDelegate.selectedNode ? Theme.selectionText : Theme.primaryText
+                                color: treeDelegate.selectedNode ? Theme.pillText : Theme.primaryText
                                 font.pixelSize: 9
                                 font.bold: true
                                 elide: Text.ElideRight

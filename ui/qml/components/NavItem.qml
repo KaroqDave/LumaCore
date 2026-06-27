@@ -27,10 +27,11 @@ Item {
         anchors.fill: parent
         radius: 8
         color: navItem.selected
-               ? Theme.selectionBg
+               ? Theme.accentSoft
                : (hoverArea.containsMouse ? Theme.hover : "transparent")
-        border.color: navItem.selected ? Theme.selectionBorder : "transparent"
+        border.color: navItem.selected ? Theme.accentSoftBorder : "transparent"
         border.width: 1
+        antialiasing: true
 
         Behavior on color {
             ColorAnimation {
@@ -44,8 +45,17 @@ Item {
             anchors.rightMargin: navItem.collapsed ? 0 : 12
             spacing: 10
 
+            Rectangle {
+                visible: navItem.selected && !navItem.collapsed
+                Layout.preferredWidth: 3
+                Layout.preferredHeight: 22
+                Layout.alignment: Qt.AlignVCenter
+                radius: 2
+                color: Theme.accent
+            }
+
             Item {
-                Layout.preferredWidth: navItem.collapsed ? parent.width : 24
+                Layout.preferredWidth: navItem.collapsed ? parent.width : 22
                 Layout.preferredHeight: 24
                 Layout.alignment: Qt.AlignVCenter
 
@@ -54,7 +64,7 @@ Item {
                     width: 22
                     height: 22
                     name: navItem.iconName
-                    color: navItem.selected ? Theme.selectionText : Theme.primaryText
+                    color: navItem.selected ? Theme.pillText : Theme.primaryText
                     strokeWidth: navItem.selected ? 2.2 : 1.8
                 }
             }
@@ -64,7 +74,7 @@ Item {
                 visible: !navItem.collapsed
                 opacity: navItem.collapsed ? 0 : 1
                 text: navItem.label
-                color: navItem.selected ? Theme.selectionText : Theme.primaryText
+                color: navItem.selected ? Theme.pillText : Theme.primaryText
                 font.pixelSize: 13
                 font.bold: navItem.selected
                 elide: Text.ElideRight
@@ -81,7 +91,7 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 visible: !navItem.collapsed && navItem.badgeText.length > 0
                 radius: 8
-                color: navItem.selected ? "#FFFFFF" : Theme.accent
+                color: navItem.selected ? Theme.surface : Theme.accent
                 implicitWidth: Math.max(22, badgeLabel.implicitWidth + 12)
                 implicitHeight: 22
 
@@ -90,7 +100,7 @@ Item {
 
                     anchors.centerIn: parent
                     text: navItem.badgeText
-                    color: navItem.selected ? Theme.selectionBg : "#FFFFFF"
+                    color: navItem.selected ? Theme.pillText : "#FFFFFF"
                     font.pixelSize: 11
                     font.bold: true
                 }
