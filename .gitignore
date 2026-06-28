@@ -49,7 +49,6 @@ CMakeUserPresets.json
 
 # Local agent guidance (not tracked in the repo)
 /AGENTS.md
-/CLAUDE.md
 
 # OS
 .DS_Store
