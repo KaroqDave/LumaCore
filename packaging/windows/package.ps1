@@ -167,6 +167,29 @@ if (Test-Path -LiteralPath $cmakeCache) {
     }
 }
 
+$runtimeSearchDirs = @()
+if (-not [string]::IsNullOrWhiteSpace($QtBinDir)) {
+    $runtimeSearchDirs += $QtBinDir
+}
+if (-not [string]::IsNullOrWhiteSpace($compilerBin)) {
+    $runtimeSearchDirs += $compilerBin
+}
+$runtimeSearchDirs += ($env:PATH -split [System.IO.Path]::PathSeparator)
+$runtimeSearchDirs = $runtimeSearchDirs |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+    Select-Object -Unique
+
+foreach ($optionalDll in @("hidapi.dll", "libhidapi-0.dll", "libhidapi.dll")) {
+    $runtimeSource = $runtimeSearchDirs |
+        ForEach-Object { Join-Path $_ $optionalDll } |
+        Where-Object { Test-Path -LiteralPath $_ } |
+        Select-Object -First 1
+    if ($runtimeSource) {
+        Copy-Item -LiteralPath $runtimeSource -Destination $stageDir -Force
+        Write-Host "Copied optional runtime $optionalDll from $(Split-Path -Parent $runtimeSource)"
+    }
+}
+
 foreach ($requiredPath in @(
     "lumacore.exe",
     "lumacore-daemon.exe",

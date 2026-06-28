@@ -52,6 +52,27 @@ if(LUMACORE_ENABLE_LINUX_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
+if(LUMACORE_ENABLE_WINDOWS_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    qt_add_library(lumacore_windows_backend STATIC
+        windows/WindowsDiscoveryBackend.cpp
+        windows/WindowsDiscoveryBackend.h
+        windows/WindowsDiscoveredDevice.cpp
+        windows/WindowsDiscoveredDevice.h
+        ${PROJECT_SOURCE_DIR}/hardware/windows/HidapiProbe.cpp
+        ${PROJECT_SOURCE_DIR}/hardware/windows/HidapiProbe.h
+        ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.cpp
+        ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.h
+    )
+
+    target_include_directories(lumacore_windows_backend PUBLIC ${PROJECT_SOURCE_DIR})
+    target_link_libraries(lumacore_windows_backend PUBLIC lumacore_core)
+
+    if(LUMACORE_HAS_HIDAPI)
+        target_compile_definitions(lumacore_windows_backend PRIVATE LUMACORE_HAS_HIDAPI)
+        target_link_libraries(lumacore_windows_backend PRIVATE ${LUMACORE_HIDAPI_TARGET})
+    endif()
+endif()
+
 if(LUMACORE_ENABLE_ASUS_AURA_HID
    AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
    AND LUMACORE_HAS_HIDAPI

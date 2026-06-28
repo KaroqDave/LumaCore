@@ -8,6 +8,9 @@
 #ifdef LUMACORE_HAS_LINUX_DISCOVERY
 #include "backends/linux/LinuxDiscoveryBackend.h"
 #endif
+#ifdef LUMACORE_HAS_WINDOWS_DISCOVERY
+#include "backends/windows/WindowsDiscoveryBackend.h"
+#endif
 #include "backends/mock/MockBackend.h"
 #include "core/DeviceManager.h"
 #include "core/PortablePaths.h"
@@ -58,6 +61,9 @@ void registerBackends(lumacore::DeviceManager& deviceManager)
 #ifdef LUMACORE_HAS_LINUX_DISCOVERY
     deviceManager.registerBackend(std::make_unique<lumacore::LinuxDiscoveryBackend>());
 #endif
+#ifdef LUMACORE_HAS_WINDOWS_DISCOVERY
+    deviceManager.registerBackend(std::make_unique<lumacore::WindowsDiscoveryBackend>());
+#endif
 #ifdef LUMACORE_HAS_ASUS_AURA_HID
     deviceManager.registerBackend(std::make_unique<lumacore::AsusAuraHidBackend>());
 #endif
@@ -86,7 +92,7 @@ bool initializeRequestedBackend(
     if (backendId == lumacore::AutoBackend::backendId()) {
         deviceManager.activityLog().info(
             lumacore::LogCategory::Backend,
-            QStringLiteral("Auto backend will aggregate ASUS HID control, Linux discovery, and mock fallback.")
+            QStringLiteral("Auto backend will aggregate available hardware backends and mock fallback.")
         );
     }
 

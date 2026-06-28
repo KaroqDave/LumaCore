@@ -10,11 +10,11 @@
   </p>
 </div>
 
-**v1.1.7.3** - Linux-first RGB control with a refined professional Qt Quick polish pass, improved dark/light theme tokens, cleaner navigation and shared controls, stabilized Devices workspace layout, selected-zone effect status visibility, and quick presets that follow the active zone/global target scope, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.8.0** - Linux-first RGB control with Windows read-only HID discovery, portable diagnostics export, improved Windows preview packaging, and automatic daemon startup through the `auto` backend, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
-LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local Unix socket; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
+LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local IPC endpoint; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
-The Windows 10/11 x64 preview preserves the daemon architecture but is intentionally mock-only: it launches the bundled daemon automatically and does not discover hardware or perform physical RGB writes.
+The Windows 10/11 x64 preview preserves the daemon architecture: it launches the bundled daemon automatically, can expose read-only HID inventory when hidapi is available, and does not perform physical RGB writes.
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
@@ -31,9 +31,10 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - In-memory RGB model for devices, zones, LEDs, profiles, static colors, rainbow, breathing, and color-cycle effects.
 - GUI-to-daemon boundary through `backends/daemon/`, `ipc/`, and `lumacore-daemon`.
 - Non-blocking interactive daemon requests with correlated responses, cancellation, bounded reconnect backoff, automatic device refresh, stable selection restoration, and manual Retry/Rescan controls.
-- Default daemon `auto` backend that prefers verified ASUS Aura HID control, adds read-only Linux discovery inventory when available, and falls back to the mock backend.
+- Default daemon `auto` backend that prefers verified ASUS Aura HID control on Linux, adds read-only platform discovery inventory when available, and falls back to the mock backend.
 - Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
 - Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata, with cataloged RGB-controller research identities and conservative heuristic classification.
+- Optional Windows read-only HID discovery through hidapi, with cataloged RGB-controller research identities and conservative heuristic classification. Windows discovery is inventory-only and does not enable writes.
 - ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native color-cycle/rainbow effects on addressable headers, and All Off.
 - Profile save, load, rename, confirmed overwrite/delete, JSON import/export, compatibility reporting, partial-result summaries, and persisted active-profile selection with atomic writes and legacy color-only profile compatibility.
 - Portable Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, daily in-app profile scheduling, opt-in close-to-tray behavior, and an enabled-by-default Windows VRR flicker workaround.
@@ -44,7 +45,7 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 
 - `lumacore` refuses to run as root; `lumacore-daemon` requires root by default on Linux.
 - Hardware writes are never exposed as raw packet methods to the GUI.
-- Linux discovery is read-only and does not perform RGB writes.
+- Linux and Windows discovery backends are read-only and do not perform RGB writes.
 - Dry-run mode logs write intent and backend-specific previews without applying changes.
 - ASUS Aura writes require an allowlisted device, a verified `EC B0`/`EC 30` config-table response, dry-run off, approved packet builders, and per-device confirmation for the current daemon session.
 - Confirmation is held in memory and is cleared when the daemon restarts or the backend is reinitialized.
@@ -60,6 +61,7 @@ New hardware contributions must follow `docs/hardware/contributing-hardware.md`,
 - Ninja or Make
 - Qt 6.5+ with `Core`, `Gui`, `Network`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`, and `Widgets`
 - Optional for Linux discovery and ASUS Aura HID builds: `pkg-config`, `hidapi`, and/or `libusb`
+- Optional for Windows HID discovery: a hidapi package discoverable by CMake, such as `hidapi::hidapi`, `hidapi::winapi`, or pkg-config `hidapi`
 
 On Arch-based systems:
 
@@ -106,7 +108,7 @@ cmake --build --preset linux-debug
 ctest --preset linux-debug
 ```
 
-WSL is recommended when working on the Linux discovery and ASUS HID backends because those sources are intentionally excluded from native Windows builds.
+WSL is recommended when working on the Linux discovery and ASUS HID write backends because those sources are intentionally excluded from native Windows builds. Native Windows builds include only the Windows read-only HID discovery path.
 
 For a Qt Online Installer setup on Windows, copy `CMakeUserPresets.json.example` to the ignored `CMakeUserPresets.json`, update `QT_ROOT_DIR` and `MINGW_ROOT`, and select the resulting `windows-local` preset in CMake Tools:
 
@@ -119,13 +121,16 @@ ctest --preset windows-local
 
 The local preset adds Qt and MinGW to the build environment so clangd can query the compiler for its target and standard-library include paths.
 
-On Windows, launching `lumacore.exe` automatically starts the sibling `lumacore-daemon.exe` with the mock backend. Pass `--no-auto-start-daemon` to disable this behavior. The default local endpoint is a versioned, per-user name beginning with `lumacore-daemon-v1-`.
-
-Create the portable preview ZIP from a Release build with:
+Use the release preset for portable Windows preview packages:
 
 ```powershell
-.\packaging\windows\package.ps1 -BuildDir .\build-windows
+cmake --preset windows-local-release
+cmake --build --preset windows-local-release
+ctest --preset windows-local-release
+.\packaging\windows\package.ps1 -BuildDir .\build-windows-release
 ```
+
+On Windows, launching `lumacore.exe` automatically starts the sibling `lumacore-daemon.exe` with the `auto` backend. It uses read-only HID discovery when compiled with hidapi and falls back to mock devices otherwise. Pass `--no-auto-start-daemon` to disable this behavior. The default local endpoint is a versioned, per-user name beginning with `lumacore-daemon-v1-`.
 
 See [docs/windows-preview.md](docs/windows-preview.md) for end-user instructions and preview limitations.
 
@@ -154,11 +159,12 @@ sudo ./build/lumacore-daemon --backend linux-discovery
 sudo ./build/lumacore-daemon --backend asus-aura-hid
 ```
 
-The daemon accepts `--backend auto`, `mock`, `linux-discovery`, or `asus-aura-hid` when those backends are built. `auto` is the default.
+The daemon accepts `--backend auto`, `mock`, `linux-discovery`, `windows-discovery`, or `asus-aura-hid` when those backends are built. `auto` is the default.
 
 ## CMake Options
 
 - `LUMACORE_ENABLE_LINUX_DISCOVERY` builds daemon-only Linux read-only discovery on supported systems.
+- `LUMACORE_ENABLE_WINDOWS_DISCOVERY` builds daemon-only Windows read-only HID discovery on supported systems.
 - `LUMACORE_ENABLE_HIDAPI` enables hidapi discovery when available.
 - `LUMACORE_ENABLE_LIBUSB` enables libusb discovery when available.
 - `LUMACORE_ENABLE_I2C_DEV` enables optional read-only i2c-dev adapter metadata discovery.
@@ -198,9 +204,11 @@ the ASUS Aura HID configuration parser and protocol serializer.
 - `backends/mock/` - safe simulated hardware backend.
 - `backends/daemon/` - GUI-facing backend that talks to `lumacore-daemon`.
 - `backends/linux/` - daemon-only read-only Linux discovery backend.
+- `backends/windows/` - daemon-only read-only Windows HID discovery backend.
 - `backends/asus/` - ASUS Aura USB HID backend.
 - `daemon/` - privileged daemon entry point and backend registration.
 - `hardware/linux/` - Linux provider probes, HID writer, and ASUS Aura protocol helpers.
+- `hardware/windows/` - Windows HID provider probes and discovery catalog helpers.
 - `ipc/` - local daemon protocol, shared frame codec, client, and server.
 - `ui/` and `ui/qml/` - QML-facing controllers, models, private UI preference stores, and Qt Quick UI.
 - `docs/` - architecture, daemon protocol, refactor parity, release verification, hardware notes, Windows preview, and systemd packaging notes.
@@ -220,7 +228,7 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 - `docs/architecture.md` documents runtime boundaries and stable APIs.
 - `docs/refactor-parity.md` is the behavior-preservation checklist for structural changes.
 - `docs/release-verification.md` documents repeatable build, test, lint, sanitizer, install-staging, and Windows preview checks.
-- `docs/windows-preview.md` documents mock-only Windows preview behavior and limitations.
+- `docs/windows-preview.md` documents Windows preview behavior and limitations.
 - `docs/hardware/asus-aura-hid.md` documents the guarded ASUS Aura HID support and protocol research boundaries.
 - `docs/hardware/discovery-catalog.md` documents read-only discovery classification stages and cataloged research identities.
 - `docs/hardware/contributing-hardware.md` documents the staged workflow and PR checklist for new hardware support.

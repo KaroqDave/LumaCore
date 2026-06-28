@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 1.1.7.3
+    VERSION 1.1.8.0
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
@@ -29,8 +29,13 @@ set(LUMACORE_LINUX_DEFAULT OFF)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(LUMACORE_LINUX_DEFAULT ON)
 endif()
+set(LUMACORE_WINDOWS_DEFAULT OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(LUMACORE_WINDOWS_DEFAULT ON)
+endif()
 
 option(LUMACORE_ENABLE_LINUX_DISCOVERY "Build daemon-only Linux read-only hardware discovery backend" ${LUMACORE_LINUX_DEFAULT})
+option(LUMACORE_ENABLE_WINDOWS_DISCOVERY "Build daemon-only Windows read-only HID discovery backend" ${LUMACORE_WINDOWS_DEFAULT})
 option(LUMACORE_ENABLE_HIDAPI "Enable read-only hidapi discovery when available" ON)
 option(LUMACORE_ENABLE_LIBUSB "Enable read-only libusb discovery when available" ON)
 option(LUMACORE_ENABLE_I2C_DEV "Enable optional read-only i2c-dev adapter metadata discovery" OFF)
@@ -120,6 +125,23 @@ if(LUMACORE_ENABLE_LINUX_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
+if(LUMACORE_ENABLE_WINDOWS_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Windows" AND LUMACORE_ENABLE_HIDAPI)
+    find_package(hidapi CONFIG QUIET)
+    if(TARGET hidapi::hidapi)
+        set(LUMACORE_HAS_HIDAPI ON)
+        set(LUMACORE_HIDAPI_TARGET hidapi::hidapi)
+    elseif(TARGET hidapi::winapi)
+        set(LUMACORE_HAS_HIDAPI ON)
+        set(LUMACORE_HIDAPI_TARGET hidapi::winapi)
+    elseif(PkgConfig_FOUND)
+        pkg_check_modules(HIDAPI QUIET IMPORTED_TARGET hidapi)
+        if(TARGET PkgConfig::HIDAPI)
+            set(LUMACORE_HAS_HIDAPI ON)
+            set(LUMACORE_HIDAPI_TARGET PkgConfig::HIDAPI)
+        endif()
+    endif()
+endif()
+
 add_subdirectory(core)
 add_subdirectory(ipc)
 add_subdirectory(backends)
@@ -185,6 +207,7 @@ enable_testing()
 add_subdirectory(tests)
 
 message(STATUS "LumaCore Linux discovery: ${LUMACORE_ENABLE_LINUX_DISCOVERY}")
+message(STATUS "LumaCore Windows discovery: ${LUMACORE_ENABLE_WINDOWS_DISCOVERY}")
 message(STATUS "LumaCore hidapi provider: ${LUMACORE_HAS_HIDAPI}")
 message(STATUS "LumaCore libusb provider: ${LUMACORE_HAS_LIBUSB}")
 message(STATUS "LumaCore i2c-dev provider: ${LUMACORE_HAS_I2C_DEV}")
@@ -200,6 +223,7 @@ lumacore_apply_project_options(
     lumacore_ipc
     lumacore_daemon_backend
     lumacore_linux_backend
+    lumacore_windows_backend
     lumacore_asus_aura_backend
     lumacore_ui
     lumacore_device_manager_write_gate_test

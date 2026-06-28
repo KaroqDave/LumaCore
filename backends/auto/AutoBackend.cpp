@@ -8,6 +8,9 @@
 #ifdef LUMACORE_HAS_LINUX_DISCOVERY
 #include "backends/linux/LinuxDiscoveryBackend.h"
 #endif
+#ifdef LUMACORE_HAS_WINDOWS_DISCOVERY
+#include "backends/windows/WindowsDiscoveryBackend.h"
+#endif
 #include "backends/mock/MockBackend.h"
 #include "core/RgbDevice.h"
 
@@ -35,7 +38,7 @@ BackendDescriptor AutoBackend::descriptor() const
     return {
         backendId(),
         QStringLiteral("Auto Backend"),
-        QStringLiteral("Aggregates verified ASUS Aura HID control, read-only Linux discovery, and mock fallback."),
+        QStringLiteral("Aggregates available hardware backends and falls back to mock devices."),
         BackendCapability::DiscoveryRead
             | BackendCapability::ZoneColorWrite
             | BackendCapability::ZoneEffectWrite,
@@ -76,6 +79,19 @@ std::vector<std::unique_ptr<RgbDevice>> AutoBackend::discoverDevices() const
                 continue;
             }
             device->setBackendId(QStringLiteral("linux-discovery"));
+            devices.push_back(std::move(device));
+        }
+    }
+#endif
+
+#ifdef LUMACORE_HAS_WINDOWS_DISCOVERY
+    WindowsDiscoveryBackend windowsDiscoveryBackend;
+    if (windowsDiscoveryBackend.probe().isGranted()) {
+        for (std::unique_ptr<RgbDevice>& device : windowsDiscoveryBackend.discoverDevices()) {
+            if (!device || isRepresentedDiscoveryDevice(*device, representedIdentities)) {
+                continue;
+            }
+            device->setBackendId(QStringLiteral("windows-discovery"));
             devices.push_back(std::move(device));
         }
     }

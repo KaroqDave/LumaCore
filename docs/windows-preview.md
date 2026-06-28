@@ -12,9 +12,14 @@ The GUI starts the bundled daemon without a console window and connects through 
 
 ## Current limitations
 
-- Mock devices only.
-- No Windows hardware discovery or physical RGB writes.
+- Windows HID discovery is read-only and available only when the build finds hidapi.
+- If hidapi is unavailable or no HID devices are reported, the auto backend falls back to mock devices.
+- No Windows physical RGB writes.
 - No Windows service, installer, automatic startup, elevation, code signing, Dynamic Lighting, or LampArray support.
 - Profiles, settings, and Qt cache data stay beside the extracted executable under `data/`; no installer or registry-backed settings are used for the preview build.
 
-If automatic startup fails, restore both executables from the ZIP. Advanced users can run `lumacore-daemon.exe --backend mock` manually, then start `lumacore.exe --no-auto-start-daemon`.
+## Diagnostics
+
+Open Settings -> Windows diagnostics to confirm the detected Windows version, Qt runtime, active backend, daemon endpoint, bundled daemon presence, and profile storage path. With a hidapi-enabled build, the backend may show `windows-discovery` devices as read-only inventory. Use Export to save a redacted JSON report, or Copy Summary for a short support summary. The same export is also available from the Active Backend dialog.
+
+If automatic startup fails, restore both executables from the ZIP. Advanced users can run `lumacore-daemon.exe --backend auto` manually, or use `--backend mock` for a simulated-device session, then start `lumacore.exe --no-auto-start-daemon`.

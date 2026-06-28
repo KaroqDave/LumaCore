@@ -2,6 +2,7 @@
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import LumaCore
 
@@ -14,6 +15,7 @@ Item {
 
     readonly property var themeOptions: ["Auto", "Light", "Dark"]
     property var scheduledProfileNames: []
+    property var diagnosticsReport: ({})
 
     function normalizedTheme(value) {
         if (value === "System") {
@@ -24,6 +26,18 @@ Item {
 
     function refreshScheduledProfileNames() {
         scheduledProfileNames = appController ? appController.profileNames() : []
+    }
+
+    function refreshDiagnosticsReport() {
+        diagnosticsReport = appController ? appController.diagnosticsReport() : ({})
+    }
+
+    function diagnosticsValue(sectionName, keyName, fallback) {
+        const section = diagnosticsReport && diagnosticsReport[sectionName]
+                      ? diagnosticsReport[sectionName]
+                      : ({})
+        const value = section[keyName]
+        return value === undefined || value === null || value === "" ? fallback : value
     }
 
     function scheduledProfileIndex() {
@@ -59,13 +73,42 @@ Item {
                 hourText + ":" + minuteText
     }
 
-    Component.onCompleted: refreshScheduledProfileNames()
+    Component.onCompleted: {
+        refreshScheduledProfileNames()
+        refreshDiagnosticsReport()
+    }
+
+    FileDialog {
+        id: diagnosticsDialog
+
+        title: qsTr("Export LumaCore Diagnostics")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [qsTr("LumaCore diagnostics (*.json)")]
+        onAccepted: {
+            if (page.appController) {
+                page.appController.exportDiagnostics(selectedFile)
+            }
+        }
+    }
 
     Connections {
         target: page.appController
 
         function onProfilesChanged() {
             page.refreshScheduledProfileNames()
+        }
+
+        function onBackendInfoChanged() {
+            page.refreshDiagnosticsReport()
+        }
+
+        function onDaemonInfoChanged() {
+            page.refreshDiagnosticsReport()
+        }
+
+        function onSetupStatusChanged() {
+            page.refreshDiagnosticsReport()
         }
     }
 
@@ -353,6 +396,151 @@ Item {
                             page.settingsController.applyOnLaunch = checked
                         }
                     }
+                }
+            }
+        }
+
+        SectionCard {
+            visible: Qt.platform.os === "windows"
+            Layout.fillWidth: true
+            title: qsTr("Windows diagnostics")
+            subtitle: qsTr("Runtime and portable package state")
+            surfaceColor: Theme.surface
+            animationsEnabled: page.animationsEnabled
+            compact: true
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 12
+                rowSpacing: 8
+
+                Label {
+                    text: qsTr("Platform")
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: page.diagnosticsValue("application", "platform", qsTr("Unknown"))
+                    color: Theme.primaryText
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    text: qsTr("Qt")
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: page.diagnosticsValue("application", "qtVersion", qsTr("Unknown"))
+                    color: Theme.primaryText
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    text: qsTr("Backend")
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: page.appController ? page.appController.backendDisplayName : qsTr("Unavailable")
+                    color: Theme.primaryText
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    text: qsTr("Daemon")
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: page.appController
+                          ? qsTr("%1 at %2")
+                                .arg(page.appController.daemonState)
+                                .arg(page.appController.daemonSocketPath)
+                          : qsTr("Unavailable")
+                    color: Theme.primaryText
+                    font.pixelSize: 12
+                    wrapMode: Text.WrapAnywhere
+                }
+
+                Label {
+                    text: qsTr("Bundled daemon")
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: page.diagnosticsValue("package", "bundledDaemonPresent", false)
+                          ? qsTr("Present")
+                          : qsTr("Missing")
+                    color: page.diagnosticsValue("package", "bundledDaemonPresent", false)
+                           ? Theme.success
+                           : Theme.warning
+                    font.pixelSize: 12
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    text: qsTr("Profiles")
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: page.appController ? page.appController.profilesDirectory : qsTr("Unavailable")
+                    color: Theme.primaryText
+                    font.pixelSize: 12
+                    wrapMode: Text.WrapAnywhere
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                AppButton {
+                    Layout.preferredWidth: 140
+                    enabled: page.appController
+                    variant: "secondary"
+                    text: qsTr("Export")
+                    compact: true
+                    animationsEnabled: page.animationsEnabled
+                    onClicked: diagnosticsDialog.open()
+                }
+
+                AppButton {
+                    Layout.preferredWidth: 150
+                    enabled: page.appController
+                    variant: "secondary"
+                    text: qsTr("Copy Summary")
+                    compact: true
+                    animationsEnabled: page.animationsEnabled
+                    onClicked: page.appController.copyDiagnosticsSummary()
+                }
+
+                Item {
+                    Layout.fillWidth: true
                 }
             }
         }

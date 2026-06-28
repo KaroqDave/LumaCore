@@ -28,6 +28,11 @@ if(TARGET lumacore_linux_backend)
     target_link_libraries(lumacore-daemon PRIVATE lumacore_linux_backend)
 endif()
 
+if(TARGET lumacore_windows_backend)
+    target_compile_definitions(lumacore-daemon PRIVATE LUMACORE_HAS_WINDOWS_DISCOVERY)
+    target_link_libraries(lumacore-daemon PRIVATE lumacore_windows_backend)
+endif()
+
 if(TARGET lumacore_asus_aura_backend)
     target_compile_definitions(lumacore-daemon PRIVATE LUMACORE_HAS_ASUS_AURA_HID)
     target_link_libraries(lumacore-daemon PRIVATE lumacore_asus_aura_backend)

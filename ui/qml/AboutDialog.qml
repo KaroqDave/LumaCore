@@ -121,7 +121,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: Qt.platform.os === "windows"
-                  ? qsTr("Windows Preview built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This preview runs the existing daemon architecture with simulated mock devices only; Windows hardware discovery and RGB writes are not supported.")
+                  ? qsTr("Windows Preview built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This preview runs the existing daemon architecture with read-only HID discovery when available, mock fallback, and no physical RGB writes.")
                   : qsTr("Linux-first RGB control built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This release keeps the GUI unprivileged, routes backend access through the LumaCore daemon, and exposes controller-aware effects for mock, discovery, and ASUS Aura HID devices.")
             color: Theme.primaryText
             font.pixelSize: 13
@@ -141,7 +141,7 @@ Dialog {
 
                 anchors.centerIn: parent
                 text: Qt.platform.os === "windows"
-                      ? qsTr("Daemon-backed - mock devices only")
+                      ? qsTr("Daemon-backed - read-only HID inventory")
                       : qsTr("Daemon-backed - session-confirmed ASUS writes")
                 color: Theme.pillText
                 font.pixelSize: 12

@@ -35,6 +35,15 @@
       }
     },
     {
+      "name": "windows-mingw-release",
+      "hidden": true,
+      "inherits": "windows-mingw",
+      "binaryDir": "${sourceDir}/build-windows-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "linux-debug",
       "displayName": "Linux / WSL Debug",
       "description": "Uses the system C++ compiler and Qt development packages.",
@@ -59,6 +68,16 @@
   ],
   "buildPresets": [
     {
+      "name": "windows-mingw",
+      "hidden": true,
+      "configurePreset": "windows-mingw"
+    },
+    {
+      "name": "windows-mingw-release",
+      "hidden": true,
+      "configurePreset": "windows-mingw-release"
+    },
+    {
       "name": "linux-debug",
       "configurePreset": "linux-debug"
     },
@@ -68,6 +87,22 @@
     }
   ],
   "testPresets": [
+    {
+      "name": "windows-mingw",
+      "hidden": true,
+      "configurePreset": "windows-mingw",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-mingw-release",
+      "hidden": true,
+      "configurePreset": "windows-mingw-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
     {
       "name": "linux-debug",
       "configurePreset": "linux-debug",

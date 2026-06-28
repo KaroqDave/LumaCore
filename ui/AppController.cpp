@@ -15,6 +15,7 @@
 #include "ui/ZoneEffectPreferenceStore.h"
 
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -124,6 +125,15 @@ QStringList uniqueNonEmptyStrings(const QStringList& values)
         }
     }
     return result;
+}
+
+QString bundledDaemonExecutableName()
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("lumacore-daemon.exe");
+#else
+    return QStringLiteral("lumacore-daemon");
+#endif
 }
 
 struct SetupStatus {
@@ -2178,6 +2188,10 @@ QVariantMap AppController::diagnosticsReport() const
     }
 
     const QString generatedAt = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+    const QString applicationFilePath = QCoreApplication::applicationFilePath();
+    const QString applicationDirectory = QCoreApplication::applicationDirPath();
+    const QString bundledDaemonPath =
+        QDir(applicationDirectory).filePath(bundledDaemonExecutableName());
     const QVariantMap counts {
         {QStringLiteral("devices"), devices.size()},
         {QStringLiteral("zones"), totalZoneCount},
@@ -2230,6 +2244,8 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("buildAbi"), QSysInfo::buildAbi()},
                 {QStringLiteral("kernel"), QSysInfo::kernelType()},
                 {QStringLiteral("kernelVersion"), QSysInfo::kernelVersion()},
+                {QStringLiteral("executablePath"), sanitize(applicationFilePath)},
+                {QStringLiteral("applicationDirectory"), sanitize(applicationDirectory)},
             },
         },
         {
@@ -2245,6 +2261,23 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("kernelVersion"), QSysInfo::kernelVersion()},
             },
         },
+        {
+            QStringLiteral("storage"),
+            QVariantMap {
+                {QStringLiteral("dataRoot"), sanitize(portableDataRoot())},
+                {QStringLiteral("settingsDirectory"), sanitize(portableSettingsDirectory())},
+                {QStringLiteral("profilesDirectory"), sanitize(profilesDirectory)},
+                {QStringLiteral("cacheDirectory"), sanitize(portableCacheDirectory())},
+            },
+        },
+        {
+            QStringLiteral("package"),
+            QVariantMap {
+                {QStringLiteral("applicationDirectory"), sanitize(applicationDirectory)},
+                {QStringLiteral("expectedBundledDaemon"), sanitize(bundledDaemonPath)},
+                {QStringLiteral("bundledDaemonPresent"), QFileInfo::exists(bundledDaemonPath)},
+            },
+        },
         {QStringLiteral("counts"), counts},
         {
             QStringLiteral("backend"),
@@ -2254,6 +2287,7 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("description"), backend.description},
                 {QStringLiteral("capabilities"), backendCapabilities},
                 {QStringLiteral("deviceCount"), m_deviceManager->deviceCount()},
+                {QStringLiteral("availableBackendIds"), m_deviceManager->backendRegistry().availableBackendIds()},
             },
         },
         {

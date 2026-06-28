@@ -32,12 +32,15 @@ DESTDIR="$PWD/dist/linux-stage" cmake --install build --prefix /usr
 
 Confirm the staged tree contains `lumacore`, `lumacore-daemon`, the desktop entry, hicolor icons, and the configured systemd unit. Do not enable or start the service as part of verification.
 
-## Windows mock preview
+## Windows preview
 
-From a Windows Release build:
+From a Windows shell with `CMakeUserPresets.json` configured for the local Qt and MinGW install:
 
 ```powershell
-.\packaging\windows\package.ps1 -BuildDir .\build-windows
+cmake --preset windows-local-release
+cmake --build --preset windows-local-release
+ctest --preset windows-local-release
+.\packaging\windows\package.ps1 -BuildDir .\build-windows-release
 ```
 
-Extract the ZIP, start `lumacore.exe`, and confirm the bundled daemon starts with the mock backend. The Windows preview remains mock-only for v1.1; do not add hardware discovery, writes, services, signing, or installer requirements to this checklist.
+Extract the ZIP, start `lumacore.exe`, and confirm the bundled daemon starts with the `auto` backend. In Settings -> Windows diagnostics, confirm the bundled daemon is present, the daemon endpoint is populated, Export creates a JSON diagnostics report, and Copy Summary updates the status message. If the build includes hidapi and reports HID devices, confirm they appear as read-only `windows-discovery` inventory. If hidapi is unavailable or no devices are reported, confirm mock fallback still loads. Windows physical RGB writes, services, signing, and installer checks belong to later phases.

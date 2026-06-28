@@ -566,6 +566,10 @@ int main(int argc, char* argv[])
     const QVariantMap diagnosticSummary = diagnostics.value(QStringLiteral("summary")).toMap();
     const QVariantMap diagnosticScope = diagnostics.value(QStringLiteral("diagnosticScope")).toMap();
     const QVariantMap diagnosticCounts = diagnostics.value(QStringLiteral("counts")).toMap();
+    const QVariantMap diagnosticApplication = diagnostics.value(QStringLiteral("application")).toMap();
+    const QVariantMap diagnosticBackend = diagnostics.value(QStringLiteral("backend")).toMap();
+    const QVariantMap diagnosticPackage = diagnostics.value(QStringLiteral("package")).toMap();
+    const QVariantMap diagnosticStorage = diagnostics.value(QStringLiteral("storage")).toMap();
     const QString diagnosticSummaryText = controller.diagnosticsSummaryText();
     if (!require(
             diagnostics.value(QStringLiteral("schemaVersion")).toInt() == 1,
@@ -587,6 +591,22 @@ int main(int argc, char* argv[])
             diagnostics.value(QStringLiteral("backend")).toMap().value(QStringLiteral("id")).toString()
                 == QStringLiteral("mock"),
             "diagnostics should include the active backend"
+        )
+        || !require(
+            diagnosticBackend.value(QStringLiteral("availableBackendIds")).toStringList().contains(QStringLiteral("mock")),
+            "diagnostics should include registered backend ids"
+        )
+        || !require(
+            !diagnosticApplication.value(QStringLiteral("executablePath")).toString().isEmpty(),
+            "diagnostics should include the GUI executable path"
+        )
+        || !require(
+            diagnosticPackage.contains(QStringLiteral("bundledDaemonPresent")),
+            "diagnostics should include bundled daemon package health"
+        )
+        || !require(
+            diagnosticStorage.value(QStringLiteral("profilesDirectory")).toString() == QStringLiteral("<profiles>"),
+            "diagnostics should include the redacted active profiles directory"
         )
         || !require(!diagnosticDevices.isEmpty(), "diagnostics should include device summaries")
         || !require(

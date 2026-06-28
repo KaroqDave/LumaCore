@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#pragma once
+
+#include "core/RgbDevice.h"
+
+#include <QString>
+#include <QStringList>
+#include <QVector>
+
+namespace lumacore::hardware::windows {
+
+struct ProbeDevice {
+    QString source;
+    QString id;
+    QString name;
+    QString vendor;
+    QString path;
+    QString details;
+    QString vendorId;
+    QString productId;
+    int interfaceNumber {-1};
+    quint16 usagePage {0};
+    quint16 usage {0};
+    RgbDeviceType type {RgbDeviceType::Unknown};
+};
+
+struct ProbeResult {
+    QString providerName;
+    bool providerAvailable {false};
+    QVector<ProbeDevice> devices;
+    QStringList messages;
+};
+
+struct DiscoverySupportInfo {
+    QString stage;
+    QString status;
+    QString family;
+    QString summary;
+    QString notes;
+    bool cataloged {false};
+    bool likelyRgbController {false};
+    bool writeCapableBackend {false};
+};
+
+[[nodiscard]] QString stableProbeId(const QString& source, const QString& key);
+[[nodiscard]] QString hexWord(quint16 value);
+[[nodiscard]] QString usbVidPidKey(const ProbeDevice& device);
+[[nodiscard]] DiscoverySupportInfo discoverySupportInfo(const ProbeDevice& device);
+[[nodiscard]] bool isCatalogedRgbController(const ProbeDevice& device);
+[[nodiscard]] bool isKnownRgbController(const ProbeDevice& device);
+[[nodiscard]] bool isLikelyRgbController(const ProbeDevice& device);
+
+} // namespace lumacore::hardware::windows

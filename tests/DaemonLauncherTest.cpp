@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
 
         const lumacore::DaemonCallResult devices = client->call(QStringLiteral("listDevices"));
         if (!require(devices.ok, "launcher-owned daemon should answer listDevices")
-            || !require(!devices.result.value(QStringLiteral("devices")).toArray().isEmpty(), "launcher-owned mock daemon should expose a device")) {
+            || !require(!devices.result.value(QStringLiteral("devices")).toArray().isEmpty(), "launcher-owned auto daemon should expose inventory or mock fallback")) {
             return 1;
         }
         client->disconnectFromDaemon();

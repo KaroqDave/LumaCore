@@ -70,7 +70,7 @@ bool DaemonLauncher::ensureAvailable(
     m_process.setProgram(executable);
     m_process.setArguments({
         QStringLiteral("--backend"),
-        QStringLiteral("mock"),
+        QStringLiteral("auto"),
         QStringLiteral("--socket"),
         m_client->socketPath(),
         QStringLiteral("--exit-on-disconnect"),
