@@ -12,9 +12,10 @@ The GUI starts the bundled daemon without a console window and connects through 
 
 ## Current limitations
 
-- Windows HID discovery is read-only and available only when the build finds hidapi.
+- Windows HID discovery is read-only and available when the build finds system hidapi or uses the bundled HIDAPI Windows backend.
 - If hidapi is unavailable or no HID devices are reported, the auto backend falls back to mock devices.
-- No Windows physical RGB writes.
+- ASUS Aura HID writes are available only for the validated `0B05:19AF` controller through the `asus-aura-hid` backend after config-table verification, dry-run is disabled, and the device is confirmed for the current daemon session.
+- Fresh Windows GUI settings and direct daemon sessions default to dry-run enabled; saved user choices are preserved.
 - No Windows service, installer, automatic startup, elevation, code signing, Dynamic Lighting, or LampArray support.
 - Profiles, settings, and Qt cache data stay beside the extracted executable under `data/`; no installer or registry-backed settings are used for the preview build.
 

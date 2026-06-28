@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 1.1.8.0
+    VERSION 1.1.8.1
     DESCRIPTION "Linux-first RGB control application"
     LANGUAGES CXX
 )
@@ -37,9 +37,14 @@ endif()
 option(LUMACORE_ENABLE_LINUX_DISCOVERY "Build daemon-only Linux read-only hardware discovery backend" ${LUMACORE_LINUX_DEFAULT})
 option(LUMACORE_ENABLE_WINDOWS_DISCOVERY "Build daemon-only Windows read-only HID discovery backend" ${LUMACORE_WINDOWS_DEFAULT})
 option(LUMACORE_ENABLE_HIDAPI "Enable read-only hidapi discovery when available" ON)
+option(LUMACORE_USE_BUNDLED_HIDAPI "Use the vendored HIDAPI source on Windows when no system package is found" ${LUMACORE_WINDOWS_DEFAULT})
 option(LUMACORE_ENABLE_LIBUSB "Enable read-only libusb discovery when available" ON)
 option(LUMACORE_ENABLE_I2C_DEV "Enable optional read-only i2c-dev adapter metadata discovery" OFF)
-option(LUMACORE_ENABLE_ASUS_AURA_HID "Build ASUS Aura USB HID backend with config-verified confirmation-gated writes" ${LUMACORE_LINUX_DEFAULT})
+set(LUMACORE_ASUS_AURA_HID_DEFAULT OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(LUMACORE_ASUS_AURA_HID_DEFAULT ON)
+endif()
+option(LUMACORE_ENABLE_ASUS_AURA_HID "Build ASUS Aura USB HID backend with config-verified confirmation-gated writes" ${LUMACORE_ASUS_AURA_HID_DEFAULT})
 option(LUMACORE_ENABLE_WARNINGS "Enable project compiler warnings for first-party targets" ON)
 option(LUMACORE_WARNINGS_AS_ERRORS "Treat project compiler warnings as errors" OFF)
 option(LUMACORE_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer for supported Linux compiler builds" OFF)
@@ -52,6 +57,7 @@ set(
 )
 
 set(LUMACORE_HAS_HIDAPI OFF)
+set(LUMACORE_USING_BUNDLED_HIDAPI OFF)
 set(LUMACORE_HAS_LIBUSB OFF)
 set(LUMACORE_HAS_I2C_DEV OFF)
 
@@ -140,6 +146,32 @@ if(LUMACORE_ENABLE_WINDOWS_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Windows" AN
             set(LUMACORE_HIDAPI_TARGET PkgConfig::HIDAPI)
         endif()
     endif()
+
+    if(NOT LUMACORE_HAS_HIDAPI AND LUMACORE_USE_BUNDLED_HIDAPI)
+        enable_language(C)
+        add_library(lumacore_bundled_hidapi STATIC
+            third_party/hidapi/hidapi/hidapi.h
+            third_party/hidapi/windows/hid.c
+            third_party/hidapi/windows/hidapi_cfgmgr32.h
+            third_party/hidapi/windows/hidapi_descriptor_reconstruct.h
+            third_party/hidapi/windows/hidapi_hidclass.h
+            third_party/hidapi/windows/hidapi_hidpi.h
+            third_party/hidapi/windows/hidapi_hidsdi.h
+            third_party/hidapi/windows/hidapi_winapi.h
+        )
+        target_include_directories(lumacore_bundled_hidapi
+            PUBLIC
+                "${CMAKE_CURRENT_SOURCE_DIR}/third_party/hidapi"
+                "${CMAKE_CURRENT_SOURCE_DIR}/third_party/hidapi/hidapi"
+        )
+        target_compile_definitions(lumacore_bundled_hidapi
+            PUBLIC
+                HID_API_NO_EXPORT_DEFINE
+        )
+        set(LUMACORE_HAS_HIDAPI ON)
+        set(LUMACORE_USING_BUNDLED_HIDAPI ON)
+        set(LUMACORE_HIDAPI_TARGET lumacore_bundled_hidapi)
+    endif()
 endif()
 
 add_subdirectory(core)
@@ -209,6 +241,7 @@ add_subdirectory(tests)
 message(STATUS "LumaCore Linux discovery: ${LUMACORE_ENABLE_LINUX_DISCOVERY}")
 message(STATUS "LumaCore Windows discovery: ${LUMACORE_ENABLE_WINDOWS_DISCOVERY}")
 message(STATUS "LumaCore hidapi provider: ${LUMACORE_HAS_HIDAPI}")
+message(STATUS "LumaCore bundled hidapi in use: ${LUMACORE_USING_BUNDLED_HIDAPI}")
 message(STATUS "LumaCore libusb provider: ${LUMACORE_HAS_LIBUSB}")
 message(STATUS "LumaCore i2c-dev provider: ${LUMACORE_HAS_I2C_DEV}")
 message(STATUS "LumaCore ASUS Aura HID backend: ${LUMACORE_ENABLE_ASUS_AURA_HID}")

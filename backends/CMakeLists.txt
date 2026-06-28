@@ -74,27 +74,45 @@ if(LUMACORE_ENABLE_WINDOWS_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 if(LUMACORE_ENABLE_ASUS_AURA_HID
-   AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
    AND LUMACORE_HAS_HIDAPI
-   AND TARGET lumacore_linux_backend)
+   AND ((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET lumacore_linux_backend)
+        OR (CMAKE_SYSTEM_NAME STREQUAL "Windows" AND TARGET lumacore_windows_backend)))
+    set(_lumacore_asus_aura_platform_sources)
+    set(_lumacore_asus_aura_platform_target)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(_lumacore_asus_aura_platform_sources
+            ${PROJECT_SOURCE_DIR}/hardware/linux/HidDeviceWriter.cpp
+            ${PROJECT_SOURCE_DIR}/hardware/linux/HidDeviceWriter.h
+        )
+        set(_lumacore_asus_aura_platform_target lumacore_linux_backend)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        set(_lumacore_asus_aura_platform_sources
+            ${PROJECT_SOURCE_DIR}/hardware/windows/HidDeviceWriter.cpp
+            ${PROJECT_SOURCE_DIR}/hardware/windows/HidDeviceWriter.h
+        )
+        set(_lumacore_asus_aura_platform_target lumacore_windows_backend)
+    endif()
+
     qt_add_library(lumacore_asus_aura_backend STATIC
         asus/AsusAuraHidBackend.cpp
         asus/AsusAuraHidBackend.h
         asus/AsusAuraHidDevice.cpp
         asus/AsusAuraHidDevice.h
+        asus/AsusAuraHidPlatform.h
         ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.h
-        ${PROJECT_SOURCE_DIR}/hardware/linux/HidDeviceWriter.cpp
-        ${PROJECT_SOURCE_DIR}/hardware/linux/HidDeviceWriter.h
+        ${_lumacore_asus_aura_platform_sources}
     )
 
     target_include_directories(lumacore_asus_aura_backend PUBLIC ${PROJECT_SOURCE_DIR})
-    target_compile_definitions(lumacore_asus_aura_backend PRIVATE LUMACORE_HAS_HIDAPI)
     target_link_libraries(lumacore_asus_aura_backend
         PUBLIC
             lumacore_core
-            lumacore_linux_backend
-        PRIVATE
-            ${LUMACORE_HIDAPI_TARGET}
+            ${_lumacore_asus_aura_platform_target}
     )
+
+    if(LUMACORE_HAS_HIDAPI)
+        target_compile_definitions(lumacore_asus_aura_backend PRIVATE LUMACORE_HAS_HIDAPI)
+        target_link_libraries(lumacore_asus_aura_backend PRIVATE ${LUMACORE_HIDAPI_TARGET})
+    endif()
 endif()

@@ -173,6 +173,7 @@ int main(int argc, char* argv[])
     }
 
     lumacore::DeviceManager manager(nullptr, profilesDirectory);
+    manager.setDryRunEnabled(false);
     manager.registerBackend(std::make_unique<lumacore::MockBackend>());
     manager.initializeBackends(QStringLiteral("mock"));
     if (!require(manager.deviceCount() == 1, "mock backend should load one device")
@@ -410,6 +411,7 @@ int main(int argc, char* argv[])
     const QString normalizationProfilesDirectory = temporaryDirectory.filePath(QStringLiteral("normalization-profiles"));
     QDir().mkpath(normalizationProfilesDirectory);
     lumacore::DeviceManager normalizationManager(nullptr, normalizationProfilesDirectory);
+    normalizationManager.setDryRunEnabled(false);
     normalizationManager.registerBackend(std::make_unique<PreviewNormalizationBackend>());
     normalizationManager.initializeBackends(QStringLiteral("preview-normalization"));
     if (!require(

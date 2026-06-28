@@ -5,6 +5,7 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QtGlobal>
 
 namespace {
 
@@ -101,6 +102,16 @@ int main(int argc, char* argv[])
     Q_UNUSED(app)
 
     lumacore::DeviceManager manager;
+#ifdef Q_OS_WIN
+    if (!require(manager.dryRunEnabled(), "Windows device manager should default to dry-run enabled")) {
+        return 1;
+    }
+#else
+    if (!require(!manager.dryRunEnabled(), "non-Windows device manager should default to dry-run disabled")) {
+        return 1;
+    }
+#endif
+    manager.setDryRunEnabled(false);
     manager.registerBackend(std::make_unique<ConfirmationBackend>());
     manager.initializeBackends(QStringLiteral("confirmation-test"));
 

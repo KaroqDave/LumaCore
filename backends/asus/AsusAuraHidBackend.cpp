@@ -3,9 +3,8 @@
 #include "backends/asus/AsusAuraHidBackend.h"
 
 #include "backends/asus/AsusAuraHidDevice.h"
+#include "backends/asus/AsusAuraHidPlatform.h"
 #include "hardware/linux/AsusAuraHidProtocol.h"
-#include "hardware/linux/HidDeviceWriter.h"
-#include "hardware/linux/HidapiProbe.h"
 
 #include <QHash>
 #include <QVector>
@@ -15,7 +14,7 @@ namespace lumacore {
 namespace {
 
 struct AuraCandidate {
-    hardware::linux::ProbeDevice device;
+    asus_aura_platform::ProbeDevice device;
     bool configVerified {false};
     hardware::linux::AsusAuraConfigTable config;
     QString configSummary;
@@ -30,32 +29,32 @@ bool textMatchesAsusAura(const QString& vendor, const QString& product)
     return vendorMatches && productMatches;
 }
 
-bool isResearchedAuraUsbDevice(const hardware::linux::ProbeDevice& device)
+bool isResearchedAuraUsbDevice(const asus_aura_platform::ProbeDevice& device)
 {
     return device.source == QStringLiteral("hidapi")
         && hardware::linux::isAsusAuraUsbVendor(device.vendorId)
         && hardware::linux::isAsusAuraResearchedUsbProduct(device.productId);
 }
 
-bool isValidatedAuraLedController(const hardware::linux::ProbeDevice& device)
+bool isValidatedAuraLedController(const asus_aura_platform::ProbeDevice& device)
 {
     return isResearchedAuraUsbDevice(device)
         && hardware::linux::isAsusAuraWriteValidatedProduct(device.productId);
 }
 
-bool isAllowedAuraDevice(const hardware::linux::ProbeDevice& device)
+bool isAllowedAuraDevice(const asus_aura_platform::ProbeDevice& device)
 {
     return isValidatedAuraLedController(device)
         && device.interfaceNumber >= 0
         && !device.path.trimmed().isEmpty();
 }
 
-QString physicalControllerKey(const hardware::linux::ProbeDevice& device)
+QString physicalControllerKey(const asus_aura_platform::ProbeDevice& device)
 {
-    return hardware::linux::usbVidPidKey(device);
+    return asus_aura_platform::usbVidPidKey(device);
 }
 
-QString interfaceSummary(const hardware::linux::ProbeDevice& device)
+QString interfaceSummary(const asus_aura_platform::ProbeDevice& device)
 {
     return QStringLiteral("%1 interface=%2 path=%3")
         .arg(physicalControllerKey(device))
@@ -63,7 +62,7 @@ QString interfaceSummary(const hardware::linux::ProbeDevice& device)
         .arg(device.path.isEmpty() ? QStringLiteral("<empty>") : device.path);
 }
 
-int deviceSelectionScore(const hardware::linux::ProbeDevice& device)
+int deviceSelectionScore(const asus_aura_platform::ProbeDevice& device)
 {
     int score = 0;
     if (textMatchesAsusAura(device.vendor, device.name)) {
@@ -81,7 +80,10 @@ int deviceSelectionScore(const hardware::linux::ProbeDevice& device)
     return score;
 }
 
-bool isBetterAuraInterface(const hardware::linux::ProbeDevice& candidate, const hardware::linux::ProbeDevice& current)
+bool isBetterAuraInterface(
+    const asus_aura_platform::ProbeDevice& candidate,
+    const asus_aura_platform::ProbeDevice& current
+)
 {
     const int candidateScore = deviceSelectionScore(candidate);
     const int currentScore = deviceSelectionScore(current);
@@ -96,13 +98,13 @@ bool isBetterAuraInterface(const hardware::linux::ProbeDevice& candidate, const 
     return candidate.path < current.path;
 }
 
-AuraCandidate probeAuraCandidate(const hardware::linux::ProbeDevice& device)
+AuraCandidate probeAuraCandidate(const asus_aura_platform::ProbeDevice& device)
 {
     AuraCandidate candidate;
     candidate.device = device;
 
-    const hardware::linux::HidDeviceWriter writer;
-    const hardware::linux::HidRequestResult response = writer.writeReportReadResponse(
+    const asus_aura_platform::HidDeviceWriter writer;
+    const asus_aura_platform::HidRequestResult response = writer.writeReportReadResponse(
         device.path,
         hardware::linux::buildAsusAuraConfigTableRequest(),
         hardware::linux::kAsusAuraResearchReportLength + 1,
@@ -161,21 +163,21 @@ std::vector<std::unique_ptr<RgbDevice>> AsusAuraHidBackend::createDevices() cons
 std::vector<std::unique_ptr<RgbDevice>> AsusAuraHidBackend::discoverDevices() const
 {
     std::vector<std::unique_ptr<RgbDevice>> devices;
-    const hardware::linux::ProbeResult result = hardware::linux::probeHidapiDevices();
+    const asus_aura_platform::ProbeResult result = asus_aura_platform::probeHidapiDevices();
     if (!result.providerAvailable) {
         return devices;
     }
 
     QVector<AuraCandidate> selectedDevices;
     QHash<QString, int> selectedIndexByKey;
-    for (const hardware::linux::ProbeDevice& device : result.devices) {
+    for (const asus_aura_platform::ProbeDevice& device : result.devices) {
         if (!isAllowedAuraDevice(device)) {
             continue;
         }
 
         AuraCandidate selectedDevice = probeAuraCandidate(device);
         const QString key = physicalControllerKey(selectedDevice.device);
-        selectedDevice.device.id = hardware::linux::stableProbeId(QStringLiteral("asus-aura-hid"), key);
+        selectedDevice.device.id = asus_aura_platform::stableProbeId(QStringLiteral("asus-aura-hid"), key);
         if (!selectedDevice.configSummary.isEmpty()) {
             selectedDevice.device.details = selectedDevice.device.details.isEmpty()
                 ? selectedDevice.configSummary
@@ -212,7 +214,7 @@ std::vector<std::unique_ptr<RgbDevice>> AsusAuraHidBackend::discoverDevices() co
 
 PermissionResult AsusAuraHidBackend::probe() const
 {
-    if (!hardware::linux::hidapiProbeAvailable()) {
+    if (!asus_aura_platform::hidapiProbeAvailable()) {
         return {
             PermissionStatus::Denied,
             QStringLiteral("ASUS Aura HID backend requires hidapi."),

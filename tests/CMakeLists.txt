@@ -1,8 +1,24 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+if(WIN32)
+    get_filename_component(LUMACORE_COMPILER_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+endif()
+
+function(lumacore_set_windows_test_runtime_path test_name)
+    if(WIN32)
+        set_property(
+            TEST "${test_name}"
+            PROPERTY ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
+                "PATH=path_list_prepend:${LUMACORE_COMPILER_BIN_DIR}"
+        )
+    endif()
+endfunction()
+
 function(lumacore_add_test_executable target test_name)
     qt_add_executable(${target} ${ARGN})
     add_test(NAME ${test_name} COMMAND ${target})
+    lumacore_set_windows_test_runtime_path("${test_name}")
 endfunction()
 
 lumacore_add_test_executable(lumacore_device_manager_write_gate_test device_manager_write_gate
@@ -29,6 +45,8 @@ lumacore_add_test_executable(lumacore_probe_result_test probe_result
     ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.h
     ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.cpp
     ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.h
+    ${PROJECT_SOURCE_DIR}/hardware/windows/HidDeviceWriter.cpp
+    ${PROJECT_SOURCE_DIR}/hardware/windows/HidDeviceWriter.h
 )
 target_include_directories(lumacore_probe_result_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_probe_result_test PRIVATE lumacore_core Qt6::Core)
@@ -99,26 +117,7 @@ add_test(
         $<TARGET_FILE:lumacore_daemon_launch_exit_fixture>
         $<TARGET_FILE:lumacore_daemon_launch_sleep_fixture>
 )
-
-if(WIN32)
-    get_filename_component(LUMACORE_COMPILER_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
-    set_property(
-        TEST
-            device_manager_write_gate
-            profile_persistence
-            auto_backend
-            probe_result
-            daemon_protocol
-            option_parsing
-            settings_controller
-            profile_schedule_runner
-            app_controller
-            daemon_launcher
-        PROPERTY ENVIRONMENT_MODIFICATION
-            "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
-            "PATH=path_list_prepend:${LUMACORE_COMPILER_BIN_DIR}"
-    )
-endif()
+lumacore_set_windows_test_runtime_path(daemon_launcher)
 
 if(TARGET lumacore_asus_aura_backend)
     lumacore_add_test_executable(lumacore_asus_aura_protocol_test asus_aura_hid_protocol

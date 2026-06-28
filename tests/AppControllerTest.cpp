@@ -200,6 +200,7 @@ int main(int argc, char* argv[])
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
 
     lumacore::DeviceManager manager(nullptr, profileDirectory.filePath(QStringLiteral("profiles")));
+    manager.setDryRunEnabled(false);
     manager.registerBackend(std::make_unique<lumacore::MockBackend>());
     manager.initializeBackends(QStringLiteral("mock"));
 
@@ -352,6 +353,7 @@ int main(int argc, char* argv[])
             nullptr,
             profileDirectory.filePath(QStringLiteral("selection-profiles"))
         );
+        selectionManager.setDryRunEnabled(false);
         std::vector<std::unique_ptr<lumacore::RgbDevice>> initialDevices;
         initialDevices.push_back(std::make_unique<StableIdDevice>(
             QStringLiteral("device-a"),
@@ -392,6 +394,7 @@ int main(int argc, char* argv[])
             nullptr,
             profileDirectory.filePath(QStringLiteral("group-profiles"))
         );
+        groupManager.setDryRunEnabled(false);
         std::vector<std::unique_ptr<lumacore::RgbDevice>> groupDevices;
         groupDevices.push_back(std::make_unique<GroupTestDevice>(
             QStringLiteral("group-device-a"),
@@ -788,6 +791,7 @@ int main(int argc, char* argv[])
     {
         const QString profilePath = profileDirectory.filePath(QStringLiteral("async-partial-profiles"));
         lumacore::DeviceManager asyncManager(nullptr, profilePath);
+        asyncManager.setDryRunEnabled(false);
         std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
         devices.push_back(std::make_unique<StableIdDevice>(
             QStringLiteral("profile-device"),
@@ -915,6 +919,7 @@ int main(int argc, char* argv[])
     {
         const QString daemonProfilePath = profileDirectory.filePath(QStringLiteral("async-daemon-profiles"));
         lumacore::DeviceManager daemonManager(nullptr, daemonProfilePath);
+        daemonManager.setDryRunEnabled(false);
         auto daemonClient = std::make_shared<lumacore::DaemonClient>(
             QStringLiteral("lumacore-app-controller-async-profile-%1").arg(QCoreApplication::applicationPid())
         );

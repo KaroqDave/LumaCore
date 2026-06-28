@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QtGlobal>
 
 namespace {
 
@@ -37,6 +38,11 @@ int main(int argc, char* argv[])
         if (!require(settings.reduceVrrFlicker(), "VRR flicker reduction should be enabled by default")
             || !require(!settings.closeToTray(), "close-to-tray should be opt-in by default")
             || !require(!settings.trayAvailable(), "tray availability should default to false until detected")
+#ifdef Q_OS_WIN
+            || !require(settings.dryRunEnabled(), "Windows should default to dry-run enabled")
+#else
+            || !require(!settings.dryRunEnabled(), "non-Windows should default to dry-run disabled")
+#endif
             || !require(settings.activeProfile().isEmpty(), "active profile should be empty by default")
             || !require(!settings.scheduledProfileEnabled(), "profile scheduling should be disabled by default")
             || !require(settings.scheduledProfile().isEmpty(), "scheduled profile should be empty by default")

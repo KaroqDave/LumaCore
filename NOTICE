@@ -14,3 +14,10 @@ https://spdx.org/licenses/GPL-2.0-or-later.html
 
 References inside the standard GPL text to the GNU Lesser General Public License
 are explanatory FSF language only. They do not license LumaCore under the LGPL.
+
+Bundled third-party notices:
+
+- HIDAPI 0.15.0 from https://github.com/libusb/hidapi is vendored under
+  `third_party/hidapi` for Windows HID support. HIDAPI is distributed under
+  the licenses provided in that directory, including the BSD-style license and
+  GPL-3.0 license text from upstream.

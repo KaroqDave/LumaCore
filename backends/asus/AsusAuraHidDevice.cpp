@@ -19,7 +19,7 @@ const RgbColor kHeader3PreviewColor(124, 92, 255);
 } // namespace
 
 AsusAuraHidDevice::AsusAuraHidDevice(
-    hardware::linux::ProbeDevice device,
+    asus_aura_platform::ProbeDevice device,
     bool configTableVerified,
     hardware::linux::AsusAuraConfigTable configTable,
     QString configSummary,
@@ -33,7 +33,7 @@ AsusAuraHidDevice::AsusAuraHidDevice(
           parent
     )
     , m_device(std::move(device))
-    , m_support(hardware::linux::discoverySupportInfo(m_device))
+    , m_support(asus_aura_platform::discoverySupportInfo(m_device))
     , m_configTableVerified(configTableVerified)
     , m_configTable(std::move(configTable))
     , m_configSummary(std::move(configSummary))
@@ -46,7 +46,7 @@ AsusAuraHidDevice::AsusAuraHidDevice(
 
 QString AsusAuraHidDevice::discoveryIdentity() const
 {
-    return hardware::linux::usbVidPidKey(m_device);
+    return asus_aura_platform::usbVidPidKey(m_device);
 }
 
 QString AsusAuraHidDevice::discoverySupportStage() const
@@ -159,7 +159,7 @@ bool AsusAuraHidDevice::sendApprovedPacket(
         return false;
     }
 
-    const hardware::linux::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
+    const asus_aura_platform::HidWriteResult write = m_writer.writeReports(m_device.path, protocol.packet.reports);
     if (!write.success) {
         m_lastHardwareWriteStatus =
             QStringLiteral("ASUS Aura HID %1 failed on %2: %3").arg(operation, m_device.path, write.error);

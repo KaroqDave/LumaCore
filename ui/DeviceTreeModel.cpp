@@ -29,6 +29,11 @@ bool deviceWritable(const RgbDevice& device)
     return device.isWritable();
 }
 
+bool hasGuardedWriteBackend(const RgbDevice& device)
+{
+    return device.discoveryWriteCapableBackend();
+}
+
 QString deviceBadgeText(const RgbDevice& device)
 {
     if (deviceWritable(device)) {
@@ -36,7 +41,7 @@ QString deviceBadgeText(const RgbDevice& device)
     }
 
     const QString stage = device.discoverySupportStage();
-    if (stage == QStringLiteral("guarded-write-backend")) {
+    if (hasGuardedWriteBackend(device)) {
         return QStringLiteral("Guarded");
     }
     if (stage == QStringLiteral("research-only")) {
@@ -54,7 +59,7 @@ QString deviceBadgeText(const RgbDevice& device)
 
 QString deviceBadgeLevel(const RgbDevice& device)
 {
-    if (deviceWritable(device) || device.discoverySupportStage() == QStringLiteral("guarded-write-backend")) {
+    if (deviceWritable(device) || hasGuardedWriteBackend(device)) {
         return QStringLiteral("ready");
     }
 

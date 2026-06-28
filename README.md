@@ -10,11 +10,11 @@
   </p>
 </div>
 
-**v1.1.8.0** - Linux-first RGB control with Windows read-only HID discovery, portable diagnostics export, improved Windows preview packaging, and automatic daemon startup through the `auto` backend, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.8.1** - Linux-first RGB control with Windows read-only HID discovery, portable diagnostics export, improved Windows preview packaging, and automatic daemon startup through the `auto` backend, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local IPC endpoint; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
-The Windows 10/11 x64 preview preserves the daemon architecture: it launches the bundled daemon automatically, can expose read-only HID inventory when hidapi is available, and does not perform physical RGB writes.
+The Windows 10/11 x64 preview preserves the daemon architecture: it launches the bundled daemon automatically, can expose read-only HID inventory when hidapi is available, and can use the same gated ASUS Aura HID write backend for the validated controller target. Windows starts dry-run-first and still requires explicit confirmation before real writes.
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
@@ -34,7 +34,7 @@ Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
 - Default daemon `auto` backend that prefers verified ASUS Aura HID control on Linux, adds read-only platform discovery inventory when available, and falls back to the mock backend.
 - Mock backend with a simulated ASUS TUF X870-PLUS WIFI motherboard for UI, profile, and effect development.
 - Optional Linux read-only discovery through compiled providers such as hidapi, libusb, and i2c-dev adapter metadata, with cataloged RGB-controller research identities and conservative heuristic classification.
-- Optional Windows read-only HID discovery through hidapi, with cataloged RGB-controller research identities and conservative heuristic classification. Windows discovery is inventory-only and does not enable writes.
+- Optional Windows read-only HID discovery through hidapi, with cataloged RGB-controller research identities and conservative heuristic classification. Windows discovery itself is inventory-only; the separate ASUS Aura HID backend owns the guarded write path.
 - ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, native color-cycle/rainbow effects on addressable headers, and All Off.
 - Profile save, load, rename, confirmed overwrite/delete, JSON import/export, compatibility reporting, partial-result summaries, and persisted active-profile selection with atomic writes and legacy color-only profile compatibility.
 - Portable Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, daily in-app profile scheduling, opt-in close-to-tray behavior, and an enabled-by-default Windows VRR flicker workaround.
@@ -61,7 +61,7 @@ New hardware contributions must follow `docs/hardware/contributing-hardware.md`,
 - Ninja or Make
 - Qt 6.5+ with `Core`, `Gui`, `Network`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`, and `Widgets`
 - Optional for Linux discovery and ASUS Aura HID builds: `pkg-config`, `hidapi`, and/or `libusb`
-- Optional for Windows HID discovery: a hidapi package discoverable by CMake, such as `hidapi::hidapi`, `hidapi::winapi`, or pkg-config `hidapi`
+- Optional for Windows HID discovery: a hidapi package discoverable by CMake, such as `hidapi::hidapi`, `hidapi::winapi`, or pkg-config `hidapi`; otherwise the bundled HIDAPI 0.15.0 Windows backend is used by default.
 
 On Arch-based systems:
 
@@ -166,9 +166,10 @@ The daemon accepts `--backend auto`, `mock`, `linux-discovery`, `windows-discove
 - `LUMACORE_ENABLE_LINUX_DISCOVERY` builds daemon-only Linux read-only discovery on supported systems.
 - `LUMACORE_ENABLE_WINDOWS_DISCOVERY` builds daemon-only Windows read-only HID discovery on supported systems.
 - `LUMACORE_ENABLE_HIDAPI` enables hidapi discovery when available.
+- `LUMACORE_USE_BUNDLED_HIDAPI` uses the vendored HIDAPI Windows backend when no system hidapi package is found. It defaults to `ON` for Windows and `OFF` elsewhere.
 - `LUMACORE_ENABLE_LIBUSB` enables libusb discovery when available.
 - `LUMACORE_ENABLE_I2C_DEV` enables optional read-only i2c-dev adapter metadata discovery.
-- `LUMACORE_ENABLE_ASUS_AURA_HID` builds the ASUS Aura USB HID backend with config-verified, confirmation-gated writes. It requires hidapi and Linux discovery.
+- `LUMACORE_ENABLE_ASUS_AURA_HID` builds the ASUS Aura USB HID backend with config-verified, confirmation-gated writes on supported Linux and Windows builds when hidapi is available. It uses the platform HID discovery and writer transport.
 - `LUMACORE_ENABLE_WARNINGS` enables project compiler warnings for first-party targets.
 - `LUMACORE_WARNINGS_AS_ERRORS` treats project compiler warnings as errors.
 - `LUMACORE_ENABLE_SANITIZERS` enables AddressSanitizer and UndefinedBehaviorSanitizer for supported GNU/Clang Linux builds.

@@ -42,7 +42,7 @@ Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research
 
 - Real writes are limited to the allowlisted `0B05:19AF` ASUS Aura LED Controller.
 - The GUI remains unprivileged; only `lumacore-daemon` opens the HID path.
-- The daemon defaults to `--backend auto`, which aggregates verified ASUS hardware with read-only Linux discovery inventory. `--backend asus-aura-hid` remains available as an explicit override.
+- The daemon defaults to `--backend auto`, which aggregates verified ASUS hardware with read-only platform discovery inventory. `--backend asus-aura-hid` remains available as an explicit override on supported Linux and Windows builds.
 - Discovery must verify an `EC 30` config-table response from the selected HID path. If no interface responds, the controller remains visible but write capability stays disabled and the activity/device details explain the probe failure.
 - Dry-run must be off and the UI must confirm writes for the current daemon session.
 - Confirmation is held in memory by the daemon and is cleared when the daemon restarts or the backend is reinitialized.

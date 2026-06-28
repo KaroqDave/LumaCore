@@ -141,6 +141,7 @@ int main(int argc, char* argv[])
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
 
     lumacore::DeviceManager manager(nullptr, profilesDirectory.filePath(QStringLiteral("profiles")));
+    manager.setDryRunEnabled(false);
     std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
     devices.push_back(std::make_unique<ScheduleDevice>());
     manager.replaceDevices(std::move(devices));

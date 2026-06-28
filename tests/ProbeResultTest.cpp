@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "hardware/linux/ProbeResult.h"
+#include "hardware/windows/HidDeviceWriter.h"
 #include "hardware/windows/ProbeResult.h"
 
 #include <QCoreApplication>
@@ -129,6 +130,9 @@ int main(int argc, char* argv[])
     );
     const lumacore::hardware::windows::DiscoverySupportInfo windowsHeuristicSupport =
         lumacore::hardware::windows::discoverySupportInfo(windowsHeuristicController);
+    const lumacore::hardware::windows::HidDeviceWriter windowsWriter;
+    const lumacore::hardware::windows::HidWriteResult emptyWindowsWrite =
+        windowsWriter.writeReports(QString(), {});
 
     if (!require(
             stableProbeId(QStringLiteral("hid"), QStringLiteral("0B05:19AF /dev/hidraw0"))
@@ -187,17 +191,22 @@ int main(int argc, char* argv[])
             "validated ASUS identity should be cataloged on Windows"
         )
         || !require(
-            windowsValidatedSupport.stage == QStringLiteral("windows-read-only"),
-            "validated ASUS identity should remain read-only on Windows"
+            windowsValidatedSupport.stage == QStringLiteral("windows-gated-write"),
+            "validated ASUS identity should advertise the gated Windows write stage"
         )
         || !require(
-            !windowsValidatedSupport.writeCapableBackend,
-            "Windows discovery must not advertise a write-capable backend"
+            windowsValidatedSupport.writeCapableBackend,
+            "validated Windows ASUS identity should advertise the write-capable backend"
         )
         || !require(
             windowsHeuristicSupport.stage == QStringLiteral("heuristic")
                 && windowsHeuristicSupport.likelyRgbController,
             "Windows keyword matches should be marked as heuristic likely RGB"
+        )
+        || !require(
+            !emptyWindowsWrite.success
+                && emptyWindowsWrite.error.contains(QStringLiteral("HID path is empty")),
+            "Windows HID writer should reject empty write targets before transport access"
         )) {
         return 1;
     }

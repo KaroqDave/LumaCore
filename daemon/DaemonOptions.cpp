@@ -31,7 +31,7 @@ void configureParser(QCommandLineParser& parser)
     );
     const QCommandLineOption backendOption(
         QStringList {QStringLiteral("b"), QStringLiteral("backend")},
-        QStringLiteral("Backend id to activate. Use 'auto' to prefer ASUS hardware, then Linux discovery, then mock."),
+        QStringLiteral("Backend id to activate. Use 'auto' to prefer ASUS hardware, then platform discovery, then mock."),
         QStringLiteral("id"),
         QStringLiteral("auto")
     );

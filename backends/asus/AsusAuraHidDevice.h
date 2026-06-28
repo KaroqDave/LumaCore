@@ -3,9 +3,8 @@
 #pragma once
 
 #include "core/RgbDevice.h"
+#include "backends/asus/AsusAuraHidPlatform.h"
 #include "hardware/linux/AsusAuraHidProtocol.h"
-#include "hardware/linux/HidDeviceWriter.h"
-#include "hardware/linux/ProbeResult.h"
 
 namespace lumacore {
 
@@ -15,7 +14,7 @@ class AsusAuraHidDevice final : public RgbDevice
 
 public:
     AsusAuraHidDevice(
-        hardware::linux::ProbeDevice device,
+        asus_aura_platform::ProbeDevice device,
         bool configTableVerified,
         hardware::linux::AsusAuraConfigTable configTable,
         QString configSummary,
@@ -57,13 +56,13 @@ private:
     [[nodiscard]] int fixedZoneCount() const;
     [[nodiscard]] bool isAddressableZone(int zoneIndex) const;
 
-    hardware::linux::ProbeDevice m_device;
-    hardware::linux::DiscoverySupportInfo m_support;
+    asus_aura_platform::ProbeDevice m_device;
+    asus_aura_platform::DiscoverySupportInfo m_support;
     bool m_configTableVerified {false};
     hardware::linux::AsusAuraConfigTable m_configTable;
     QString m_configSummary;
     QString m_lastHardwareWriteStatus;
-    hardware::linux::HidDeviceWriter m_writer;
+    asus_aura_platform::HidDeviceWriter m_writer;
 };
 
 } // namespace lumacore
