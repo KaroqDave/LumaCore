@@ -37,7 +37,7 @@ Confirm the staged tree contains `lumacore`, `lumacore-daemon`, the desktop entr
 From a Windows Release build:
 
 ```powershell
-.\packaging\windows\package.ps1 -BuildDir .\build
+.\packaging\windows\package.ps1 -BuildDir .\build-windows
 ```
 
 Extract the ZIP, start `lumacore.exe`, and confirm the bundled daemon starts with the mock backend. The Windows preview remains mock-only for v1.1; do not add hardware discovery, writes, services, signing, or installer requirements to this checklist.

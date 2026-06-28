@@ -96,7 +96,7 @@ For an unprivileged mock-only development session:
 
 ## VS Code Development
 
-The repository includes CMake presets, clangd configuration, QML language-server configuration, and recommended VS Code extensions. CMake always writes `build/compile_commands.json`, which clangd uses for the real Qt include paths, compiler flags, and generated headers.
+The repository includes CMake presets, clangd configuration, QML language-server configuration, and recommended VS Code extensions. The Linux/WSL presets write `build/compile_commands.json`, which clangd uses for the real Qt include paths, compiler flags, and generated headers. (The native Windows preset configures into `build-windows/`, leaving the Linux/WSL tree in `build/` intact for editor tooling.)
 
 On Linux or in WSL, install the dependencies listed above, open the repository in the WSL VS Code window, and select the `linux-debug` configure preset:
 
@@ -124,7 +124,7 @@ On Windows, launching `lumacore.exe` automatically starts the sibling `lumacore-
 Create the portable preview ZIP from a Release build with:
 
 ```powershell
-.\packaging\windows\package.ps1 -BuildDir .\build
+.\packaging\windows\package.ps1 -BuildDir .\build-windows
 ```
 
 See [docs/windows-preview.md](docs/windows-preview.md) for end-user instructions and preview limitations.
@@ -145,7 +145,7 @@ Run the same QML analysis enforced by CI with:
 cmake --build build --target all_qmllint
 ```
 
-If switching the same checkout between native Windows and WSL, remove the generated `build` directory before selecting the other platform's preset because CMake build trees are platform-specific.
+The native Windows preset configures into `build-windows/` while the Linux/WSL presets use `build/`, so the same checkout can hold both platform build trees at once without reconfiguring or deleting either. clangd reads `build/compile_commands.json`, so the Linux/WSL tree drives editor tooling.
 
 Backend overrides:
 
