@@ -49,6 +49,7 @@ std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::discoverDevices
 {
     std::vector<std::unique_ptr<RgbDevice>> devices;
     QSet<QString> seenIds;
+    QSet<QString> seenControllers;
 
     for (const hardware::windows::ProbeResult& result : collectProbeResults()) {
         if (!result.providerAvailable) {
@@ -58,6 +59,18 @@ std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::discoverDevices
         for (const hardware::windows::ProbeDevice& probeDevice : result.devices) {
             if (probeDevice.id.isEmpty() || seenIds.contains(probeDevice.id)) {
                 continue;
+            }
+
+            // A single physical peripheral exposes one hid_device_info entry per
+            // top-level HID collection, all sharing one VID:PID but with distinct
+            // paths. Collapse them into a single read-only inventory row so a
+            // keyboard/mouse/controller does not appear several times.
+            const QString controllerKey = hardware::windows::usbVidPidKey(probeDevice);
+            if (!controllerKey.isEmpty()) {
+                if (seenControllers.contains(controllerKey)) {
+                    continue;
+                }
+                seenControllers.insert(controllerKey);
             }
 
             seenIds.insert(probeDevice.id);

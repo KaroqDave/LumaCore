@@ -112,6 +112,10 @@ int runDaemon(const lumacore::DaemonOptions& options)
         return 1;
     }
 
+    if (options.dryRunEnabled.has_value()) {
+        deviceManager.setDryRunEnabled(*options.dryRunEnabled);
+    }
+
     lumacore::DaemonServer server(&deviceManager);
     server.setExitWhenIdle(options.exitOnDisconnect);
     QObject::connect(

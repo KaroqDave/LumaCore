@@ -48,7 +48,6 @@ struct DiscoverySupportInfo {
 [[nodiscard]] QString usbVidPidKey(const ProbeDevice& device);
 [[nodiscard]] DiscoverySupportInfo discoverySupportInfo(const ProbeDevice& device);
 [[nodiscard]] bool isCatalogedRgbController(const ProbeDevice& device);
-[[nodiscard]] bool isKnownRgbController(const ProbeDevice& device);
 [[nodiscard]] bool isLikelyRgbController(const ProbeDevice& device);
 
 } // namespace lumacore::hardware::windows

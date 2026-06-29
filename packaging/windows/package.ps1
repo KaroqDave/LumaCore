@@ -149,6 +149,7 @@ if ($daemonDeployExit -ne 0) {
 # build), the deployed libstdc++ is missing newer symbols and the GUI fails to start
 # with STATUS_ENTRYPOINT_NOT_FOUND (0xC0000139). Overwrite the runtime with the build
 # compiler's own DLLs so the package matches the binaries.
+$compilerBin = ""
 $cmakeCache = Join-Path $resolvedBuildDir "CMakeCache.txt"
 if (Test-Path -LiteralPath $cmakeCache) {
     $compilerMatch = Select-String -LiteralPath $cmakeCache -Pattern '^CMAKE_CXX_COMPILER:[^=]*=(.+)$' |

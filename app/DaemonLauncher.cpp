@@ -8,6 +8,7 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QDir>
+#include <QStringList>
 #include <QThread>
 #include <QtGlobal>
 
@@ -37,7 +38,8 @@ DaemonLauncher::~DaemonLauncher()
 bool DaemonLauncher::ensureAvailable(
     bool autoStart,
     const QString& daemonExecutable,
-    int startupTimeoutMs
+    int startupTimeoutMs,
+    std::optional<bool> initialDryRun
 )
 {
     m_lastError.clear();
@@ -67,14 +69,19 @@ bool DaemonLauncher::ensureAvailable(
         return false;
     }
 
-    m_process.setProgram(executable);
-    m_process.setArguments({
+    QStringList arguments {
         QStringLiteral("--backend"),
         QStringLiteral("auto"),
         QStringLiteral("--socket"),
         m_client->socketPath(),
         QStringLiteral("--exit-on-disconnect"),
-    });
+    };
+    if (initialDryRun.has_value()) {
+        arguments << QStringLiteral("--dry-run")
+                  << (*initialDryRun ? QStringLiteral("true") : QStringLiteral("false"));
+    }
+    m_process.setProgram(executable);
+    m_process.setArguments(arguments);
     m_process.start();
     if (!m_process.waitForStarted(1000)) {
         m_lastError = QStringLiteral("Could not start the bundled LumaCore daemon: %1")

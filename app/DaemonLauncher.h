@@ -6,6 +6,7 @@
 #include <QString>
 
 #include <memory>
+#include <optional>
 
 namespace lumacore {
 
@@ -23,7 +24,8 @@ public:
     [[nodiscard]] bool ensureAvailable(
         bool autoStart,
         const QString& daemonExecutable = {},
-        int startupTimeoutMs = 3000
+        int startupTimeoutMs = 3000,
+        std::optional<bool> initialDryRun = std::nullopt
     );
     [[nodiscard]] bool startedDaemon() const;
     [[nodiscard]] QString lastError() const;

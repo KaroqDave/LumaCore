@@ -4,6 +4,7 @@
 
 #include "core/PermissionGate.h"
 #include "core/ProfilePlan.h"
+#include "core/SafetyDefaults.h"
 #include "core/WriteGate.h"
 
 #include <QDir>
@@ -17,24 +18,11 @@
 
 namespace lumacore {
 
-namespace {
-
-bool defaultDryRunEnabled()
-{
-#ifdef Q_OS_WIN
-    return true;
-#else
-    return false;
-#endif
-}
-
-} // namespace
-
 DeviceManager::DeviceManager(QObject* parent, QString profilesDirectory)
     : QObject(parent)
     , m_effectsEngine(std::make_unique<EffectsEngine>(this))
     , m_profileStore(std::move(profilesDirectory))
-    , m_dryRunEnabled(defaultDryRunEnabled())
+    , m_dryRunEnabled(platformDefaultDryRunEnabled())
 {
     connect(&m_activityLog, &ActivityLog::entryAdded, this, [this](const LogEntry& entry) {
         emit logMessage(entry.formatted());

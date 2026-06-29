@@ -9,6 +9,8 @@
 #include <QCoreApplication>
 #include <QDebug>
 
+#include <optional>
+
 namespace lumacore {
 
 namespace {
@@ -43,12 +45,32 @@ void configureParser(QCommandLineParser& parser)
         QStringLiteral("enable-experimental-writes"),
         QStringLiteral("Deprecated compatibility flag; ASUS Aura HID writes are now enabled by config verification and confirmation.")
     );
+    const QCommandLineOption dryRunOption(
+        QStringLiteral("dry-run"),
+        QStringLiteral("Override the startup dry-run state ('true' logs write intent only, 'false' arms writes). Defaults to the platform default."),
+        QStringLiteral("enabled")
+    );
 
     parser.addOption(socketOption);
     parser.addOption(allowUnprivilegedOption);
     parser.addOption(backendOption);
     parser.addOption(exitOnDisconnectOption);
     parser.addOption(experimentalWritesOption);
+    parser.addOption(dryRunOption);
+}
+
+std::optional<bool> parseDryRunValue(const QString& value)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("true") || normalized == QStringLiteral("1")
+        || normalized == QStringLiteral("on") || normalized == QStringLiteral("yes")) {
+        return true;
+    }
+    if (normalized == QStringLiteral("false") || normalized == QStringLiteral("0")
+        || normalized == QStringLiteral("off") || normalized == QStringLiteral("no")) {
+        return false;
+    }
+    return std::nullopt;
 }
 
 DaemonOptions optionsFromParser(const QCommandLineParser& parser)
@@ -58,6 +80,9 @@ DaemonOptions optionsFromParser(const QCommandLineParser& parser)
         .backendId = parser.value(QStringLiteral("backend")).trimmed(),
         .allowUnprivileged = parser.isSet(QStringLiteral("allow-unprivileged")),
         .exitOnDisconnect = parser.isSet(QStringLiteral("exit-on-disconnect")),
+        .dryRunEnabled = parser.isSet(QStringLiteral("dry-run"))
+            ? parseDryRunValue(parser.value(QStringLiteral("dry-run")))
+            : std::nullopt,
     };
 }
 

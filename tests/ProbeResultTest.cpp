@@ -191,8 +191,8 @@ int main(int argc, char* argv[])
             "validated ASUS identity should be cataloged on Windows"
         )
         || !require(
-            windowsValidatedSupport.stage == QStringLiteral("windows-gated-write"),
-            "validated ASUS identity should advertise the gated Windows write stage"
+            windowsValidatedSupport.stage == QStringLiteral("guarded-write-backend"),
+            "validated ASUS identity should advertise the shared gated write stage"
         )
         || !require(
             windowsValidatedSupport.writeCapableBackend,

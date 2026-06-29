@@ -2,9 +2,8 @@
 
 #include "ui/SettingsController.h"
 
+#include "core/SafetyDefaults.h"
 #include "core/ScheduleTime.h"
-
-#include <QtGlobal>
 
 namespace lumacore {
 
@@ -189,15 +188,6 @@ QString SettingsController::theme() const
 
 namespace {
 
-bool defaultDryRunEnabled()
-{
-#ifdef Q_OS_WIN
-    return true;
-#else
-    return false;
-#endif
-}
-
 QString normalizeTheme(const QString& value)
 {
     const QString trimmed = value.trimmed();
@@ -259,7 +249,7 @@ void SettingsController::load()
     m_reduceVrrFlicker = m_settings.value(QStringLiteral("ui/reduceVrrFlicker"), true).toBool();
     m_startMinimized = m_settings.value(QStringLiteral("startup/startMinimized"), false).toBool();
     m_closeToTray = m_settings.value(QStringLiteral("startup/closeToTray"), false).toBool();
-    m_dryRunEnabled = m_settings.value(QStringLiteral("safety/dryRunEnabled"), defaultDryRunEnabled()).toBool();
+    m_dryRunEnabled = m_settings.value(QStringLiteral("safety/dryRunEnabled"), platformDefaultDryRunEnabled()).toBool();
     m_theme = normalizeTheme(m_settings.value(QStringLiteral("ui/theme"), QStringLiteral("Dark")).toString());
     m_activeProfile = m_settings.value(QStringLiteral("startup/activeProfile")).toString().trimmed();
     m_applyOnLaunch = !m_activeProfile.isEmpty()

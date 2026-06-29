@@ -97,7 +97,15 @@ void GuiApplication::configureQtApplication(QApplication& application)
 
 int GuiApplication::run()
 {
-    const bool daemonAvailable = m_daemonLauncher->ensureAvailable(m_autoStartDaemon);
+    // Start the bundled daemon already in the user's persisted dry-run state so a
+    // GUI-launched daemon never has a startup window in which its platform-default
+    // dry-run state disagrees with the GUI before the post-connect sync completes.
+    const bool daemonAvailable = m_daemonLauncher->ensureAvailable(
+        m_autoStartDaemon,
+        {},
+        3000,
+        m_settingsController.dryRunEnabled()
+    );
     m_backendContext.deviceManager.initializeBackends(QStringLiteral("daemon"));
     if (!daemonAvailable && !m_daemonLauncher->lastError().isEmpty()) {
         m_backendContext.daemonClient->reportConnectionError(m_daemonLauncher->lastError());

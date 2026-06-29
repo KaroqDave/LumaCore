@@ -92,6 +92,16 @@ Item {
         }
     }
 
+    // Coalesces bursts of backend/daemon/setup signals (which often fire together
+    // on startup and reconnect) into a single diagnostics rebuild.
+    Timer {
+        id: diagnosticsRefreshTimer
+
+        interval: 0
+        repeat: false
+        onTriggered: page.refreshDiagnosticsReport()
+    }
+
     Connections {
         target: page.appController
 
@@ -100,15 +110,15 @@ Item {
         }
 
         function onBackendInfoChanged() {
-            page.refreshDiagnosticsReport()
+            diagnosticsRefreshTimer.restart()
         }
 
         function onDaemonInfoChanged() {
-            page.refreshDiagnosticsReport()
+            diagnosticsRefreshTimer.restart()
         }
 
         function onSetupStatusChanged() {
-            page.refreshDiagnosticsReport()
+            diagnosticsRefreshTimer.restart()
         }
     }
 
