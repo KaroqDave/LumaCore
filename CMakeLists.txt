@@ -197,6 +197,7 @@ set_source_files_properties(ui/qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TR
 set_source_files_properties(
     ui/qml/components/BackendInfoDialog.qml
     ui/qml/components/ProfileManager.qml
+    ui/qml/components/SettingsPage.qml
     PROPERTIES QT_QML_SKIP_QMLLINT TRUE
 )
 
