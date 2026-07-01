@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "backends/windows/WindowsDiscoveryBackend.h"
 #include "hardware/linux/ProbeResult.h"
 #include "hardware/windows/HidDeviceWriter.h"
 #include "hardware/windows/ProbeResult.h"
@@ -51,18 +52,19 @@ lumacore::hardware::windows::ProbeDevice windowsProbeDevice(
     QString productId,
     QString vendor,
     QString name,
-    QString details = {}
+    QString details = {},
+    QString path = QStringLiteral("test-path")
 )
 {
     return {
         QStringLiteral("test"),
         lumacore::hardware::windows::stableProbeId(
             QStringLiteral("test"),
-            QStringLiteral("%1-%2").arg(vendorId, productId)
+            QStringLiteral("%1-%2-%3").arg(vendorId, productId, path)
         ),
         std::move(name),
         std::move(vendor),
-        QStringLiteral("test-path"),
+        std::move(path),
         std::move(details),
         std::move(vendorId),
         std::move(productId),
@@ -97,6 +99,24 @@ int main(int argc, char* argv[])
         QStringLiteral("AURA LED Controller")
     );
     const DiscoverySupportInfo researchedSupport = discoverySupportInfo(researchedAsus);
+
+    const ProbeDevice researchedAuraAddressable = probeDevice(
+        QStringLiteral("0B05"),
+        QStringLiteral("1867"),
+        QStringLiteral("ASUSTek Computer, Inc."),
+        QStringLiteral("AURA LED Controller")
+    );
+    const DiscoverySupportInfo researchedAddressableSupport =
+        discoverySupportInfo(researchedAuraAddressable);
+
+    const ProbeDevice researchedAuraTerminal = probeDevice(
+        QStringLiteral("0B05"),
+        QStringLiteral("1889"),
+        QStringLiteral("ASUSTek Computer, Inc."),
+        QStringLiteral("ROG AURA Terminal")
+    );
+    const DiscoverySupportInfo researchedTerminalSupport =
+        discoverySupportInfo(researchedAuraTerminal);
 
     const ProbeDevice heuristicController = probeDevice(
         QStringLiteral("1234"),
@@ -133,6 +153,36 @@ int main(int argc, char* argv[])
     const lumacore::hardware::windows::HidDeviceWriter windowsWriter;
     const lumacore::hardware::windows::HidWriteResult emptyWindowsWrite =
         windowsWriter.writeReports(QString(), {});
+    const lumacore::hardware::windows::ProbeDevice firstIdenticalController = windowsProbeDevice(
+        QStringLiteral("1234"),
+        QStringLiteral("abcd"),
+        QStringLiteral("Example"),
+        QStringLiteral("Example RGB Controller"),
+        {},
+        QStringLiteral("\\\\?\\hid#first")
+    );
+    const lumacore::hardware::windows::ProbeDevice secondIdenticalController = windowsProbeDevice(
+        QStringLiteral("1234"),
+        QStringLiteral("abcd"),
+        QStringLiteral("Example"),
+        QStringLiteral("Example RGB Controller"),
+        {},
+        QStringLiteral("\\\\?\\hid#second")
+    );
+    const lumacore::hardware::windows::ProbeDevice duplicateCollection = firstIdenticalController;
+    const QVector<lumacore::hardware::windows::ProbeDevice> inventoryDevices =
+        lumacore::windowsDiscoveryInventoryDevices({
+            {
+                QStringLiteral("test-provider"),
+                true,
+                {
+                    firstIdenticalController,
+                    secondIdenticalController,
+                    duplicateCollection,
+                },
+                {},
+            },
+        });
 
     if (!require(
             stableProbeId(QStringLiteral("hid"), QStringLiteral("0B05:19AF /dev/hidraw0"))
@@ -160,6 +210,19 @@ int main(int argc, char* argv[])
         || !require(
             !researchedSupport.writeCapableBackend,
             "research-only identities must not advertise write-capable backends"
+        )
+        || !require(
+            researchedAddressableSupport.cataloged
+                && researchedAddressableSupport.stage == QStringLiteral("research-only")
+                && researchedAddressableSupport.family == QStringLiteral("ASUS Aura USB HID")
+                && !researchedAddressableSupport.writeCapableBackend,
+            "newly cataloged ASUS Aura addressable controllers should be research-only, in-family, and never write-capable"
+        )
+        || !require(
+            researchedTerminalSupport.cataloged
+                && researchedTerminalSupport.stage == QStringLiteral("research-only")
+                && !researchedTerminalSupport.writeCapableBackend,
+            "the ASUS ROG Aura Terminal identity should be cataloged research-only without a write backend"
         )
         || !require(
             heuristicSupport.stage == QStringLiteral("heuristic"),
@@ -207,6 +270,10 @@ int main(int argc, char* argv[])
             !emptyWindowsWrite.success
                 && emptyWindowsWrite.error.contains(QStringLiteral("HID path is empty")),
             "Windows HID writer should reject empty write targets before transport access"
+        )
+        || !require(
+            inventoryDevices.size() == 2,
+            "Windows discovery should keep distinct same-VID/PID HID paths and drop only duplicate IDs"
         )) {
         return 1;
     }

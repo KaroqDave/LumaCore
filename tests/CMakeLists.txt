@@ -41,8 +41,14 @@ target_link_libraries(lumacore_auto_backend_test PRIVATE lumacore_core Qt6::Core
 
 lumacore_add_test_executable(lumacore_probe_result_test probe_result
     ProbeResultTest.cpp
+    ${PROJECT_SOURCE_DIR}/backends/windows/WindowsDiscoveryBackend.cpp
+    ${PROJECT_SOURCE_DIR}/backends/windows/WindowsDiscoveryBackend.h
+    ${PROJECT_SOURCE_DIR}/backends/windows/WindowsDiscoveredDevice.cpp
+    ${PROJECT_SOURCE_DIR}/backends/windows/WindowsDiscoveredDevice.h
     ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.cpp
     ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.h
+    ${PROJECT_SOURCE_DIR}/hardware/windows/HidapiProbe.cpp
+    ${PROJECT_SOURCE_DIR}/hardware/windows/HidapiProbe.h
     ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.cpp
     ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.h
     ${PROJECT_SOURCE_DIR}/hardware/windows/HidDeviceWriter.cpp

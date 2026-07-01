@@ -40,18 +40,14 @@ BackendDescriptor WindowsDiscoveryBackend::descriptor() const
     };
 }
 
-std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::createDevices() const
+QVector<hardware::windows::ProbeDevice> windowsDiscoveryInventoryDevices(
+    const QVector<hardware::windows::ProbeResult>& results
+)
 {
-    return discoverDevices();
-}
-
-std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::discoverDevices() const
-{
-    std::vector<std::unique_ptr<RgbDevice>> devices;
+    QVector<hardware::windows::ProbeDevice> devices;
     QSet<QString> seenIds;
-    QSet<QString> seenControllers;
 
-    for (const hardware::windows::ProbeResult& result : collectProbeResults()) {
+    for (const hardware::windows::ProbeResult& result : results) {
         if (!result.providerAvailable) {
             continue;
         }
@@ -61,21 +57,27 @@ std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::discoverDevices
                 continue;
             }
 
-            // A single physical peripheral exposes one hid_device_info entry per
-            // top-level HID collection, all sharing one VID:PID but with distinct
-            // paths. Collapse them into a single read-only inventory row so a
-            // keyboard/mouse/controller does not appear several times.
-            const QString controllerKey = hardware::windows::usbVidPidKey(probeDevice);
-            if (!controllerKey.isEmpty()) {
-                if (seenControllers.contains(controllerKey)) {
-                    continue;
-                }
-                seenControllers.insert(controllerKey);
-            }
-
             seenIds.insert(probeDevice.id);
-            devices.push_back(std::make_unique<WindowsDiscoveredDevice>(probeDevice));
+            devices.append(probeDevice);
         }
+    }
+
+    return devices;
+}
+
+std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::createDevices() const
+{
+    return discoverDevices();
+}
+
+std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::discoverDevices() const
+{
+    std::vector<std::unique_ptr<RgbDevice>> devices;
+    const QVector<hardware::windows::ProbeDevice> probeDevices =
+        windowsDiscoveryInventoryDevices(collectProbeResults());
+    devices.reserve(static_cast<std::size_t>(probeDevices.size()));
+    for (const hardware::windows::ProbeDevice& probeDevice : probeDevices) {
+        devices.push_back(std::make_unique<WindowsDiscoveredDevice>(probeDevice));
     }
 
     return devices;

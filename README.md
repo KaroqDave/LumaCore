@@ -235,6 +235,14 @@ Devices match by `id`; zones match by `name` with their stored index as a fallba
 - `docs/hardware/contributing-hardware.md` documents the staged workflow and PR checklist for new hardware support.
 - `docs/packaging/systemd.md` documents Linux install staging, the systemd service, and backend overrides.
 
+Device wire protocols are reverse-engineered and verified against owned hardware with
+[**LumaScope**](https://github.com/KaroqDave/LumaScope), a companion capture/decode harness.
+LumaScope drives the vendor app, captures the USB traffic (Frida hooks or a USBPcap bus sniff), and
+auto-diffs it into a protocol spec — the loop that confirmed LumaCore's ASUS Aura `EC40` direct-color
+packets byte-for-byte against a real board, established that Armoury Crate host-streams every effect
+(no native `EC35`/`EC36` command is used), and measured that effect speed is a host animation rate
+rather than a wire field (see `docs/hardware/asus-aura-hid.md`).
+
 ## Current Gaps
 
 - Automated coverage is still focused; broader mock-backend and end-to-end UI integration work remains beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.

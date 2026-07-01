@@ -16,6 +16,19 @@ The discovery catalog records hardware identities that LumaCore can classify dur
 | `0B05:19AF` | ASUS Aura USB HID | `guarded-write-backend` | `asus-aura-hid`, after config verification and confirmation |
 | `0B05:18F3` | ASUS Aura USB HID | `research-only` | none |
 | `0B05:1939` | ASUS Aura USB HID | `research-only` | none |
+| `0B05:1867` | ASUS Aura USB HID | `research-only` | none |
+| `0B05:1872` | ASUS Aura USB HID | `research-only` | none |
+| `0B05:18A3` | ASUS Aura USB HID | `research-only` | none |
+| `0B05:18A5` | ASUS Aura USB HID | `research-only` | none |
+| `0B05:1AA6` | ASUS Aura USB HID | `research-only` | none |
+| `0B05:1889` | ASUS Aura USB HID | `research-only` | none |
+
+The `0B05:1867`, `0B05:1872`, `0B05:18A3`, `0B05:18A5`, and `0B05:1889` identities are ASUS Aura
+addressable-header / ROG Aura Terminal USB controllers; `0B05:1AA6` is a newer Aura mainboard
+controller. All are cataloged for read-only inventory only and are sourced from the GPL-compatible
+OpenRGB `AsusAuraUSBControllerDetect.cpp` detector at commit `9f82afa4`. None are write-validated:
+only `0B05:19AF` has owned-hardware config-table verification, so the others stay `research-only`
+until they pass the staged workflow in `contributing-hardware.md`.
 
 ## Rules
 

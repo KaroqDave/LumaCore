@@ -2,6 +2,8 @@
 
 #include "hardware/linux/AsusAuraHidProtocol.h"
 
+#include "hardware/common/RgbControllerCatalog.h"
+
 #include <QChar>
 #include <QStringList>
 #include <QtGlobal>
@@ -37,6 +39,12 @@ constexpr int kAuraConfigTableLength = 60;
 const QString kOpenRgbProvenance = QStringLiteral(
     "OpenRGB-referenced ASUS Aura USB 65-byte EC35/EC36 mode/color sequence"
 );
+
+bool isAsusAuraUsbCatalogEntry(const hardware::common::RgbControllerCatalogEntry& entry)
+{
+    return QString::fromLatin1(entry.vendorId).compare(QStringLiteral("0B05"), Qt::CaseInsensitive) == 0
+        && QString::fromLatin1(entry.family) == QStringLiteral("ASUS Aura USB HID");
+}
 
 // --- format helpers ---
 
@@ -503,11 +511,13 @@ QString asusAuraDeviceKey(quint16 productId)
 
 QStringList asusAuraResearchedDeviceKeys()
 {
-    return {
-        asusAuraDeviceKey(kAsusAuraLedControllerProductId),
-        asusAuraDeviceKey(kAsusAuraAddressableHeaderProductId),
-        asusAuraDeviceKey(kAsusAuraTerminalProductId),
-    };
+    QStringList keys;
+    for (const hardware::common::RgbControllerCatalogEntry& entry : hardware::common::kRgbControllerCatalog) {
+        if (isAsusAuraUsbCatalogEntry(entry)) {
+            keys.append(QStringLiteral("0B05:%1").arg(QString::fromLatin1(entry.productId).toUpper()));
+        }
+    }
+    return keys;
 }
 
 bool isAsusAuraUsbVendor(const QString& vendorId)
@@ -518,9 +528,9 @@ bool isAsusAuraUsbVendor(const QString& vendorId)
 bool isAsusAuraResearchedUsbProduct(const QString& productId)
 {
     const QString normalized = productId.trimmed().toUpper();
-    return normalized == QStringLiteral("19AF")
-        || normalized == QStringLiteral("18F3")
-        || normalized == QStringLiteral("1939");
+    const hardware::common::RgbControllerCatalogEntry* entry =
+        hardware::common::rgbControllerCatalogEntry(QStringLiteral("0B05"), normalized);
+    return entry != nullptr && isAsusAuraUsbCatalogEntry(*entry);
 }
 
 bool isAsusAuraWriteValidatedProduct(const QString& productId)

@@ -9,6 +9,8 @@
 #include <QCoreApplication>
 #include <QDebug>
 
+#include <cstdio>
+#include <cstdlib>
 #include <optional>
 
 namespace lumacore {
@@ -73,17 +75,33 @@ std::optional<bool> parseDryRunValue(const QString& value)
     return std::nullopt;
 }
 
-DaemonOptions optionsFromParser(const QCommandLineParser& parser)
+DaemonOptions optionsFromParser(const QCommandLineParser& parser, QString* errorMessage)
 {
+    std::optional<bool> dryRunEnabled;
+    if (parser.isSet(QStringLiteral("dry-run"))) {
+        dryRunEnabled = parseDryRunValue(parser.value(QStringLiteral("dry-run")));
+        if (!dryRunEnabled.has_value() && errorMessage != nullptr) {
+            *errorMessage = QStringLiteral(
+                "Invalid --dry-run value '%1'. Use true or false."
+            ).arg(parser.value(QStringLiteral("dry-run")));
+        }
+    }
+
     return {
         .socketPath = parser.value(QStringLiteral("socket")),
         .backendId = parser.value(QStringLiteral("backend")).trimmed(),
         .allowUnprivileged = parser.isSet(QStringLiteral("allow-unprivileged")),
         .exitOnDisconnect = parser.isSet(QStringLiteral("exit-on-disconnect")),
-        .dryRunEnabled = parser.isSet(QStringLiteral("dry-run"))
-            ? parseDryRunValue(parser.value(QStringLiteral("dry-run")))
-            : std::nullopt,
+        .dryRunEnabled = dryRunEnabled,
     };
+}
+
+[[noreturn]] void showParserErrorAndExit(const QCommandLineParser& parser, const QString& errorMessage)
+{
+    std::fputs(qPrintable(errorMessage), stderr);
+    std::fputs("\n\n", stderr);
+    std::fputs(qPrintable(parser.helpText()), stderr);
+    std::exit(EXIT_FAILURE);
 }
 
 } // namespace
@@ -99,17 +117,25 @@ DaemonOptions parseDaemonOptions(QCoreApplication& application)
             << QStringLiteral("--enable-experimental-writes is deprecated and ignored; ASUS writes remain config-verified and confirmation-gated.");
     }
 
-    return optionsFromParser(parser);
+    QString errorMessage;
+    DaemonOptions options = optionsFromParser(parser, &errorMessage);
+    if (!errorMessage.isEmpty()) {
+        showParserErrorAndExit(parser, errorMessage);
+    }
+    return options;
 }
 
 DaemonOptions parseDaemonOptionsArguments(const QStringList& arguments, QString* errorMessage)
 {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
     QCommandLineParser parser;
     configureParser(parser);
     if (!parser.parse(arguments) && errorMessage != nullptr) {
         *errorMessage = parser.errorText();
     }
-    return optionsFromParser(parser);
+    return optionsFromParser(parser, errorMessage);
 }
 
 } // namespace lumacore

@@ -3,8 +3,15 @@
 #pragma once
 
 #include "core/RgbBackend.h"
+#include "hardware/windows/ProbeResult.h"
+
+#include <QVector>
 
 namespace lumacore {
+
+[[nodiscard]] QVector<hardware::windows::ProbeDevice> windowsDiscoveryInventoryDevices(
+    const QVector<hardware::windows::ProbeResult>& results
+);
 
 class WindowsDiscoveryBackend final : public RgbBackend
 {

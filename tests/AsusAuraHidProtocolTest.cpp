@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QString>
+#include <QStringList>
 
 namespace {
 
@@ -40,6 +41,34 @@ int main(int argc, char* argv[])
     }
     if (!require(asusAuraResearchedDeviceKeys().contains(QStringLiteral("0B05:18F3")), "researched ASUS Aura keys should include adjacent documented PIDs")) {
         return 1;
+    }
+    const QStringList researchedProductIds {
+        QStringLiteral("19AF"),
+        QStringLiteral("18F3"),
+        QStringLiteral("1939"),
+        QStringLiteral("1867"),
+        QStringLiteral("1872"),
+        QStringLiteral("18A3"),
+        QStringLiteral("18A5"),
+        QStringLiteral("1AA6"),
+        QStringLiteral("1889"),
+    };
+    const QStringList researchedDeviceKeys = asusAuraResearchedDeviceKeys();
+    for (const QString& productId : researchedProductIds) {
+        if (!require(
+                isAsusAuraResearchedUsbProduct(productId),
+                "cataloged ASUS Aura PIDs should be treated as researched"
+            )
+            || !require(
+                researchedDeviceKeys.contains(QStringLiteral("0B05:%1").arg(productId)),
+                "researched ASUS Aura device key list should include every cataloged PID"
+            )
+            || !require(
+                isAsusAuraWriteValidatedProduct(productId) == (productId == QStringLiteral("19AF")),
+                "only 0B05:19AF should be write-validated"
+            )) {
+            return 1;
+        }
     }
 
     const QByteArray configRequest = buildAsusAuraConfigTableRequest();
@@ -445,6 +474,69 @@ int main(int argc, char* argv[])
           ).ok,
           "native effect writes should reject zones beyond the parsed config")) {
         return 1;
+    }
+
+    // --- Golden test: EC40 direct-color encoding verified against the real hardware ---
+    // Captured from a physical ASUS board (VID_0B05 / PID_19AF, AURA LED Controller) with the
+    // board set to PURE RED, via USBPcap (LumaScope). Every direct-color packet on the wire was:
+    //   EC 40 <channel | 0x80-on-last-chunk> <ledOffset> 0x14 <ff0000 x 20 LEDs>
+    // i.e. report 0xEC / command 0x40, offset+count in LEDs (20 LEDs = 60 payload bytes), RGB
+    // order (red = ff 00 00), apply (0x80) flag on the final chunk. Zone 1 is an addressable
+    // header, whose static-color path uses this direct-color encoder.
+    const AsusAuraHidProtocolResult capturedRed = buildAsusAuraStaticColorWrite(
+        parsedConfig,
+        1,
+        lumacore::RgbColor(255, 0, 0),
+        kAsusAuraMaxResearchLeds,
+        100
+    );
+    if (!require(capturedRed.ok, "static red on an addressable header should build a direct-color write")) {
+        return 1;
+    }
+    QVector<QByteArray> directChunks;
+    for (const QByteArray& report : capturedRed.packet.reports) {
+        if (report.size() >= 8
+            && static_cast<unsigned char>(report.at(0)) == 0xEC
+            && static_cast<unsigned char>(report.at(1)) == 0x40) {
+            directChunks.append(report);
+        }
+    }
+    if (!require(directChunks.size() == 6, "120 LEDs at 20 LEDs/packet should produce 6 EC40 direct-color chunks")) {
+        return 1;
+    }
+    const QByteArray& firstChunk = directChunks.first();
+    if (!require(
+            static_cast<unsigned char>(firstChunk.at(3)) == 0x00
+                && static_cast<unsigned char>(firstChunk.at(4)) == 20,
+            "first direct chunk should start at LED 0 and cover 20 LEDs (offset/count are in LEDs)"
+        )) {
+        return 1;
+    }
+    // The crux verified on real hardware: ASUS Aura direct color is RGB (red -> ff 00 00) at
+    // payload offset 5. A controlled single-color USBPcap capture confirmed this; if it ever
+    // flips to GRB the board will display wrong colors.
+    if (!require(
+            static_cast<unsigned char>(firstChunk.at(5)) == 0xFF
+                && static_cast<unsigned char>(firstChunk.at(6)) == 0x00
+                && static_cast<unsigned char>(firstChunk.at(7)) == 0x00,
+            "captured ground truth: direct color is RGB (red = ff 00 00) starting at payload byte 5"
+        )) {
+        return 1;
+    }
+    if (!require(
+            (static_cast<unsigned char>(directChunks.last().at(2)) & 0x80) != 0
+                && (static_cast<unsigned char>(directChunks.first().at(2)) & 0x80) == 0,
+            "only the final direct chunk should set the apply (0x80) flag"
+        )) {
+        return 1;
+    }
+    for (int i = 0; i < directChunks.size(); ++i) {
+        if (!require(
+                static_cast<unsigned char>(directChunks.at(i).at(3)) == static_cast<unsigned char>(i * 20),
+                "direct chunk LED offsets should step by 20 (0,20,40,60,80,100)"
+            )) {
+            return 1;
+        }
     }
 
     return 0;

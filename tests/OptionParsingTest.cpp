@@ -66,6 +66,51 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    error.clear();
+    const lumacore::DaemonOptions dryRunOnOptions = lumacore::parseDaemonOptionsArguments({
+        QStringLiteral("lumacore-daemon"),
+        QStringLiteral("--dry-run"),
+        QStringLiteral("yes"),
+    }, &error);
+    if (!require(error.isEmpty(), "daemon dry-run yes should parse without errors")
+        || !require(
+            dryRunOnOptions.dryRunEnabled.has_value() && *dryRunOnOptions.dryRunEnabled,
+            "daemon dry-run yes should enable dry-run"
+        )) {
+        return 1;
+    }
+
+    error.clear();
+    const lumacore::DaemonOptions dryRunOffOptions = lumacore::parseDaemonOptionsArguments({
+        QStringLiteral("lumacore-daemon"),
+        QStringLiteral("--dry-run"),
+        QStringLiteral("0"),
+    }, &error);
+    if (!require(error.isEmpty(), "daemon dry-run 0 should parse without errors")
+        || !require(
+            dryRunOffOptions.dryRunEnabled.has_value() && !*dryRunOffOptions.dryRunEnabled,
+            "daemon dry-run 0 should disable dry-run"
+        )) {
+        return 1;
+    }
+
+    error.clear();
+    const lumacore::DaemonOptions invalidDryRunOptions = lumacore::parseDaemonOptionsArguments({
+        QStringLiteral("lumacore-daemon"),
+        QStringLiteral("--dry-run"),
+        QStringLiteral("treu"),
+    }, &error);
+    if (!require(
+            error.contains(QStringLiteral("Invalid --dry-run value")),
+            "invalid daemon dry-run values should be rejected"
+        )
+        || !require(
+            !invalidDryRunOptions.dryRunEnabled.has_value(),
+            "invalid daemon dry-run values should not produce an override"
+        )) {
+        return 1;
+    }
+
 #ifdef Q_OS_WIN
     const QString defaultWindowsSocketPath = lumacore::defaultDaemonSocketPath();
     if (!require(
