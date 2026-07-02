@@ -10,7 +10,7 @@ Broader ASUS or non-ASUS hardware support must follow the staged workflow in `do
 - Observed family: ASUS Aura LED Controller.
 - Initial allowlist key: `VID:PID 0B05:19AF`.
 - Backend id: `asus-aura-hid`.
-- Current safe model: one motherboard-shaped controller with zones derived from the verified ASUS Aura config table where available, with a three-header fallback only when the config table is unavailable.
+- Current safe model: one motherboard-shaped controller with zones derived from the verified ASUS Aura config table where available, with addressable headers defaulting to the LumaScope-validated 120-LED `EC40` capacity and a three-header fallback only when the config table is unavailable.
 - Locally observed owned hardware: `0B05:19AF ASUSTek Computer, Inc. AURA LED Controller`.
 
 ## ASUS RGB Family Boundary
@@ -48,12 +48,11 @@ Related ASUS Aura USB controller PIDs reported by OpenRGB and liquidctl research
 - Confirmation is held in memory by the daemon and is cleared when the daemon restarts or the backend is reinitialized.
 - Approved packets use 65-byte reports based on GPL-compatible OpenRGB protocol references. The sequence starts with the OpenRGB mainboard `EC52 53 00 01` setup packet.
 - Fixed RGB headers are targeted from the parsed config table with `EC35` static mode plus `EC36` color data at the computed RGB-header LED offset, and are advertised as static-only.
-- Addressable headers are targeted from the parsed config table with `EC35` direct mode plus chunked `EC40` direct color packets, with the apply bit set only on the final chunk.
-- Native effects on individual fixed RGB headers are blocked because those headers share one channel-wide `EC35` effect channel. Addressable headers advertise native color cycle and rainbow only; color-bearing native effects such as breathing are not offered on the native path — owned-hardware capture (see below) shows the vendor does not implement them natively on addressable channels but streams them as direct color, so a future "breathing" feature would be host-streamed animation over the validated `EC40` path, not a native effect command.
-- Color cycle uses native ASUS spectrum-cycle mode `0x04`.
-- Rainbow uses native ASUS mode `0x05`.
-- Native mode brightness is accepted only as `0` (off) or `100`; intermediate values are rejected until a hardware brightness field is verified.
-- LumaCore stores effect speed in the UI/model and logs it in previews, but no ASUS speed payload byte is encoded. Owned-hardware capture (see the speed finding below) confirms this controller has no wire speed field under Armoury Crate — the vendor renders effect speed as a host-side animation phase-step, not a device command.
+- Addressable static colors are targeted from the parsed config table with `EC35` direct mode plus chunked `EC40` direct color packets, with the apply bit set only on the final chunk.
+- Addressable animated effects are host-streamed over the same LumaScope-validated `EC40` direct-color path. Applying an effect primes direct mode, paints the first frame, then the daemon streams per-LED frames through `applyZoneFrame` while normal dry-run and confirmation gates remain in force.
+- Addressable headers advertise rainbow, breathing, and color-cycle with speed and brightness support because both are host-rendered before serialization. Fixed RGB headers remain static-only because their native channel mapping is shared and their Armoury Crate capture reassembled through a separate channel that is not enabled for LumaCore writes yet.
+- LumaCore stores effect speed in the UI/model, maps it to a host-side animation period, and does not encode a speed payload byte. Owned-hardware capture (see the speed finding below) confirms this controller has no wire speed field under Armoury Crate — the vendor renders effect speed as a host-side animation phase-step, not a device command.
+- The older `EC35`/`EC36` native effect serializer remains OpenRGB-referenced research code for later validation, but it is no longer the advertised addressable animated route.
 - The All Off action sends one explicit `EC35` off-mode packet per parsed config channel and requires session confirmation.
 - Successful and failed real HID writes are recorded in the activity log with interface/path, report count, byte count, and protocol summary or transport error.
 
@@ -103,10 +102,9 @@ Two takeaways for this backend:
    guarded dry-run→write test from LumaCore itself (daemon-side, Armoury Crate closed). Until then the
    existing gates on those paths are correct and should stay.
 2. **The entire Armoury Crate feature set — all effects, fixed and addressable — is reproducible over
-   the already-validated `EC40` direct path alone** (`appendDirectColorReports`), host-streamed. Any
-   future animated/effect support can be built on the certain path without depending on the unvalidated
-   `EC35`/`EC36` commands; doing so is a scope decision (this repo lists *Animated direct-mode
-   streaming* as out of scope), not a reverse-engineering blocker.
+   the already-validated `EC40` direct path alone** (`appendDirectColorReports`), host-streamed.
+   LumaCore now uses that certain path for addressable rainbow, breathing, and color-cycle effects
+   without depending on the unvalidated `EC35`/`EC36` native effect commands.
 
 ### Effect speed has no wire field — it is a host animation rate (finding)
 
@@ -117,10 +115,10 @@ constant) while the per-frame hue step scaled ~9× and the full-cycle period mov
 further each frame — i.e. effect speed is a host-side phase increment, not a byte on the wire.
 
 This resolves the "no verified speed field" note above: for this controller there is nothing to
-encode. If LumaCore ever offers streamed effects (per takeaway 2), "speed" is simply its animation
-timer rate, and matching the vendor's feel means a cycle period of roughly **1.6 s (fast) to 16.5 s
-(slow)**. A native firmware speed field could still exist behind the OpenRGB `EC35` effect path, but
-that is unconfirmed here and shares the same validation route as the rest of that path.
+encode on the streamed path. LumaCore maps the UI speed slider to a host animation period of roughly
+**1.6 s (fast) to 16.5 s (slow)**, matching the measured vendor range. A native firmware speed field
+could still exist behind the OpenRGB `EC35` effect path, but that is unconfirmed here and shares the
+same validation route as the rest of that path.
 
 ## Licensing Boundary
 
@@ -135,7 +133,7 @@ Before broadening the write path beyond the current allowlisted static/direct/na
 3. Document report id, opcode, color payload layout, commit behavior, and unknown bytes.
 4. Add serializer tests using independently derived packet examples.
 5. Validate per-header channel mapping and report-ID behavior for this exact motherboard.
-6. Validate native effect speed/direction fields before encoding hardware speed controls.
+6. Validate native effect mode/color/speed/direction fields before advertising hardware-persistent native effects.
 7. Test only volatile all-off or low-brightness static color after explicit user confirmation.
 8. Keep discovery/read-only interrogation separate from write enablement for every new ASUS device family.
 
@@ -145,5 +143,5 @@ Before broadening the write path beyond the current allowlisted static/direct/na
 - Address scanning.
 - Persistent hardware configuration.
 - Firmware or EEPROM writes.
-- Animated direct-mode streaming.
+- Native hardware-persistent effects beyond the current guarded OpenRGB-referenced research path.
 - Generic HID writes for non-allowlisted devices.

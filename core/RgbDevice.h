@@ -62,6 +62,7 @@ public:
     [[nodiscard]] virtual bool applyAllOff();
     [[nodiscard]] virtual bool updateZoneMetadata(int zoneIndex, const QString& name, int ledCount);
     [[nodiscard]] virtual bool usesLocalFrameRendering() const;
+    [[nodiscard]] virtual bool usesLocalFrameRenderingForEffect(int zoneIndex, const RgbEffect& effect) const;
     [[nodiscard]] virtual QString previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const;
     [[nodiscard]] virtual QString lastHardwareWriteStatus() const;
     [[nodiscard]] virtual BackendCapabilities capabilities() const;

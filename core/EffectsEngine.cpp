@@ -14,14 +14,26 @@ namespace lumacore {
 namespace {
 
 constexpr int kFrameIntervalMs = 16; // ~60 Hz
-constexpr double kRainbowPeriodSeconds = 6.0;
-constexpr double kColorCyclePeriodSeconds = 6.0;
-constexpr double kBreathingPeriodSeconds = 4.0;
+constexpr double kMinEffectSpeed = 0.1;
+constexpr double kMaxEffectSpeed = 5.0;
+constexpr double kVendorFastStreamPeriodSeconds = 1.6;
+constexpr double kVendorSlowStreamPeriodSeconds = 16.5;
 constexpr double kBreathingFloor = 0.12;
 
 [[nodiscard]] double fractional(double value)
 {
     return value - std::floor(value);
+}
+
+[[nodiscard]] double streamPeriodScale()
+{
+    return (kVendorSlowStreamPeriodSeconds - kVendorFastStreamPeriodSeconds)
+        / ((1.0 / kMinEffectSpeed) - (1.0 / kMaxEffectSpeed));
+}
+
+[[nodiscard]] double streamPeriodOffset()
+{
+    return kVendorFastStreamPeriodSeconds - (streamPeriodScale() / kMaxEffectSpeed);
 }
 
 } // namespace
@@ -97,6 +109,12 @@ void EffectsEngine::tick()
     }
 }
 
+double EffectsEngine::streamedEffectPeriodSeconds(double speed)
+{
+    const double boundedSpeed = qBound(kMinEffectSpeed, speed, kMaxEffectSpeed);
+    return streamPeriodOffset() + (streamPeriodScale() / boundedSpeed);
+}
+
 QVector<RgbColor> EffectsEngine::computeFrame(const RgbEffect& effect, int ledCount, double elapsedSeconds)
 {
     if (ledCount <= 0) {
@@ -109,7 +127,7 @@ QVector<RgbColor> EffectsEngine::computeFrame(const RgbEffect& effect, int ledCo
 
     switch (effect.type()) {
     case RgbEffectType::Rainbow: {
-        const double offset = elapsedSeconds * effect.speed() / kRainbowPeriodSeconds;
+        const double offset = elapsedSeconds / streamedEffectPeriodSeconds(effect.speed());
         for (int index = 0; index < ledCount; ++index) {
             const double hue = fractional(offset + static_cast<double>(index) / static_cast<double>(ledCount));
             const QColor color = QColor::fromHsvF(static_cast<float>(hue), 1.0F, static_cast<float>(brightness));
@@ -118,13 +136,13 @@ QVector<RgbColor> EffectsEngine::computeFrame(const RgbEffect& effect, int ledCo
         break;
     }
     case RgbEffectType::ColorCycle: {
-        const double hue = fractional(elapsedSeconds * effect.speed() / kColorCyclePeriodSeconds);
+        const double hue = fractional(elapsedSeconds / streamedEffectPeriodSeconds(effect.speed()));
         const QColor color = QColor::fromHsvF(static_cast<float>(hue), 1.0F, static_cast<float>(brightness));
         colors.fill(RgbColor::fromQColor(color), ledCount);
         break;
     }
     case RgbEffectType::Breathing: {
-        const double phase = elapsedSeconds * effect.speed() / kBreathingPeriodSeconds;
+        const double phase = elapsedSeconds / streamedEffectPeriodSeconds(effect.speed());
         const double wave = (std::sin(phase * 2.0 * M_PI) + 1.0) / 2.0;
         const double factor = (kBreathingFloor + (1.0 - kBreathingFloor) * wave) * brightness;
         const RgbColor base = effect.color();

@@ -24,6 +24,7 @@ enum class AsusAuraHidPacketKind {
     ResearchPreview,
     StaticColorWrite,
     NativeEffectWrite,
+    DirectFrameWrite,
     AllOffWrite,
 };
 
@@ -94,6 +95,12 @@ struct AsusAuraConfigTable {
     int zoneIndex,
     const RgbEffect& effect,
     int ledCount
+);
+[[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraDirectFrameWrite(
+    const AsusAuraConfigTable& config,
+    int zoneIndex,
+    const QVector<RgbColor>& colors,
+    bool includeDirectMode
 );
 [[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraAllOffWrite(const AsusAuraConfigTable& config);
 

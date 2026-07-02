@@ -107,6 +107,13 @@ int main(int argc, char* argv[])
     if (!require(parsedConfig.channels.size() == 3, "config parser should build fixed plus addressable channels")) {
         return 1;
     }
+    if (!require(
+            parsedConfig.channels.at(1).ledCount == kAsusAuraMaxResearchLeds
+                && parsedConfig.channels.at(2).ledCount == kAsusAuraMaxResearchLeds,
+            "config parser should default addressable headers to the LumaScope-validated 120 LED EC40 capacity"
+        )) {
+        return 1;
+    }
     if (!require(!parseAsusAuraConfigTableResponse(QByteArray(8, '\0')).valid, "short config responses should be rejected")) {
         return 1;
     }
@@ -473,6 +480,94 @@ int main(int argc, char* argv[])
               1
           ).ok,
           "native effect writes should reject zones beyond the parsed config")) {
+        return 1;
+    }
+
+    QVector<lumacore::RgbColor> frameColors;
+    for (int index = 0; index < 21; ++index) {
+        frameColors.append(lumacore::RgbColor(
+            static_cast<quint8>(index),
+            static_cast<quint8>(index + 1),
+            static_cast<quint8>(index + 2)
+        ));
+    }
+    const AsusAuraHidProtocolResult primedFrame =
+        buildAsusAuraDirectFrameWrite(parsedConfig, 1, frameColors, true);
+    if (!require(primedFrame.ok, "addressable direct frame write should build")) {
+        return 1;
+    }
+    if (!require(primedFrame.packet.kind == AsusAuraHidPacketKind::DirectFrameWrite, "direct frame write should use its own packet kind")) {
+        return 1;
+    }
+    if (!require(primedFrame.packet.hardwareWriteApproved, "direct frame write should be hardware-approved")) {
+        return 1;
+    }
+    if (!require(primedFrame.packet.reports.size() == 4, "primed 21-LED frame should contain gen1, direct mode, and two EC40 chunks")) {
+        return 1;
+    }
+    const QByteArray primedModeReport = primedFrame.packet.reports.at(1);
+    const QByteArray frameFirstChunk = primedFrame.packet.reports.at(2);
+    const QByteArray frameFinalChunk = primedFrame.packet.reports.at(3);
+    if (!require(static_cast<unsigned char>(primedModeReport.at(5)) == 0xFF, "primed frame should request direct mode")) {
+        return 1;
+    }
+    if (!require(static_cast<unsigned char>(frameFirstChunk.at(1)) == 0x40, "frame chunks should use EC40 direct color")) {
+        return 1;
+    }
+    if (!require(
+            static_cast<unsigned char>(frameFirstChunk.at(5)) == 0
+                && static_cast<unsigned char>(frameFirstChunk.at(6)) == 1
+                && static_cast<unsigned char>(frameFirstChunk.at(7)) == 2,
+            "frame chunks should preserve per-LED RGB payload order"
+        )) {
+        return 1;
+    }
+    if (!require(
+            static_cast<unsigned char>(frameFirstChunk.at(3)) == 0
+                && static_cast<unsigned char>(frameFirstChunk.at(4)) == 20,
+            "first frame chunk should cover the first 20 LEDs"
+        )) {
+        return 1;
+    }
+    if (!require(
+            static_cast<unsigned char>(frameFinalChunk.at(3)) == 20
+                && static_cast<unsigned char>(frameFinalChunk.at(4)) == 1,
+            "final frame chunk should carry the remaining LED offset/count in LEDs"
+        )) {
+        return 1;
+    }
+    if (!require(
+            (static_cast<unsigned char>(frameFinalChunk.at(2)) & 0x80) != 0
+                && (static_cast<unsigned char>(frameFirstChunk.at(2)) & 0x80) == 0,
+            "direct frame writes should set the apply flag only on the final chunk"
+        )) {
+        return 1;
+    }
+
+    const AsusAuraHidProtocolResult frameOnly =
+        buildAsusAuraDirectFrameWrite(parsedConfig, 1, frameColors, false);
+    if (!require(frameOnly.ok, "unprimed direct frame write should build")) {
+        return 1;
+    }
+    if (!require(frameOnly.packet.reports.size() == 2, "unprimed frame writes should contain only EC40 chunks")) {
+        return 1;
+    }
+    if (!require(
+            static_cast<unsigned char>(frameOnly.packet.reports.first().at(1)) == 0x40,
+            "unprimed frame writes should start with EC40"
+        )) {
+        return 1;
+    }
+    if (!require(
+            !buildAsusAuraDirectFrameWrite(parsedConfig, 0, frameColors, true).ok,
+            "direct frame streaming should reject fixed RGB headers"
+        )) {
+        return 1;
+    }
+    if (!require(
+            !buildAsusAuraDirectFrameWrite(parsedConfig, 1, {}, true).ok,
+            "direct frame streaming should reject empty frames"
+        )) {
         return 1;
     }
 

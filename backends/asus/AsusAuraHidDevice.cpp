@@ -2,6 +2,7 @@
 
 #include "backends/asus/AsusAuraHidDevice.h"
 
+#include "core/EffectsEngine.h"
 #include "hardware/linux/AsusAuraHidProtocol.h"
 
 #include <QtGlobal>
@@ -194,11 +195,11 @@ bool AsusAuraHidDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
     }
 
     const hardware::linux::AsusAuraHidProtocolResult protocol = effect.isAnimated()
-        ? hardware::linux::buildAsusAuraNativeEffectWrite(
+        ? hardware::linux::buildAsusAuraDirectFrameWrite(
               m_configTable,
               zoneIndex,
-              effect,
-              zones().at(zoneIndex).ledCount()
+              EffectsEngine::computeFrame(effect, zones().at(zoneIndex).ledCount(), 0.0),
+              true
           )
         : hardware::linux::buildAsusAuraStaticColorWrite(
               m_configTable,
@@ -212,16 +213,39 @@ bool AsusAuraHidDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
     }
 
     setZoneEffect(zoneIndex, effect);
-    mutableZones()[zoneIndex].setColor(effect.color());
+    if (effect.isAnimated()) {
+        const QVector<RgbColor> frame = EffectsEngine::computeFrame(effect, zones().at(zoneIndex).ledCount(), 0.0);
+        if (!frame.isEmpty()) {
+            mutableZones()[zoneIndex].setLedColors(frame);
+        }
+    } else {
+        mutableZones()[zoneIndex].setColor(effect.color());
+    }
     emit zoneChanged(zoneIndex);
     return true;
 }
 
 bool AsusAuraHidDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors)
 {
-    Q_UNUSED(zoneIndex)
-    Q_UNUSED(colors)
-    return false;
+    m_lastHardwareWriteStatus.clear();
+    if (zoneIndex < 0 || zoneIndex >= zones().size()) {
+        m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID stream frame skipped: invalid zone.");
+        return false;
+    }
+
+    if (!m_configTableVerified) {
+        m_lastHardwareWriteStatus = QStringLiteral("ASUS Aura HID stream frame skipped: %1").arg(writeDisabledReason());
+        return false;
+    }
+
+    const hardware::linux::AsusAuraHidProtocolResult protocol =
+        hardware::linux::buildAsusAuraDirectFrameWrite(m_configTable, zoneIndex, colors, false);
+    if (!sendApprovedPacket(protocol, QStringLiteral("stream frame"))) {
+        return false;
+    }
+
+    mutableZones()[zoneIndex].setLedColors(colors);
+    return true;
 }
 
 bool AsusAuraHidDevice::applyAllOff()
@@ -265,6 +289,11 @@ bool AsusAuraHidDevice::usesLocalFrameRendering() const
     return false;
 }
 
+bool AsusAuraHidDevice::usesLocalFrameRenderingForEffect(int zoneIndex, const RgbEffect& effect) const
+{
+    return supportsHostStreamedEffect(zoneIndex, static_cast<int>(effect.type()));
+}
+
 QString AsusAuraHidDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const
 {
     if (zoneIndex < 0 || zoneIndex >= zones().size()) {
@@ -276,7 +305,12 @@ QString AsusAuraHidDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect
     }
 
     const hardware::linux::AsusAuraHidProtocolResult protocol = effect.isAnimated()
-        ? hardware::linux::buildAsusAuraNativeEffectWrite(m_configTable, zoneIndex, effect, zones().at(zoneIndex).ledCount())
+        ? hardware::linux::buildAsusAuraDirectFrameWrite(
+              m_configTable,
+              zoneIndex,
+              EffectsEngine::computeFrame(effect, zones().at(zoneIndex).ledCount(), 0.0),
+              true
+          )
         : hardware::linux::buildAsusAuraStaticColorWrite(
               m_configTable,
               zoneIndex,
@@ -339,7 +373,11 @@ bool AsusAuraHidDevice::supportsEffect(int effectType) const
 
 bool AsusAuraHidDevice::supportsEffectSpeed(int effectType) const
 {
-    Q_UNUSED(effectType)
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        if (supportsZoneEffectSpeed(zoneIndex, effectType)) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -367,25 +405,25 @@ bool AsusAuraHidDevice::supportsZoneEffect(int zoneIndex, int effectType) const
         return false;
     }
 
-    if (effectType == static_cast<int>(RgbEffectType::Rainbow)
-        || effectType == static_cast<int>(RgbEffectType::ColorCycle)) {
-        return isAddressableZone(zoneIndex);
-    }
-
-    return false;
+    return supportsHostStreamedEffect(zoneIndex, effectType);
 }
 
 bool AsusAuraHidDevice::supportsZoneEffectSpeed(int zoneIndex, int effectType) const
 {
-    Q_UNUSED(zoneIndex)
-    Q_UNUSED(effectType)
-    return false;
+    return supportsHostStreamedEffect(zoneIndex, effectType);
 }
 
 bool AsusAuraHidDevice::supportsZoneEffectBrightness(int zoneIndex, int effectType) const
 {
-    return supportsZoneEffect(zoneIndex, effectType)
-        && effectType == static_cast<int>(RgbEffectType::Static);
+    return supportsZoneEffect(zoneIndex, effectType);
+}
+
+bool AsusAuraHidDevice::supportsHostStreamedEffect(int zoneIndex, int effectType) const
+{
+    return isAddressableZone(zoneIndex)
+        && (effectType == static_cast<int>(RgbEffectType::Rainbow)
+            || effectType == static_cast<int>(RgbEffectType::Breathing)
+            || effectType == static_cast<int>(RgbEffectType::ColorCycle));
 }
 
 int AsusAuraHidDevice::fixedZoneCount() const

@@ -215,6 +215,13 @@ bool RgbDevice::usesLocalFrameRendering() const
     return true;
 }
 
+bool RgbDevice::usesLocalFrameRenderingForEffect(int zoneIndex, const RgbEffect& effect) const
+{
+    Q_UNUSED(zoneIndex)
+    Q_UNUSED(effect)
+    return usesLocalFrameRendering();
+}
+
 QString RgbDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const
 {
     Q_UNUSED(zoneIndex)

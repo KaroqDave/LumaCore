@@ -207,10 +207,7 @@ bool appendFixedColorReport(
 bool appendDirectColorReports(
     QVector<QByteArray>& reports,
     int directChannel,
-    int ledCount,
-    quint8 red,
-    quint8 green,
-    quint8 blue,
+    const QVector<RgbColor>& colors,
     QString* error
 )
 {
@@ -219,6 +216,15 @@ bool appendDirectColorReports(
             *error = QStringLiteral("ASUS Aura direct channel must be between 0 and %1: channel=%2.")
                          .arg(kAuraMaxDirectChannels - 1)
                          .arg(directChannel);
+        }
+        return false;
+    }
+    const int ledCount = colors.size();
+    if (ledCount < 1 || ledCount > kAsusAuraMaxResearchLeds) {
+        if (error != nullptr) {
+            *error = QStringLiteral("ASUS Aura direct frame LED count must be between 1 and %1: leds=%2.")
+                         .arg(kAsusAuraMaxResearchLeds)
+                         .arg(ledCount);
         }
         return false;
     }
@@ -236,15 +242,31 @@ bool appendDirectColorReports(
 
         for (int ledIndex = 0; ledIndex < packetLedCount; ++ledIndex) {
             const int payloadOffset = kAuraColorPayloadOffset + (ledIndex * 3);
-            report[payloadOffset] = static_cast<char>(red);
-            report[payloadOffset + 1] = static_cast<char>(green);
-            report[payloadOffset + 2] = static_cast<char>(blue);
+            const RgbColor& color = colors.at(offset + ledIndex);
+            report[payloadOffset] = static_cast<char>(color.red());
+            report[payloadOffset + 1] = static_cast<char>(color.green());
+            report[payloadOffset + 2] = static_cast<char>(color.blue());
         }
 
         reports.append(report);
         offset += packetLedCount;
     }
     return true;
+}
+
+bool appendDirectColorReports(
+    QVector<QByteArray>& reports,
+    int directChannel,
+    int ledCount,
+    quint8 red,
+    quint8 green,
+    quint8 blue,
+    QString* error
+)
+{
+    QVector<RgbColor> colors;
+    colors.fill(RgbColor::fromRgb(red, green, blue), ledCount);
+    return appendDirectColorReports(reports, directChannel, colors, error);
 }
 
 // --- config-table navigation ---
@@ -617,7 +639,7 @@ AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response)
         ++effectChannel;
     }
     for (int index = 0; index < addressableHeaders; ++index) {
-        channels.append({AsusAuraChannelType::Addressable, effectChannel, index, 1, 0});
+        channels.append({AsusAuraChannelType::Addressable, effectChannel, index, kAsusAuraMaxResearchLeds, 0});
         ++effectChannel;
     }
 
@@ -878,6 +900,60 @@ AsusAuraHidProtocolResult buildAsusAuraNativeEffectWrite(
             .arg(bytesPreview(reports.first()), kOpenRgbProvenance),
         kOpenRgbProvenance,
         AsusAuraHidPacketKind::NativeEffectWrite,
+        true,
+    };
+
+    return {true, packet, {}};
+}
+
+AsusAuraHidProtocolResult buildAsusAuraDirectFrameWrite(
+    const AsusAuraConfigTable& config,
+    int zoneIndex,
+    const QVector<RgbColor>& colors,
+    bool includeDirectMode
+)
+{
+    const AsusAuraHidProtocolResult validation = validateConfigWriteInput(config, zoneIndex, colors.size(), 100);
+    if (!validation.ok) {
+        return validation;
+    }
+
+    AsusAuraConfigChannel target;
+    QString targetSummary;
+    if (!resolveEffectTarget(config, zoneIndex, &target, nullptr, &targetSummary)) {
+        return makeError(QStringLiteral("ASUS Aura direct-frame target could not be resolved."));
+    }
+    if (target.type != AsusAuraChannelType::Addressable) {
+        return makeError(QStringLiteral("ASUS Aura direct-frame streaming is enabled only for addressable headers."));
+    }
+
+    QVector<QByteArray> reports;
+    if (includeDirectMode) {
+        reports.append(buildAuraGen1Report());
+        reports.append(buildAuraModeReport(static_cast<quint8>(target.effectChannel), kAuraDirectMode));
+    }
+
+    QString error;
+    if (!appendDirectColorReports(reports, target.directChannel, colors, &error)) {
+        return makeError(error);
+    }
+
+    AsusAuraHidPacket packet {
+        reports.first(),
+        reports,
+        QStringLiteral(
+            "ASUS Aura HID approved EC40 host-streamed frame for %1 Header %2: synchronized=false %3 reportCount=%4 reportLength=%5 leds=%6 directModePrimed=%7 speedHardwareField=none firstReportBytes=%8 hardwareWriteApproved=true provenance=%9"
+        )
+            .arg(asusAuraDeviceKey())
+            .arg(zoneIndex + 1)
+            .arg(targetSummary)
+            .arg(reports.size())
+            .arg(reports.first().size())
+            .arg(colors.size())
+            .arg(includeDirectMode ? QStringLiteral("true") : QStringLiteral("false"))
+            .arg(bytesPreview(reports.first()), QStringLiteral("LumaScope-validated ASUS Aura EC40 direct-color stream")),
+        QStringLiteral("LumaScope-validated ASUS Aura EC40 direct-color stream"),
+        AsusAuraHidPacketKind::DirectFrameWrite,
         true,
     };
 

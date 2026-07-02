@@ -34,6 +34,7 @@ public:
     [[nodiscard]] bool applyAllOff() override;
     [[nodiscard]] bool updateZoneMetadata(int zoneIndex, const QString& name, int ledCount) override;
     [[nodiscard]] bool usesLocalFrameRendering() const override;
+    [[nodiscard]] bool usesLocalFrameRenderingForEffect(int zoneIndex, const RgbEffect& effect) const override;
     [[nodiscard]] QString previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const override;
     [[nodiscard]] QString lastHardwareWriteStatus() const override;
     [[nodiscard]] BackendCapabilities capabilities() const override;
@@ -53,6 +54,7 @@ private:
         const hardware::linux::AsusAuraHidProtocolResult& protocol,
         const QString& operation
     );
+    [[nodiscard]] bool supportsHostStreamedEffect(int zoneIndex, int effectType) const;
     [[nodiscard]] int fixedZoneCount() const;
     [[nodiscard]] bool isAddressableZone(int zoneIndex) const;
 

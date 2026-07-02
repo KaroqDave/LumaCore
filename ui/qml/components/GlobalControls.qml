@@ -50,8 +50,8 @@ Item {
     readonly property bool usesBaseColor: effectType !== 1 && effectType !== 3
     readonly property bool usesSpeed: effectType !== 0
     readonly property real brightnessFactor: brightness / 100.0
-    readonly property int rainbowPeriodMs: Math.max(600, 6000 / effectSpeed)
-    readonly property int breathingHalfPeriodMs: Math.max(150, 2000 / effectSpeed)
+    readonly property int streamPeriodMs: streamedEffectPeriodMs(effectSpeed)
+    readonly property int breathingHalfPeriodMs: Math.max(150, Math.round(streamPeriodMs / 2))
     readonly property bool roomyHeader: width >= 760
     readonly property var disabledEffectSegments: [
         !targetSupportsEffect(0),
@@ -64,6 +64,11 @@ Item {
     signal selectedColorSyncRequested(color colorValue)
 
     implicitHeight: content.implicitHeight
+
+    function streamedEffectPeriodMs(speedValue) {
+        const boundedSpeed = Math.max(0.1, Math.min(5.0, speedValue))
+        return Math.round((1.2959183673469388 + 1.520408163265306 / boundedSpeed) * 1000)
+    }
 
     function refreshTargetOptions() {
         const names = appController ? appController.deviceGroupNames : []
@@ -657,7 +662,7 @@ Item {
                         from: 0
                         to: -Math.max(1, globalPreviewBar.width)
                         loops: Animation.Infinite
-                        duration: controls.rainbowPeriodMs
+                        duration: controls.streamPeriodMs
                     }
                 }
             }
@@ -695,7 +700,7 @@ Item {
                 loops: Animation.Infinite
                 from: 0
                 to: 1
-                duration: controls.rainbowPeriodMs
+                duration: controls.streamPeriodMs
             }
 
             RowLayout {

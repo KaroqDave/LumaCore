@@ -397,6 +397,7 @@ bool DeviceManager::applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEff
     if (!device->supportsZoneEffectBrightness(zoneIndex, effectType)) {
         effectToApply.setBrightness(100);
     }
+    const bool localFrameRendering = device->usesLocalFrameRenderingForEffect(zoneIndex, effectToApply);
 
     QString dryRunSummary = effectToApply.isAnimated()
         ? QStringLiteral("Would set %1 / %2 to %3 (speed %4x, brightness %5%).")
@@ -442,7 +443,7 @@ bool DeviceManager::applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEff
     }
 
     if (effectToApply.isAnimated()) {
-        if (device->usesLocalFrameRendering()) {
+        if (localFrameRendering) {
             m_effectsEngine->startZone(deviceIndex, zoneIndex);
         } else {
             m_effectsEngine->stopZone(deviceIndex, zoneIndex);
@@ -456,7 +457,7 @@ bool DeviceManager::applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEff
         );
     } else {
         m_effectsEngine->stopZone(deviceIndex, zoneIndex);
-        if (device->usesLocalFrameRendering()) {
+        if (localFrameRendering) {
             const QVector<RgbColor> frame = EffectsEngine::computeFrame(effectToApply, zone.ledCount(), 0.0);
             if (!frame.isEmpty()) {
                 const bool frameApplied = device->applyZoneFrame(zoneIndex, frame);
