@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v1.1.8.1** - Linux-first RGB control with Windows read-only HID discovery, portable diagnostics export, improved Windows preview packaging, and automatic daemon startup through the `auto` backend, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.9.0** - Linux-first RGB control with Windows read-only HID discovery, portable diagnostics export, improved Windows preview packaging, and automatic daemon startup through the `auto` backend, built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe, daemon-backed RGB controller for Linux desktops. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local IPC endpoint; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
