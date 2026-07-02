@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 1.1.9.0
+    VERSION 1.1.9.1
     DESCRIPTION "Cross-platform RGB control application"
     LANGUAGES CXX
 )

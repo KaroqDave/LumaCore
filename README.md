@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v1.1.9.0** - Cross-platform, daemon-backed RGB control for Linux and Windows, with read-only hardware discovery, portable diagnostics export, safe mock testing, and guarded ASUS Aura HID writes for validated controllers. Built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.1.9.1** - Cross-platform, daemon-backed RGB control for Linux and Windows, with read-only hardware discovery, portable diagnostics export, safe mock testing, and guarded ASUS Aura HID writes for validated controllers. Built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe desktop RGB controller. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local IPC endpoint; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
