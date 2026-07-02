@@ -300,6 +300,53 @@ public:
     }
 };
 
+class EffectOnlySnapshotDevice final : public lumacore::RgbDevice
+{
+public:
+    EffectOnlySnapshotDevice()
+        : RgbDevice(
+              QStringLiteral("effect-only-snapshot-device"),
+              QStringLiteral("Effect-only Snapshot Device"),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Effect Zone"),
+            lumacore::RgbZoneType::AddressableHeader,
+            1
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        Q_UNUSED(zoneIndex)
+        Q_UNUSED(color)
+        return false;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capability == lumacore::BackendCapability::DiscoveryRead) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+        if (capability == lumacore::BackendCapability::ZoneEffectWrite) {
+            return {
+                lumacore::PermissionStatus::RequiresConfirmation,
+                QStringLiteral("Effect-only snapshot writes require confirmation."),
+            };
+        }
+
+        return {lumacore::PermissionStatus::Denied, QStringLiteral("Unsupported effect-only snapshot capability.")};
+    }
+};
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -1126,8 +1173,30 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    const EffectOnlySnapshotDevice effectOnlySnapshot;
+    const QJsonObject effectOnlyJson = deviceToJson(effectOnlySnapshot, 2, false);
+    const PermissionResult effectOnlyPermission = permissionResultFromJson(
+        effectOnlyJson.value(QStringLiteral("permission")).toObject()
+    );
+    auto effectOnlyClient = std::make_shared<DaemonClient>(QStringLiteral("unused-effect-only"));
+    DaemonRgbDevice effectOnlyProxy(effectOnlyJson, effectOnlyClient);
+    if (!require(
+            effectOnlyJson.value(QStringLiteral("writeRequiresConfirmation")).toBool(false),
+            "effect-only daemon snapshots should request confirmation"
+        )
+        || !require(
+            effectOnlyPermission.status == PermissionStatus::RequiresConfirmation,
+            "effect-only daemon snapshots should expose aggregate write permission"
+        )
+        || !require(
+            effectOnlyProxy.writeRequiresConfirmation(),
+            "effect-only daemon proxies should preserve confirmation-required state"
+        )) {
+        return 1;
+    }
+
     const ZoneSupportSnapshotDevice zoneSupportDevice;
-    const QJsonObject zoneSupportJson = deviceToJson(zoneSupportDevice, 2, false);
+    const QJsonObject zoneSupportJson = deviceToJson(zoneSupportDevice, 3, false);
     auto zoneSupportClient = std::make_shared<DaemonClient>(QStringLiteral("unused-zone-support"));
     DaemonRgbDevice zoneSupportProxy(zoneSupportJson, zoneSupportClient);
     if (!require(

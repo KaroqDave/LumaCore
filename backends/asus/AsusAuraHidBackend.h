@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "backends/asus/AsusAuraHidPlatform.h"
 #include "core/RgbBackend.h"
 
 namespace lumacore {
@@ -13,6 +14,12 @@ public:
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> createDevices() const override;
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> discoverDevices() const override;
     [[nodiscard]] PermissionResult probe() const override;
+
+    [[nodiscard]] static bool acceptsProbeDevice(const asus_aura_platform::ProbeDevice& device);
+    [[nodiscard]] static bool prefersProbeDevice(
+        const asus_aura_platform::ProbeDevice& candidate,
+        const asus_aura_platform::ProbeDevice& current
+    );
 };
 
 } // namespace lumacore

@@ -8,6 +8,8 @@ The client and server share one internal frame codec for newline extraction, exa
 
 - `lumacore` is the unprivileged Qt Quick GUI.
 - `lumacore-daemon` owns hardware-facing backends and chooses the active backend.
+- In the GUI, `daemon` is the transport/proxy backend. The daemon's selected hardware backend
+  remains visible separately as the effective backend identity, for example `daemon -> auto`.
 - Linux defaults to `/run/lumacore/lumacore.sock`; Windows uses a versioned, per-user name beginning with `lumacore-daemon-v1-`. Both binaries accept `--socket` to override the endpoint.
 - The daemon default backend is `auto`, which aggregates available hardware backends with read-only platform discovery inventory, then falls back to mock.
 - On Windows builds, the GUI starts the sibling daemon with `--backend auto --exit-on-disconnect` unless `--no-auto-start-daemon` is supplied. The endpoint is restricted to the current Windows user.

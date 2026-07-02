@@ -2,6 +2,7 @@
 
 #include "ipc/DaemonProtocol.h"
 
+#include "core/PermissionGate.h"
 #include "core/PortablePaths.h"
 
 #include <QCryptographicHash>
@@ -278,6 +279,7 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
     }
     QJsonObject permissions = permissionResultsToJson(device);
     const BackendCapabilities capabilities = device.capabilities();
+    PermissionResult writePermission = PermissionGate::checkAnyWrite(device);
     PermissionResult colorPermission = permissionResultFromJson(
         permissions.value(backendCapabilityToString(BackendCapability::ZoneColorWrite)).toObject()
     );
@@ -304,6 +306,15 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
             permissionResultToJson(effectPermission)
         );
     }
+    if (writeConfirmed && writePermission.status == PermissionStatus::RequiresConfirmation) {
+        writePermission = {
+            PermissionStatus::Granted,
+            QStringLiteral("Hardware writes are confirmed for this daemon session."),
+        };
+    }
+    const bool writeRequiresConfirmation =
+        colorPermission.status == PermissionStatus::RequiresConfirmation
+        || effectPermission.status == PermissionStatus::RequiresConfirmation;
 
     return {
         {QStringLiteral("index"), index},
@@ -321,12 +332,12 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
         {QStringLiteral("discoveryCataloged"), device.discoveryCataloged()},
         {QStringLiteral("discoveryWriteCapableBackend"), device.discoveryWriteCapableBackend()},
         {QStringLiteral("capabilities"), capabilitiesToJson(capabilities)},
-        {QStringLiteral("permission"), permissionResultToJson(colorPermission)},
+        {QStringLiteral("permission"), permissionResultToJson(writePermission)},
         {QStringLiteral("permissions"), permissions},
         {QStringLiteral("effectSupport"), effectSupportToJson(device)},
         {QStringLiteral("lastHardwareWriteStatus"), device.lastHardwareWriteStatus()},
         {QStringLiteral("writeConfirmed"), writeConfirmed},
-        {QStringLiteral("writeRequiresConfirmation"), colorPermission.status == PermissionStatus::RequiresConfirmation},
+        {QStringLiteral("writeRequiresConfirmation"), writeRequiresConfirmation},
         {QStringLiteral("readOnly"), !capabilities.testFlag(BackendCapability::ZoneColorWrite)
              && !capabilities.testFlag(BackendCapability::ZoneEffectWrite)},
         {QStringLiteral("likelyRgbController"), device.likelyRgbController()},

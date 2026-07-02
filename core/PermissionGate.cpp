@@ -4,7 +4,18 @@
 
 #include "core/RgbDevice.h"
 
+#include <QStringList>
+
 namespace lumacore {
+
+namespace {
+
+constexpr BackendCapability kWriteCapabilities[] {
+    BackendCapability::ZoneColorWrite,
+    BackendCapability::ZoneEffectWrite,
+};
+
+} // namespace
 
 QString backendCapabilityToString(BackendCapability capability)
 {
@@ -38,6 +49,67 @@ PermissionResult PermissionGate::checkWrite(const RgbDevice& device, BackendCapa
     }
 
     return device.checkRuntimePermission(operation);
+}
+
+PermissionResult PermissionGate::checkAnyWrite(const RgbDevice& device)
+{
+    bool sawSupportedWrite = false;
+    bool sawGrantedWrite = false;
+    QStringList deniedReasons;
+
+    for (const BackendCapability capability : kWriteCapabilities) {
+        if (!device.capabilities().testFlag(capability)) {
+            continue;
+        }
+
+        sawSupportedWrite = true;
+        const PermissionResult permission = checkWrite(device, capability);
+        if (permission.status == PermissionStatus::RequiresConfirmation) {
+            return permission;
+        }
+        if (permission.isGranted()) {
+            sawGrantedWrite = true;
+            continue;
+        }
+        if (!permission.reason.isEmpty()) {
+            deniedReasons.append(permission.reason);
+        }
+    }
+
+    if (sawGrantedWrite) {
+        return {
+            PermissionStatus::Granted,
+            QStringLiteral("At least one RGB write operation is available."),
+        };
+    }
+
+    if (!sawSupportedWrite) {
+        return {
+            PermissionStatus::Denied,
+            QStringLiteral("%1 does not support RGB writes.").arg(device.name()),
+        };
+    }
+
+    deniedReasons.removeDuplicates();
+    return {
+        PermissionStatus::Denied,
+        deniedReasons.isEmpty()
+            ? QStringLiteral("%1 does not currently allow RGB writes.").arg(device.name())
+            : deniedReasons.join(QStringLiteral(" ")),
+    };
+}
+
+bool PermissionGate::writeRequiresConfirmation(const RgbDevice& device)
+{
+    for (const BackendCapability capability : kWriteCapabilities) {
+        if (!device.capabilities().testFlag(capability)) {
+            continue;
+        }
+        if (checkWrite(device, capability).status == PermissionStatus::RequiresConfirmation) {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace lumacore

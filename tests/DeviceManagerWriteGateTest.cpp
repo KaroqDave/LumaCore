@@ -94,6 +94,91 @@ public:
     }
 };
 
+class EffectOnlyConfirmationDevice final : public lumacore::RgbDevice
+{
+public:
+    EffectOnlyConfirmationDevice()
+        : RgbDevice(
+              QStringLiteral("effect-only-confirmation-device"),
+              QStringLiteral("Effect-only Confirmation Device"),
+              QStringLiteral("Test"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Effect Zone"),
+            lumacore::RgbZoneType::AddressableHeader,
+            4,
+            lumacore::RgbColor(1, 2, 3)
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        Q_UNUSED(zoneIndex)
+        Q_UNUSED(color)
+        return false;
+    }
+
+    [[nodiscard]] bool applyZoneEffect(int zoneIndex, const lumacore::RgbEffect& effect) override
+    {
+        if (zoneIndex < 0 || zoneIndex >= mutableZones().size()) {
+            return false;
+        }
+
+        setZoneEffect(zoneIndex, effect);
+        return true;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capability == lumacore::BackendCapability::DiscoveryRead) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+
+        if (capability == lumacore::BackendCapability::ZoneEffectWrite) {
+            return {
+                lumacore::PermissionStatus::RequiresConfirmation,
+                QStringLiteral("Effect writes require confirmation."),
+            };
+        }
+
+        return {lumacore::PermissionStatus::Denied, QStringLiteral("Unsupported effect-only test operation.")};
+    }
+};
+
+class EffectOnlyConfirmationBackend final : public lumacore::RgbBackend
+{
+public:
+    [[nodiscard]] lumacore::BackendDescriptor descriptor() const override
+    {
+        return {
+            QStringLiteral("effect-only-confirmation-test"),
+            QStringLiteral("Effect-only Confirmation Test"),
+            QStringLiteral("Effect-only confirmation-gated test backend."),
+            lumacore::BackendCapability::DiscoveryRead | lumacore::BackendCapability::ZoneEffectWrite,
+        };
+    }
+
+    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> createDevices() const override
+    {
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
+        devices.push_back(std::make_unique<EffectOnlyConfirmationDevice>());
+        return devices;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult probe() const override
+    {
+        return {lumacore::PermissionStatus::Granted, {}};
+    }
+};
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -164,6 +249,33 @@ int main(int argc, char* argv[])
     if (!require(
             manager.deviceAt(0)->zones().at(0).currentColor() == lumacore::RgbColor(9, 8, 7),
             "confirmed local animation frames should remain allowed"
+        )) {
+        return 1;
+    }
+
+    lumacore::DeviceManager effectOnlyManager;
+    effectOnlyManager.setDryRunEnabled(false);
+    effectOnlyManager.registerBackend(std::make_unique<EffectOnlyConfirmationBackend>());
+    effectOnlyManager.initializeBackends(QStringLiteral("effect-only-confirmation-test"));
+    if (!require(effectOnlyManager.deviceCount() == 1, "effect-only confirmation backend should load one device")) {
+        return 1;
+    }
+    if (!require(
+            effectOnlyManager.confirmDeviceWrites(0),
+            "effect-only write devices should confirm without requiring color-write support"
+        )) {
+        return 1;
+    }
+    if (!require(effectOnlyManager.deviceWriteConfirmed(0), "effect-only write confirmation should be stored")) {
+        return 1;
+    }
+    if (!require(
+            effectOnlyManager.applyZoneEffect(
+                0,
+                0,
+                lumacore::RgbEffect(lumacore::RgbEffectType::Rainbow, lumacore::RgbColor(20, 40, 80))
+            ),
+            "effect-only writes should apply after confirmation"
         )) {
         return 1;
     }

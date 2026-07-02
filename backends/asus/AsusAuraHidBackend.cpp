@@ -45,7 +45,6 @@ bool isValidatedAuraLedController(const asus_aura_platform::ProbeDevice& device)
 bool isAllowedAuraDevice(const asus_aura_platform::ProbeDevice& device)
 {
     return isValidatedAuraLedController(device)
-        && device.interfaceNumber >= 0
         && !device.path.trimmed().isEmpty();
 }
 
@@ -92,6 +91,9 @@ bool isBetterAuraInterface(
     }
 
     if (candidate.interfaceNumber != current.interfaceNumber) {
+        if (candidate.interfaceNumber < 0 || current.interfaceNumber < 0) {
+            return candidate.interfaceNumber >= 0;
+        }
         return candidate.interfaceNumber < current.interfaceNumber;
     }
 
@@ -134,7 +136,7 @@ bool isBetterAuraCandidate(const AuraCandidate& candidate, const AuraCandidate& 
         return candidate.configVerified;
     }
 
-    return isBetterAuraInterface(candidate.device, current.device);
+    return AsusAuraHidBackend::prefersProbeDevice(candidate.device, current.device);
 }
 
 } // namespace
@@ -155,6 +157,19 @@ BackendDescriptor AsusAuraHidBackend::descriptor() const
     };
 }
 
+bool AsusAuraHidBackend::acceptsProbeDevice(const asus_aura_platform::ProbeDevice& device)
+{
+    return isAllowedAuraDevice(device);
+}
+
+bool AsusAuraHidBackend::prefersProbeDevice(
+    const asus_aura_platform::ProbeDevice& candidate,
+    const asus_aura_platform::ProbeDevice& current
+)
+{
+    return isBetterAuraInterface(candidate, current);
+}
+
 std::vector<std::unique_ptr<RgbDevice>> AsusAuraHidBackend::createDevices() const
 {
     return discoverDevices();
@@ -171,7 +186,7 @@ std::vector<std::unique_ptr<RgbDevice>> AsusAuraHidBackend::discoverDevices() co
     QVector<AuraCandidate> selectedDevices;
     QHash<QString, int> selectedIndexByKey;
     for (const asus_aura_platform::ProbeDevice& device : result.devices) {
-        if (!isAllowedAuraDevice(device)) {
+        if (!acceptsProbeDevice(device)) {
             continue;
         }
 

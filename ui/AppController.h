@@ -23,6 +23,7 @@ class AppController final : public QObject
     Q_PROPERTY(QString profilesDirectory READ profilesDirectory CONSTANT)
     Q_PROPERTY(QString backendDisplayName READ backendDisplayName NOTIFY backendInfoChanged)
     Q_PROPERTY(QString backendId READ backendId NOTIFY backendInfoChanged)
+    Q_PROPERTY(QString backendEffectiveId READ backendEffectiveId NOTIFY backendInfoChanged)
     Q_PROPERTY(QString backendDescription READ backendDescription NOTIFY backendInfoChanged)
     Q_PROPERTY(QString backendCapabilitiesText READ backendCapabilitiesText NOTIFY backendInfoChanged)
     Q_PROPERTY(int backendDeviceCount READ backendDeviceCount NOTIFY backendInfoChanged)
@@ -54,6 +55,7 @@ public:
     [[nodiscard]] QString profilesDirectory() const;
     [[nodiscard]] QString backendDisplayName() const;
     [[nodiscard]] QString backendId() const;
+    [[nodiscard]] QString backendEffectiveId() const;
     [[nodiscard]] QString backendDescription() const;
     [[nodiscard]] QString backendCapabilitiesText() const;
     [[nodiscard]] int backendDeviceCount() const;

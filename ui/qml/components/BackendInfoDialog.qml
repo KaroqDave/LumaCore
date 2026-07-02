@@ -28,6 +28,12 @@ Dialog {
     readonly property color setupStatusBackground: setupStatusLevel === "error"
         ? Theme.errorBg
         : (setupStatusLevel === "warning" ? Theme.warningBg : Theme.subtleSurface)
+    readonly property string backendIdentityText: controller
+        ? (controller.backendEffectiveId.length > 0
+           && controller.backendEffectiveId !== controller.backendId
+           ? qsTr("%1 -> %2").arg(controller.backendId).arg(controller.backendEffectiveId)
+           : controller.backendId)
+        : ""
 
     standardButtons: Dialog.NoButton
 
@@ -149,7 +155,7 @@ Dialog {
             Label {
                 Layout.fillWidth: true
                 text: dialog.controller
-                      ? qsTr("ID: %1").arg(dialog.controller.backendId)
+                      ? qsTr("ID: %1").arg(dialog.backendIdentityText)
                       : ""
                 color: Theme.secondaryText
                 font.pixelSize: 12

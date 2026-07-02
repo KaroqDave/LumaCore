@@ -19,6 +19,7 @@ public:
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> discoverDevices() const override;
     [[nodiscard]] PermissionResult probe() const override;
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> devicesFromPayload(const QJsonObject& payload) const;
+    [[nodiscard]] BackendDescriptor effectiveDescriptor() const;
 
 private:
     void updateDescriptor(const QJsonObject& payload) const;
@@ -30,6 +31,7 @@ private:
         QStringLiteral("LumaCore daemon over a local IPC endpoint."),
         BackendCapability::DiscoveryRead | BackendCapability::ZoneColorWrite | BackendCapability::ZoneEffectWrite,
     };
+    mutable BackendDescriptor m_effectiveDescriptor;
 };
 
 } // namespace lumacore

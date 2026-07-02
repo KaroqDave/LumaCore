@@ -2,6 +2,7 @@
 
 #include "backends/daemon/DaemonRgbDevice.h"
 
+#include "core/PermissionGate.h"
 #include "ipc/DaemonProtocol.h"
 
 #include <QJsonArray>
@@ -386,8 +387,7 @@ bool DaemonRgbDevice::writeConfirmed() const
 
 bool DaemonRgbDevice::writeRequiresConfirmation() const
 {
-    return checkRuntimePermission(BackendCapability::ZoneColorWrite).status
-        == PermissionStatus::RequiresConfirmation;
+    return PermissionGate::writeRequiresConfirmation(*this);
 }
 
 bool DaemonRgbDevice::supportsEffect(int effectType) const

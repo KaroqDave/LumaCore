@@ -5,6 +5,7 @@
 #include "backends/daemon/DaemonBackend.h"
 #include "backends/daemon/DaemonRgbDevice.h"
 #include "core/ActivityLog.h"
+#include "core/PermissionGate.h"
 #include "core/PortablePaths.h"
 #include "core/ProfilePlan.h"
 #include "core/ProfileStore.h"
@@ -278,8 +279,8 @@ SetupStatus setupStatusFor(const AppController& controller)
         return {
             QStringLiteral("info"),
             QStringLiteral("Read-only inventory"),
-            QStringLiteral("Devices are visible, but the active backend does not expose RGB write capability."),
-            QStringLiteral("Use a write-capable backend or keep this backend for diagnostics only."),
+            QStringLiteral("Devices are visible, but none of the loaded devices are verified for RGB writes."),
+            QStringLiteral("Use diagnostics to check backend selection, device identity, and write-gate verification."),
         };
     }
 
@@ -422,6 +423,20 @@ QString AppController::backendId() const
 {
     if (m_deviceManager == nullptr) {
         return {};
+    }
+
+    return m_deviceManager->backendRegistry().activeDescriptor().id;
+}
+
+QString AppController::backendEffectiveId() const
+{
+    if (m_deviceManager == nullptr) {
+        return {};
+    }
+
+    const RgbBackend* backend = m_deviceManager->backendRegistry().activeBackend();
+    if (const auto* daemonBackend = dynamic_cast<const DaemonBackend*>(backend)) {
+        return daemonBackend->effectiveDescriptor().id;
     }
 
     return m_deviceManager->backendRegistry().activeDescriptor().id;
@@ -1093,7 +1108,7 @@ bool AppController::deviceRequiresConfirmation(int deviceIndex) const
         return false;
     }
 
-    return device->checkRuntimePermission(BackendCapability::ZoneColorWrite).status == PermissionStatus::RequiresConfirmation;
+    return PermissionGate::writeRequiresConfirmation(*device);
 }
 
 bool AppController::deviceWriteConfirmed(int deviceIndex) const
@@ -2045,6 +2060,7 @@ QVariantMap AppController::diagnosticsReport() const
     };
 
     const BackendDescriptor backend = m_deviceManager->backendRegistry().activeDescriptor();
+    const QString effectiveBackendId = backendEffectiveId();
     QVariantList backendCapabilities;
     for (const BackendCapability capability : {
              BackendCapability::DiscoveryRead,
@@ -2215,6 +2231,7 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("setupLevel"), setupStatusLevel()},
                 {QStringLiteral("backend"), backend.displayName},
                 {QStringLiteral("backendId"), backend.id},
+                {QStringLiteral("backendEffectiveId"), effectiveBackendId},
                 {QStringLiteral("deviceCount"), devices.size()},
                 {QStringLiteral("zoneCount"), totalZoneCount},
                 {QStringLiteral("writableDeviceCount"), writableDeviceCount},
@@ -2283,6 +2300,7 @@ QVariantMap AppController::diagnosticsReport() const
             QStringLiteral("backend"),
             QVariantMap {
                 {QStringLiteral("id"), backend.id},
+                {QStringLiteral("effectiveId"), effectiveBackendId},
                 {QStringLiteral("displayName"), backend.displayName},
                 {QStringLiteral("description"), backend.description},
                 {QStringLiteral("capabilities"), backendCapabilities},

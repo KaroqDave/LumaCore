@@ -231,7 +231,7 @@ bool DeviceManager::confirmDeviceWrites(int deviceIndex)
         return false;
     }
 
-    const PermissionResult permission = PermissionGate::checkWrite(*device, BackendCapability::ZoneColorWrite);
+    const PermissionResult permission = PermissionGate::checkAnyWrite(*device);
     if (permission.status != PermissionStatus::RequiresConfirmation && !permission.isGranted()) {
         m_activityLog.warning(LogCategory::Permission, permission.reason);
         return false;

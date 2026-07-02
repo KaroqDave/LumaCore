@@ -464,7 +464,17 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    text: page.appController ? page.appController.backendDisplayName : qsTr("Unavailable")
+                    text: page.appController
+                          ? (page.appController.backendEffectiveId.length > 0
+                             && page.appController.backendEffectiveId !== page.appController.backendId
+                             ? qsTr("%1 (%2 -> %3)")
+                                   .arg(page.appController.backendDisplayName)
+                                   .arg(page.appController.backendId)
+                                   .arg(page.appController.backendEffectiveId)
+                             : qsTr("%1 (%2)")
+                                   .arg(page.appController.backendDisplayName)
+                                   .arg(page.appController.backendId))
+                          : qsTr("Unavailable")
                     color: Theme.primaryText
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap

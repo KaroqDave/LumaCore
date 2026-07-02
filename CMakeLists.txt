@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(LumaCore
-    VERSION 1.1.9.1
+    VERSION 1.1.9.3
     DESCRIPTION "Cross-platform RGB control application"
     LANGUAGES CXX
 )
@@ -273,6 +273,7 @@ lumacore_apply_project_options(
     lumacore_daemon_launch_exit_fixture
     lumacore_daemon_launch_sleep_fixture
     lumacore_daemon_launcher_test
+    lumacore_asus_aura_backend_test
     lumacore_asus_aura_protocol_test
 )
 

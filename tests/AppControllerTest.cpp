@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "backends/mock/MockBackend.h"
+#include "backends/daemon/DaemonBackend.h"
 #include "backends/daemon/DaemonRgbDevice.h"
 #include "core/DeviceManager.h"
 #include "core/ProfileStore.h"
+#include "ipc/DaemonProtocol.h"
 #include "ui/AppController.h"
 
 #include <QCoreApplication>
@@ -131,6 +133,102 @@ public:
         return {
             lumacore::PermissionStatus::Denied,
             QStringLiteral("Group test device does not support %1.").arg(lumacore::backendCapabilityToString(capability)),
+        };
+    }
+};
+
+class ReadOnlyTestDevice final : public lumacore::RgbDevice
+{
+public:
+    ReadOnlyTestDevice()
+        : RgbDevice(
+              QStringLiteral("read-only-device"),
+              QStringLiteral("Read-only Device"),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        setLikelyRgbController(true);
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Inventory Zone"),
+            lumacore::RgbZoneType::AddressableHeader,
+            1
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        Q_UNUSED(zoneIndex)
+        Q_UNUSED(color)
+        return false;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capability == lumacore::BackendCapability::DiscoveryRead) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+
+        return {
+            lumacore::PermissionStatus::Denied,
+            QStringLiteral("Read-only test device does not expose %1.")
+                .arg(lumacore::backendCapabilityToString(capability)),
+        };
+    }
+};
+
+class EffectOnlyConfirmationTestDevice final : public lumacore::RgbDevice
+{
+public:
+    EffectOnlyConfirmationTestDevice()
+        : RgbDevice(
+              QStringLiteral("effect-only-confirmation-device"),
+              QStringLiteral("Effect-only Confirmation Device"),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Effect Zone"),
+            lumacore::RgbZoneType::AddressableHeader,
+            1
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        Q_UNUSED(zoneIndex)
+        Q_UNUSED(color)
+        return false;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capability == lumacore::BackendCapability::DiscoveryRead) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+        if (capability == lumacore::BackendCapability::ZoneEffectWrite) {
+            return {
+                lumacore::PermissionStatus::RequiresConfirmation,
+                QStringLiteral("Effect-only test device requires confirmation."),
+            };
+        }
+
+        return {
+            lumacore::PermissionStatus::Denied,
+            QStringLiteral("Effect-only test device does not expose %1.")
+                .arg(lumacore::backendCapabilityToString(capability)),
         };
     }
 };
@@ -311,6 +409,119 @@ int main(int argc, char* argv[])
             || !require(
                 emptyController.setupStatusSummary() == QStringLiteral("No devices loaded"),
                 "empty inventory warning should explain that no devices are available"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        lumacore::DeviceManager readOnlyManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("read-only-profiles"))
+        );
+        readOnlyManager.setDryRunEnabled(false);
+        readOnlyManager.registerBackend(std::make_unique<lumacore::MockBackend>());
+        if (!require(
+                readOnlyManager.activateBackend(QStringLiteral("mock")),
+                "read-only setup fixture should activate a write-capable backend descriptor"
+            )) {
+            return 1;
+        }
+
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> readOnlyDevices;
+        readOnlyDevices.push_back(std::make_unique<ReadOnlyTestDevice>());
+        readOnlyManager.replaceDevices(std::move(readOnlyDevices));
+        lumacore::AppController readOnlyController(&readOnlyManager);
+        if (!require(
+                readOnlyController.setupStatusSummary() == QStringLiteral("Read-only inventory"),
+                "read-only devices should report inventory-only setup state"
+            )
+            || !require(
+                readOnlyController.setupStatusDetail().contains(QStringLiteral("loaded devices")),
+                "read-only setup detail should describe loaded device write verification"
+            )
+            || !require(
+                !readOnlyController.setupStatusDetail().contains(QStringLiteral("active backend")),
+                "read-only setup detail should not blame the active backend descriptor"
+            )
+            || !require(
+                readOnlyController.setupStatusAction().contains(QStringLiteral("write-gate verification")),
+                "read-only setup action should direct users toward write-gate diagnostics"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        lumacore::DeviceManager effectOnlyManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("effect-only-profiles"))
+        );
+        effectOnlyManager.setDryRunEnabled(false);
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> effectOnlyDevices;
+        effectOnlyDevices.push_back(std::make_unique<EffectOnlyConfirmationTestDevice>());
+        effectOnlyManager.replaceDevices(std::move(effectOnlyDevices));
+        lumacore::AppController effectOnlyController(&effectOnlyManager);
+        if (!require(
+                effectOnlyController.deviceRequiresConfirmation(0),
+                "effect-only write devices should still require confirmation in the controller"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        auto effectiveBackendClient = std::make_shared<lumacore::DaemonClient>(
+            QStringLiteral("lumacore-app-controller-effective-backend-%1")
+                .arg(QCoreApplication::applicationPid())
+        );
+        auto daemonBackend = std::make_unique<lumacore::DaemonBackend>(effectiveBackendClient);
+        const std::vector<std::unique_ptr<lumacore::RgbDevice>> effectiveBackendDevices =
+            daemonBackend->devicesFromPayload(QJsonObject {
+            {QStringLiteral("backend"), lumacore::backendDescriptorToJson(lumacore::BackendDescriptor {
+                QStringLiteral("auto"),
+                QStringLiteral("Auto Backend"),
+                QStringLiteral("Effective backend fixture"),
+                lumacore::BackendCapability::DiscoveryRead | lumacore::BackendCapability::ZoneColorWrite,
+            })},
+            {QStringLiteral("devices"), QJsonArray {}},
+        });
+        Q_UNUSED(effectiveBackendDevices)
+
+        lumacore::DeviceManager effectiveBackendManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("effective-backend-profiles"))
+        );
+        effectiveBackendManager.registerBackend(std::move(daemonBackend));
+        if (!require(
+                effectiveBackendManager.activateBackend(QStringLiteral("daemon")),
+                "effective backend fixture should activate the daemon proxy backend"
+            )) {
+            return 1;
+        }
+
+        lumacore::AppController effectiveBackendController(
+            &effectiveBackendManager,
+            effectiveBackendClient
+        );
+        const QVariantMap effectiveDiagnostics = effectiveBackendController.diagnosticsReport();
+        const QVariantMap effectiveDiagnosticBackend =
+            effectiveDiagnostics.value(QStringLiteral("backend")).toMap();
+        if (!require(
+                effectiveBackendController.backendId() == QStringLiteral("daemon"),
+                "controller backend ID should expose the GUI daemon proxy"
+            )
+            || !require(
+                effectiveBackendController.backendEffectiveId() == QStringLiteral("auto"),
+                "controller effective backend ID should expose the daemon-selected backend"
+            )
+            || !require(
+                effectiveDiagnosticBackend.value(QStringLiteral("id")).toString() == QStringLiteral("daemon"),
+                "diagnostics should preserve the proxy backend ID"
+            )
+            || !require(
+                effectiveDiagnosticBackend.value(QStringLiteral("effectiveId")).toString() == QStringLiteral("auto"),
+                "diagnostics should include the effective daemon backend ID"
             )) {
             return 1;
         }

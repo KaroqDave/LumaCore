@@ -52,11 +52,17 @@ std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::devicesFromPayload(const 
     return devices;
 }
 
+BackendDescriptor DaemonBackend::effectiveDescriptor() const
+{
+    return m_effectiveDescriptor.id.isEmpty() ? m_descriptor : m_effectiveDescriptor;
+}
+
 void DaemonBackend::updateDescriptor(const QJsonObject& payload) const
 {
     const BackendDescriptor daemonDescriptor =
         backendDescriptorFromJson(payload.value(QStringLiteral("backend")).toObject());
     if (!daemonDescriptor.id.isEmpty()) {
+        m_effectiveDescriptor = daemonDescriptor;
         m_descriptor.displayName = QStringLiteral("Daemon: %1").arg(daemonDescriptor.displayName);
         m_descriptor.description = QStringLiteral("%1 Socket: %2")
                                        .arg(daemonDescriptor.description, m_client->socketPath());

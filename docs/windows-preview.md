@@ -52,6 +52,6 @@ Terminal 2:
 
 ## Diagnostics
 
-Open Settings -> Windows diagnostics to confirm the detected Windows version, Qt runtime, active backend, daemon endpoint, bundled daemon presence, dry-run state, and profile storage path. With a hidapi-enabled build, the backend may show `windows-discovery` devices as read-only inventory. Use Export to save a redacted JSON report, or Copy Summary for a short support summary. The same export is also available from the Active Backend dialog.
+Open Settings -> Windows diagnostics to confirm the detected Windows version, Qt runtime, active backend, daemon endpoint, bundled daemon presence, dry-run state, and profile storage path. The GUI backend is the `daemon` proxy; diagnostics also report the daemon-selected effective backend such as `auto`, `mock`, or `asus-aura-hid`. With a hidapi-enabled build, the backend may show `windows-discovery` devices as read-only inventory. Use Export to save a redacted JSON report, or Copy Summary for a short support summary. The same export is also available from the Active Backend dialog.
 
 If automatic startup fails, restore both executables from the ZIP. Advanced users can run `lumacore-daemon.exe --backend auto` manually, or use `--backend mock` for a simulated-device session, then start `lumacore.exe --no-auto-start-daemon`.

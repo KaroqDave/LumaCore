@@ -131,6 +131,11 @@ add_test(
 lumacore_set_windows_test_runtime_path(daemon_launcher)
 
 if(TARGET lumacore_asus_aura_backend)
+    lumacore_add_test_executable(lumacore_asus_aura_backend_test asus_aura_hid_backend
+        AsusAuraHidBackendTest.cpp
+    )
+    target_link_libraries(lumacore_asus_aura_backend_test PRIVATE lumacore_asus_aura_backend Qt6::Core)
+
     lumacore_add_test_executable(lumacore_asus_aura_protocol_test asus_aura_hid_protocol
         AsusAuraHidProtocolTest.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.cpp
