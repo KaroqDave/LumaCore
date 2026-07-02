@@ -18,11 +18,11 @@ Linux uses a system-style daemon and optional systemd unit. Windows 10/11 x64 us
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
-![LumaCore ASUS hardware write confirmation](assets/screenshots/lumacore-devices-collapsed-confirmation.png)
+![LumaCore collapsed sidebar devices view](assets/screenshots/lumacore-devices-collapsed.png)
 
 ![LumaCore active backend dialog](assets/screenshots/lumacore-backend-dialog.png)
 
-Light and collapsed-sidebar screenshots are also kept in `assets/screenshots/`.
+Additional light-theme and confirmation screenshots are kept in `assets/screenshots/`.
 
 ## Current Capabilities
 
