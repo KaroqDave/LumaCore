@@ -352,7 +352,7 @@ ApplicationWindow {
             Rectangle {
                 visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
-                Layout.preferredHeight: visible ? 44 : 0
+                Layout.preferredHeight: visible ? 58 : 0
                 radius: 8
                 color: Theme.warningBg
                 border.color: Theme.warning
@@ -372,7 +372,7 @@ ApplicationWindow {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Windows Preview: Mock devices only - hardware discovery and RGB writes are not supported.")
+                        text: qsTr("Windows package: dry-run is enabled by default. Hardware writes require validated ASUS Aura HID hardware and confirmation.")
                         color: Theme.primaryText
                         font.pixelSize: 12
                         font.bold: true

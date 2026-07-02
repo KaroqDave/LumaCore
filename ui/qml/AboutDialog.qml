@@ -121,8 +121,8 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: Qt.platform.os === "windows"
-                  ? qsTr("Windows Preview built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This preview runs the existing daemon architecture with read-only HID discovery when available, mock fallback, and no physical RGB writes.")
-                  : qsTr("Linux-first RGB control built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This release keeps the GUI unprivileged, routes backend access through the LumaCore daemon, and exposes controller-aware effects for mock, discovery, and ASUS Aura HID devices.")
+                  ? qsTr("Cross-platform RGB control built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This Windows build runs the same daemon architecture with read-only HID discovery, mock fallback, and guarded ASUS Aura HID writes for validated controllers.")
+                  : qsTr("Cross-platform RGB control built with C++23 and Qt 6, licensed under GPL-2.0-or-later. This release keeps the GUI unprivileged, routes backend access through the LumaCore daemon, and exposes controller-aware effects for mock, discovery, and ASUS Aura HID devices.")
             color: Theme.primaryText
             font.pixelSize: 13
             wrapMode: Text.WordWrap
@@ -141,7 +141,7 @@ Dialog {
 
                 anchors.centerIn: parent
                 text: Qt.platform.os === "windows"
-                      ? qsTr("Daemon-backed - read-only HID inventory")
+                      ? qsTr("Daemon-backed - dry-run-first hardware writes")
                       : qsTr("Daemon-backed - session-confirmed ASUS writes")
                 color: Theme.pillText
                 font.pixelSize: 12
@@ -152,7 +152,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: Qt.platform.os === "windows"
-                  ? qsTr("The Windows Preview is isolated from physical RGB hardware. Effects and profiles operate only on the simulated device.")
+                  ? qsTr("Windows hardware writes require a validated ASUS Aura HID controller, config-table verification, dry-run disabled, and per-session confirmation. Use the mock backend for routine testing.")
                   : qsTr("ASUS Aura HID support uses allowlisted, config-verified packets for static colors and native hardware modes. Unsupported controller parameters are disabled in the effect editor.")
             color: Theme.secondaryText
             font.pixelSize: 12

@@ -14,7 +14,7 @@ BackendDescriptor MockBackend::descriptor() const
         QStringLiteral("mock"),
         QStringLiteral("Mock Backend"),
 #ifdef Q_OS_WIN
-        QStringLiteral("Windows Preview demo backend. Simulated devices only; no hardware discovery or RGB writes are performed."),
+        QStringLiteral("Simulated Windows-safe backend. No hardware discovery or RGB writes are performed."),
 #else
         QStringLiteral("In-memory ASUS motherboard simulation with no hardware access."),
 #endif

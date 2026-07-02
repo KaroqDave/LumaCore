@@ -27,12 +27,35 @@ ctest --preset linux-sanitizer
 ## Linux install staging
 
 ```sh
-DESTDIR="$PWD/dist/linux-stage" cmake --install build --prefix /usr
+cmake -S . -B build-linux-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-linux-release
+ctest --test-dir build-linux-release --output-on-failure
+cmake --build build-linux-release --target all_qmllint
+rm -rf dist/linux-stage dist/LumaCore-Linux-x64 dist/LumaCore-Linux-x64.tar.gz
+DESTDIR="$PWD/dist/linux-stage" cmake --install build-linux-release --prefix /usr
 ```
 
 Confirm the staged tree contains `lumacore`, `lumacore-daemon`, the desktop entry, hicolor icons, and the configured systemd unit. Do not enable or start the service as part of verification.
 
-## Windows preview
+Create the Linux release archive from the staged tree:
+
+```sh
+mkdir -p dist/LumaCore-Linux-x64
+cp -a dist/linux-stage/usr dist/LumaCore-Linux-x64/
+cp LICENSE dist/LumaCore-Linux-x64/
+cp docs/linux-package.md dist/LumaCore-Linux-x64/README-Linux.md
+tar -C dist -czf dist/LumaCore-Linux-x64.tar.gz LumaCore-Linux-x64
+sha256sum dist/LumaCore-Linux-x64.tar.gz
+```
+
+Verify the packaged binaries report the release version:
+
+```sh
+./dist/LumaCore-Linux-x64/usr/bin/lumacore --version
+./dist/LumaCore-Linux-x64/usr/bin/lumacore-daemon --version
+```
+
+## Windows package
 
 From a Windows shell with `CMakeUserPresets.json` configured for the local Qt and MinGW install:
 
@@ -44,3 +67,14 @@ ctest --preset windows-local-release
 ```
 
 Extract the ZIP, start `lumacore.exe`, and confirm the bundled daemon starts with the `auto` backend. In Settings -> Windows diagnostics, confirm the bundled daemon is present, the daemon endpoint is populated, dry-run is enabled on fresh settings, Export creates a JSON diagnostics report, and Copy Summary updates the status message. Confirm CMake reported a hidapi provider, either system or bundled. If HID devices are reported, confirm non-ASUS devices appear as read-only `windows-discovery` inventory. For an owned validated `0B05:19AF` ASUS Aura controller, first verify dry-run previews and confirmation prompts; only then disable dry-run and confirm one controlled static color write. If no devices are reported, confirm mock fallback still loads. Windows services, signing, and installer checks belong to later phases.
+
+## GitHub release assets
+
+Attach both release archives to the tag:
+
+```sh
+gh release upload vX.Y.Z dist/LumaCore-Windows-x64.zip dist/LumaCore-Linux-x64.tar.gz
+gh release view vX.Y.Z --json assets
+```
+
+The release notes should name both downloads, mention that the Linux archive is a staged install tree, and include the Windows and Linux verification summary.
