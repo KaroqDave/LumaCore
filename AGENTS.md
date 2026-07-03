@@ -52,3 +52,16 @@ Tests are standalone C++ executables in `tests/CMakeLists.txt`. Name files `<Sub
 Recent commits use short release or imperative summaries such as `Release v0.9.0 daily-driver controls`, `Harden ASUS Aura HID write validation`, and `Fix CI: ...`. Keep each commit scoped.
 
 Pull requests should explain behavior and safety impact, link issues, report build/test/QML-lint results, and include screenshots for UI changes. Preserve the GUI/daemon trust boundary and dry-run, allowlist, config-verification, and per-device confirmation gates. Treat protocol fields, profile formats and paths, IDs, AppController/QML invokables, backend ordering, ASUS packet bytes, Windows discovery behavior, and Windows package behavior as compatibility-sensitive; consult `docs/architecture.md`, `docs/daemon/protocol.md`, `docs/refactor-parity.md`, `docs/release-verification.md`, `docs/hardware/asus-aura-hid.md`, and `docs/windows-preview.md`.
+
+## Cursor Cloud specific instructions
+
+The build/test/lint commands are the standard ones documented under "Build, Test, and Development Commands" above (`cmake --preset linux-debug`, `cmake --build --preset linux-debug`, `ctest --preset linux-debug`, `cmake --build build --target all_qmllint`). Notes below are the non-obvious caveats for this cloud VM.
+
+- Qt: Ubuntu 24.04 apt only ships Qt 6.4.2, which is below the required 6.5+. The VM has Qt 6.7.3 installed at `/opt/Qt/6.7.3/gcc_64` (via `aqt`). The Qt env (`QT_ROOT_DIR`, `PATH`, `LD_LIBRARY_PATH`, `CMAKE_PREFIX_PATH`) is exported in `~/.bashrc`, so a normal login shell already finds `cmake`/`qmllint`/Qt libs. If you run in a non-login shell, source it or configure with `-DCMAKE_PREFIX_PATH=/opt/Qt/6.7.3/gcc_64/lib/cmake`.
+- Default compiler: `/usr/bin/c++` was pointed at `clang++` (which cannot find `libstdc++`); it has been switched via `update-alternatives` to `g++`. Builds use GCC 13. Do not repoint `c++` back to clang.
+- Binary locations differ from the AGENTS.md example paths: the GUI is `./build/lumacore` but the daemon is `./build/daemon/lumacore-daemon` (not `./build/lumacore-daemon`).
+- Running the app: start the daemon first with the mock backend, then the GUI, both on the same socket. A display is available at `DISPLAY=:1`. Example:
+  - `./build/daemon/lumacore-daemon --allow-unprivileged --backend mock --socket /tmp/lumacore.sock`
+  - `DISPLAY=:1 ./build/lumacore --socket /tmp/lumacore.sock`
+- On Linux the GUI does not auto-start the daemon (`autoStartDaemon` defaults to false), so the daemon must already be running before/alongside the GUI. Use the `mock` backend for all routine dev; never arm real hardware writes.
+- The GUI prints benign QML warnings on startup (binding-loop / "Unable to assign [undefined] to bool" in `ProfileManager.qml`, and a pipeline-cache-file message); these are pre-existing and not fatal.
