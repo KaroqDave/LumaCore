@@ -138,6 +138,16 @@ add_test(
 )
 lumacore_set_windows_test_runtime_path(daemon_launcher)
 
+qt_add_executable(lumacore_daemon_end_to_end_test DaemonEndToEndTest.cpp)
+target_include_directories(lumacore_daemon_end_to_end_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(lumacore_daemon_end_to_end_test PRIVATE lumacore_core lumacore_ipc Qt6::Core)
+add_dependencies(lumacore_daemon_end_to_end_test lumacore-daemon)
+add_test(
+    NAME daemon_end_to_end
+    COMMAND lumacore_daemon_end_to_end_test $<TARGET_FILE:lumacore-daemon>
+)
+lumacore_set_windows_test_runtime_path(daemon_end_to_end)
+
 if(TARGET lumacore_asus_aura_backend)
     lumacore_add_test_executable(lumacore_asus_aura_backend_test asus_aura_hid_backend
         AsusAuraHidBackendTest.cpp

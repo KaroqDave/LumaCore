@@ -278,8 +278,11 @@ ctest --preset linux-sanitizer
 
 Current tests cover write confirmation and gating, profile persistence, profile apply/preview
 reports, daemon frame limits and snapshots, auto-backend deduplication, option parsing, schedule
-settings, application controllers, daemon launch behavior, and, when the ASUS backend is built,
-the ASUS Aura HID configuration parser and protocol serializer.
+settings, application controllers, daemon launch behavior, a full-stack end-to-end flow that
+launches the real daemon with the mock backend and drives handshake, inventory, dry-run
+effect/frame writes, the dry-run synchronization guard, All Off, and idle shutdown over the local
+socket, and, when the ASUS backend is built, the ASUS Aura HID configuration parser and protocol
+serializer.
 
 ## Project Layout
 
@@ -330,7 +333,7 @@ rather than a wire field (see `docs/hardware/asus-aura-hid.md`).
 
 ## Current Gaps
 
-- Automated coverage is still focused; broader mock-backend and end-to-end UI integration work remains beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
+- Automated coverage is still focused; a full-stack daemon end-to-end test now exercises the mock-backed socket flow, but broader mock-backend cases and QML/UI integration coverage remain beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
 - Startup and scheduled profile application still use the synchronous compatibility path; direct interactive device operations and GUI profile loads are asynchronous.
 - Profile scheduling currently runs inside the GUI session; daemon/systemd background scheduling is not implemented.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation follows the hardware contribution workflow.
