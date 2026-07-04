@@ -88,6 +88,12 @@ lumacore_add_test_executable(lumacore_daemon_server_failure_path_test daemon_ser
 target_include_directories(lumacore_daemon_server_failure_path_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_daemon_server_failure_path_test PRIVATE lumacore_core lumacore_ipc Qt6::Core)
 
+lumacore_add_test_executable(lumacore_daemon_write_dispatch_test daemon_write_dispatch
+    DaemonWriteDispatchTest.cpp
+)
+target_include_directories(lumacore_daemon_write_dispatch_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(lumacore_daemon_write_dispatch_test PRIVATE lumacore_core lumacore_ipc Qt6::Core)
+
 lumacore_add_test_executable(lumacore_option_parsing_test option_parsing
     OptionParsingTest.cpp
     ${PROJECT_SOURCE_DIR}/app/GuiOptions.cpp
