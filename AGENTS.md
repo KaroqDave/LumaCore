@@ -49,6 +49,17 @@ Tests are standalone C++ executables in `tests/CMakeLists.txt`. Name files `<Sub
 
 ## Commits, Pull Requests, and Safety
 
-Recent commits use short release or imperative summaries such as `Release v0.9.0 daily-driver controls`, `Harden ASUS Aura HID write validation`, and `Fix CI: ...`. Keep each commit scoped.
+Use Conventional Commit prefixes — `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:` — with a concise, lowercase, scoped subject that names the command, backend, or protocol area affected (e.g. `feat: add host effect-frame streaming to the daemon protocol`, `fix: preserve chunked frame codec ordering`). Keep each commit scoped to one change.
+
+Write a body that explains the *why* and the *what*, not a restated diff: the problem being solved, the reasoning, and any hardware/protocol findings or assumptions. Prose paragraphs or a `Changelog:` bullet list both work. Close every non-trivial commit with a verification section listing the exact commands run and their results, for example:
+
+```
+Verification:
+- ctest --preset linux-debug (all passing)
+- cmake --build build --target all_qmllint
+- ./build/lumacore-daemon --allow-unprivileged --backend mock ... smoke run
+```
+
+Release commits may keep a `Release vX.Y.Z <summary>` subject.
 
 Pull requests should explain behavior and safety impact, link issues, report build/test/QML-lint results, and include screenshots for UI changes. Preserve the GUI/daemon trust boundary and dry-run, allowlist, config-verification, and per-device confirmation gates. Treat protocol fields, profile formats and paths, IDs, AppController/QML invokables, backend ordering, ASUS packet bytes, Windows discovery behavior, and Windows package behavior as compatibility-sensitive; consult `docs/architecture.md`, `docs/daemon/protocol.md`, `docs/refactor-parity.md`, `docs/release-verification.md`, `docs/hardware/asus-aura-hid.md`, and `docs/windows-preview.md`.
