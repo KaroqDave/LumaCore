@@ -109,6 +109,11 @@ lumacore_add_test_executable(lumacore_device_tree_model_test device_tree_model
 )
 target_link_libraries(lumacore_device_tree_model_test PRIVATE lumacore_ui lumacore_core Qt6::Core)
 
+lumacore_add_test_executable(lumacore_global_operation_report_test global_operation_report
+    GlobalOperationReportTest.cpp
+)
+target_link_libraries(lumacore_global_operation_report_test PRIVATE lumacore_ui lumacore_core Qt6::Core)
+
 qt_add_executable(lumacore_daemon_launch_exit_fixture DaemonLaunchFixture.cpp)
 target_link_libraries(lumacore_daemon_launch_exit_fixture PRIVATE Qt6::Core)
 
