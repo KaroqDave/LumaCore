@@ -1,0 +1,21 @@
+# Normalize all text files to LF in the repository and on checkout so the
+# working tree stays consistent across Windows, Linux, and WSL.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF endings.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.tar binary
+*.gz binary
+*.tgz binary

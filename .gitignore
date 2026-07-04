@@ -73,6 +73,7 @@ install-check/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+!.vscode/tasks.json
 *.code-workspace
 *.suo
 *.user

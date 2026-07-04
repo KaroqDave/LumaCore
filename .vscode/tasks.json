@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CMake: Configure",
+      "detail": "Configure the active CMake preset.",
+      "type": "shell",
+      "command": "cmake",
+      "args": ["--preset", "${command:cmake.activeConfigurePresetName}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Build",
+      "detail": "Build the active CMake preset.",
+      "type": "shell",
+      "command": "cmake",
+      "args": ["--build", "--preset", "${command:cmake.activeBuildPresetName}"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Test",
+      "detail": "Run CTest for the active preset with failure output.",
+      "type": "shell",
+      "command": "ctest",
+      "args": ["--preset", "${command:cmake.activeTestPresetName}"],
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "QML Lint",
+      "detail": "Run the all_qmllint target for the active build preset.",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "${command:cmake.activeBuildPresetName}",
+        "--target",
+        "all_qmllint"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

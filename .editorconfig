@@ -1,0 +1,23 @@
+# EditorConfig helps keep a consistent coding style across editors and IDEs.
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Data and markup files conventionally use two-space indentation.
+[*.{json,yml,yaml}]
+indent_size = 2
+
+# Windows scripts are kept as CRLF (see .gitattributes).
+[*.{bat,ps1}]
+end_of_line = crlf
+
+# Preserve hard line breaks (two trailing spaces) in Markdown.
+[*.md]
+trim_trailing_whitespace = false

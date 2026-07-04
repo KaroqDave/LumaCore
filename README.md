@@ -180,7 +180,11 @@ For a native Windows source build, use the Windows local preset described below.
 
 ## VS Code Development
 
-The repository includes CMake presets, clangd configuration, QML language-server configuration, and recommended VS Code extensions. The Linux/WSL presets write `build/compile_commands.json`, which clangd uses for the real Qt include paths, compiler flags, and generated headers. (The native Windows preset configures into `build-windows/`, leaving the Linux/WSL tree in `build/` intact for editor tooling.)
+The repository includes CMake presets, clangd configuration, an `.editorconfig`, QML language-server configuration, `.vscode` tasks, and recommended VS Code extensions. Every preset exports `compile_commands.json` into its build directory, giving clangd the real Qt include paths, compiler flags, and generated headers.
+
+The committed `.clangd` points clangd at `build-windows/`, so a configured native Windows build drives editor tooling out of the box. Open the folder, select the `windows-local` configure preset, and configure once so `build-windows/compile_commands.json` exists. When editing the Linux discovery providers from a WSL VS Code window instead, point clangd at the Linux tree by adding a local `--compile-commands-dir=build` argument (VS Code: set `clangd.arguments` in a WSL-scoped settings entry, or start clangd with that flag) after configuring the `linux-debug` preset.
+
+The recommended extensions handle the rest: `llvm-vs-code-extensions.vscode-clangd` for C++ IntelliSense (the Microsoft C/C++ IntelliSense engine is intentionally disabled to avoid conflicts), `ms-vscode.cmake-tools` for preset-driven configure/build/test/debug, and `TheQtCompany.qt` for the QML language server. The bundled `.vscode/tasks.json` exposes **Build** (`Ctrl+Shift+B`), **Test**, **CMake: Configure**, and **QML Lint** tasks that follow whichever CMake preset is currently selected.
 
 On Linux or in WSL, install the dependencies listed above, open the repository in the WSL VS Code window, and select the `linux-debug` configure preset:
 
