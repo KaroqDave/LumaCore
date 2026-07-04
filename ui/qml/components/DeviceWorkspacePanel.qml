@@ -475,7 +475,7 @@ Item {
                 Layout.fillHeight: true
                 Layout.minimumHeight: 92
                 Layout.preferredHeight: panel.wideLayout ? 118 : 132
-                radius: 8
+                radius: Theme.radiusSmall
                 color: Theme.sunken
                 border.color: Theme.border
                 border.width: 1
@@ -569,7 +569,7 @@ Item {
         implicitHeight: 21
         Layout.preferredWidth: implicitWidth
         Layout.preferredHeight: implicitHeight
-        radius: 8
+        radius: Theme.radiusSmall
         color: Qt.rgba(colorValue.r, colorValue.g, colorValue.b, Theme.dark ? 0.16 : 0.11)
         border.color: colorValue
         border.width: 1

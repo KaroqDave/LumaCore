@@ -23,11 +23,10 @@ Rectangle {
     visible: controller && !ready
     Layout.fillWidth: true
     implicitHeight: visible ? content.implicitHeight + (compact ? 18 : 24) : 0
-    radius: 8
+    radius: Theme.radiusLarge
     color: statusBackground
-    border.color: statusColor
+    border.color: Qt.alpha(statusColor, 0.45)
     border.width: 1
-    opacity: 0.98
 
     Behavior on color {
         ColorAnimation {

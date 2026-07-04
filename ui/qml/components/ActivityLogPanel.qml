@@ -52,7 +52,7 @@ Item {
 
             background: Rectangle {
                 color: Theme.sunken
-                radius: 8
+                radius: Theme.radiusSmall
                 border.color: Theme.border
             }
 

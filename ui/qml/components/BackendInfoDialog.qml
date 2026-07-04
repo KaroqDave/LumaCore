@@ -69,7 +69,7 @@ Dialog {
 
     background: Rectangle {
         color: Theme.surface
-        radius: 8
+        radius: Theme.radiusLarge
         border.color: Theme.border
         border.width: 1
     }
@@ -195,9 +195,9 @@ Dialog {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: setupStatusColumn.implicitHeight + 20
-            radius: 8
+            radius: Theme.radiusSmall
             color: dialog.setupStatusBackground
-            border.color: dialog.setupStatusColor
+            border.color: Qt.alpha(dialog.setupStatusColor, 0.45)
             border.width: 1
 
             ColumnLayout {
@@ -379,7 +379,7 @@ Dialog {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: noteLabel.implicitHeight + 16
-            radius: 8
+            radius: Theme.radiusSmall
             color: Theme.sunken
             border.color: Theme.border
 

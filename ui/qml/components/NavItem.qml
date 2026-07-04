@@ -25,12 +25,10 @@ Item {
         id: background
 
         anchors.fill: parent
-        radius: 8
+        radius: Theme.radiusSmall
         color: navItem.selected
                ? Theme.accentSoft
                : (hoverArea.containsMouse ? Theme.hover : "transparent")
-        border.color: navItem.selected ? Theme.accentSoftBorder : "transparent"
-        border.width: 1
         antialiasing: true
 
         Behavior on color {
@@ -90,7 +88,7 @@ Item {
             Rectangle {
                 Layout.alignment: Qt.AlignVCenter
                 visible: !navItem.collapsed && navItem.badgeText.length > 0
-                radius: 8
+                radius: Theme.radiusSmall
                 color: navItem.selected ? Theme.surface : Theme.accent
                 implicitWidth: Math.max(22, badgeLabel.implicitWidth + 12)
                 implicitHeight: 22
@@ -136,7 +134,7 @@ Item {
 
         background: Rectangle {
             color: Theme.elevated
-            radius: 10
+            radius: Theme.radiusMedium
             border.color: Theme.border
             border.width: 1
         }

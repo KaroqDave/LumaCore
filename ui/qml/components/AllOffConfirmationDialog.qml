@@ -31,7 +31,7 @@ Dialog {
 
     background: Rectangle {
         color: Theme.surface
-        radius: 8
+        radius: Theme.radiusLarge
         border.color: Theme.border
         border.width: 1
     }

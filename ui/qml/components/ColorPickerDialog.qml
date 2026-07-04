@@ -123,7 +123,7 @@ Dialog {
 
     background: Rectangle {
         color: Theme.surface
-        radius: 8
+        radius: Theme.radiusLarge
         border.color: Theme.border
         border.width: 1
     }
@@ -153,7 +153,7 @@ Dialog {
                 id: svField
 
                 anchors.fill: parent
-                radius: 12
+                radius: Theme.radiusMedium
                 color: dialog.colorFromHsv(dialog.hue, 1, 1)
                 border.color: Theme.border
                 border.width: 1
@@ -306,7 +306,7 @@ Dialog {
             Rectangle {
                 Layout.preferredWidth: 28
                 Layout.preferredHeight: 28
-                radius: 8
+                radius: Theme.radiusSmall
                 color: dialog.draftColor
                 border.color: Theme.border
                 border.width: 1

@@ -342,7 +342,7 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(groupDeviceList.implicitHeight + 20, 260)
-                radius: 10
+                radius: Theme.radiusMedium
                 color: Theme.inputBg
                 border.color: Theme.border
 
@@ -483,7 +483,7 @@ Item {
                 Layout.preferredWidth: 172
                 Layout.fillWidth: !controls.roomyHeader
                 Layout.preferredHeight: 34
-                radius: 8
+                radius: Theme.radiusSmall
                 color: controls.selectedZoneMode ? Theme.accentSoft : Theme.sunken
                 border.color: controls.selectedZoneMode ? Theme.accentSoftBorder : Theme.border
                 border.width: 1
@@ -596,7 +596,7 @@ Item {
 
             Layout.fillWidth: true
             Layout.preferredHeight: 56
-            radius: 8
+            radius: Theme.radiusSmall
             border.color: previewMouse.containsMouse && controls.colorEditable ? Theme.accentSoftBorder : Theme.border
             border.width: 1
             clip: true
@@ -839,9 +839,9 @@ Item {
                      && controls.appController
                      && !controls.appController.dryRunEnabled
             Layout.preferredHeight: visible ? confirmationColumn.implicitHeight + 20 : 0
-            radius: 8
+            radius: Theme.radiusSmall
             color: controls.selectedDeviceWriteConfirmed ? Theme.inputBg : Theme.warningBg
-            border.color: controls.selectedDeviceWriteConfirmed ? Theme.accentSoftBorder : Theme.warning
+            border.color: controls.selectedDeviceWriteConfirmed ? Theme.accentSoftBorder : Qt.alpha(Theme.warning, 0.45)
             border.width: 1
 
             ColumnLayout {
