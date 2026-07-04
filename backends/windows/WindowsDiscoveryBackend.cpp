@@ -65,11 +65,6 @@ QVector<hardware::windows::ProbeDevice> windowsDiscoveryInventoryDevices(
     return devices;
 }
 
-std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::createDevices() const
-{
-    return discoverDevices();
-}
-
 std::vector<std::unique_ptr<RgbDevice>> WindowsDiscoveryBackend::discoverDevices() const
 {
     std::vector<std::unique_ptr<RgbDevice>> devices;

@@ -50,11 +50,6 @@ BackendDescriptor LinuxDiscoveryBackend::descriptor() const
     };
 }
 
-std::vector<std::unique_ptr<RgbDevice>> LinuxDiscoveryBackend::createDevices() const
-{
-    return discoverDevices();
-}
-
 std::vector<std::unique_ptr<RgbDevice>> LinuxDiscoveryBackend::discoverDevices() const
 {
     std::vector<std::unique_ptr<RgbDevice>> devices;

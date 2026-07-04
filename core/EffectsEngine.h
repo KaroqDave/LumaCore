@@ -25,6 +25,7 @@ public:
 
     void startZone(int deviceIndex, int zoneIndex);
     void stopZone(int deviceIndex, int zoneIndex);
+    void stopDevice(int deviceIndex);
     void stopAll();
 
     [[nodiscard]] static double streamedEffectPeriodSeconds(double speed);

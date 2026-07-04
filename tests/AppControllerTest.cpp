@@ -441,6 +441,10 @@ int main(int argc, char* argv[])
                 "read-only setup detail should describe loaded device write verification"
             )
             || !require(
+                readOnlyController.setupStatusDetail().contains(QStringLiteral("Read-only test device does not expose")),
+                "read-only setup detail should include the first blocked write reason"
+            )
+            || !require(
                 !readOnlyController.setupStatusDetail().contains(QStringLiteral("active backend")),
                 "read-only setup detail should not blame the active backend descriptor"
             )

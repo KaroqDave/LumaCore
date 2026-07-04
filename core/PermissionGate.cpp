@@ -99,6 +99,16 @@ PermissionResult PermissionGate::checkAnyWrite(const RgbDevice& device)
     };
 }
 
+bool PermissionGate::allowsWriteOrConfirmation(const PermissionResult& permission)
+{
+    return permission.isGranted() || permission.status == PermissionStatus::RequiresConfirmation;
+}
+
+bool PermissionGate::writeAllowedOrConfirmable(const RgbDevice& device)
+{
+    return allowsWriteOrConfirmation(checkAnyWrite(device));
+}
+
 bool PermissionGate::writeRequiresConfirmation(const RgbDevice& device)
 {
     for (const BackendCapability capability : kWriteCapabilities) {
@@ -110,6 +120,20 @@ bool PermissionGate::writeRequiresConfirmation(const RgbDevice& device)
         }
     }
     return false;
+}
+
+PermissionResult PermissionGate::withSessionConfirmation(
+    const PermissionResult& permission,
+    bool writeConfirmed
+)
+{
+    if (writeConfirmed && permission.status == PermissionStatus::RequiresConfirmation) {
+        return {
+            PermissionStatus::Granted,
+            QStringLiteral("Hardware writes are confirmed for this daemon session."),
+        };
+    }
+    return permission;
 }
 
 } // namespace lumacore

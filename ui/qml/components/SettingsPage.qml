@@ -500,6 +500,32 @@ Item {
                 }
 
                 Label {
+                    text: qsTr("Dry-run")
+                    color: Theme.secondaryText
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+
+                Label {
+                    readonly property bool dryRunMismatch: page.appController
+                        && page.appController.daemonDryRunMismatch
+
+                    Layout.fillWidth: true
+                    text: page.appController
+                          ? (page.appController.daemonDryRunKnown
+                             ? qsTr("GUI %1, daemon %2")
+                                   .arg(page.appController.dryRunEnabled ? qsTr("enabled") : qsTr("disabled"))
+                                   .arg(page.appController.daemonDryRunEnabled ? qsTr("enabled") : qsTr("disabled"))
+                             : qsTr("GUI %1, daemon unknown")
+                                   .arg(page.appController.dryRunEnabled ? qsTr("enabled") : qsTr("disabled")))
+                          : qsTr("Unavailable")
+                    color: dryRunMismatch ? Theme.warning : Theme.primaryText
+                    font.pixelSize: 12
+                    font.bold: dryRunMismatch
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
                     text: qsTr("Bundled daemon")
                     color: Theme.secondaryText
                     font.pixelSize: 11

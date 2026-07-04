@@ -34,6 +34,26 @@ Dialog {
            ? qsTr("%1 -> %2").arg(controller.backendId).arg(controller.backendEffectiveId)
            : controller.backendId)
         : ""
+    readonly property bool daemonDryRunMismatch: controller && controller.daemonDryRunMismatch
+    readonly property string dryRunModeText: {
+        if (!controller) {
+            return qsTr("Unknown")
+        }
+        const guiText = controller.dryRunEnabled ? qsTr("GUI enabled") : qsTr("GUI disabled")
+        if (controller.daemonSocketPath.length === 0) {
+            return controller.dryRunEnabled ? qsTr("Enabled") : qsTr("Disabled")
+        }
+        if (!controller.daemonDryRunKnown) {
+            return qsTr("%1 / Daemon unknown").arg(guiText)
+        }
+        const daemonText = controller.daemonDryRunEnabled ? qsTr("Daemon enabled") : qsTr("Daemon disabled")
+        return controller.daemonDryRunEnabled === controller.dryRunEnabled
+            ? (controller.dryRunEnabled ? qsTr("Enabled") : qsTr("Disabled"))
+            : qsTr("%1 / %2").arg(guiText).arg(daemonText)
+    }
+    readonly property color dryRunModeColor: daemonDryRunMismatch
+        ? Theme.warning
+        : (controller && controller.dryRunEnabled ? Theme.warning : Theme.success)
 
     standardButtons: Dialog.NoButton
 
@@ -298,12 +318,11 @@ Dialog {
 
                 Label {
                     Layout.fillWidth: true
-                    text: dialog.controller && dialog.controller.dryRunEnabled
-                          ? qsTr("Enabled")
-                          : qsTr("Disabled")
-                    color: dialog.controller && dialog.controller.dryRunEnabled ? Theme.warning : Theme.success
-                    font.pixelSize: 18
+                    text: dialog.dryRunModeText
+                    color: dialog.dryRunModeColor
+                    font.pixelSize: dialog.daemonDryRunMismatch ? 14 : 18
                     font.bold: true
+                    wrapMode: Text.WordWrap
                 }
             }
         }

@@ -38,6 +38,9 @@ class AppController final : public QObject
     Q_PROPERTY(QString daemonVersion READ daemonVersion NOTIFY daemonInfoChanged)
     Q_PROPERTY(QString daemonLastError READ daemonLastError NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonRecoveryBusy READ daemonRecoveryBusy NOTIFY daemonInfoChanged)
+    Q_PROPERTY(bool daemonDryRunKnown READ daemonDryRunKnown NOTIFY daemonInfoChanged)
+    Q_PROPERTY(bool daemonDryRunEnabled READ daemonDryRunEnabled NOTIFY daemonInfoChanged)
+    Q_PROPERTY(bool daemonDryRunMismatch READ daemonDryRunMismatch NOTIFY daemonDryRunSyncChanged)
     Q_PROPERTY(bool dryRunEnabled READ dryRunEnabled WRITE setDryRunEnabled NOTIFY dryRunEnabledChanged)
     Q_PROPERTY(int pendingDaemonOperations READ pendingDaemonOperations NOTIFY pendingDaemonOperationsChanged)
     Q_PROPERTY(bool profileApplyInProgress READ profileApplyInProgress NOTIFY profileApplyInProgressChanged)
@@ -70,6 +73,9 @@ public:
     [[nodiscard]] QString daemonVersion() const;
     [[nodiscard]] QString daemonLastError() const;
     [[nodiscard]] bool daemonRecoveryBusy() const;
+    [[nodiscard]] bool daemonDryRunKnown() const;
+    [[nodiscard]] bool daemonDryRunEnabled() const;
+    [[nodiscard]] bool daemonDryRunMismatch() const;
     [[nodiscard]] bool dryRunEnabled() const;
     [[nodiscard]] int pendingDaemonOperations() const;
     [[nodiscard]] bool profileApplyInProgress() const;
@@ -153,6 +159,7 @@ signals:
     void backendInfoChanged();
     void setupStatusChanged();
     void daemonInfoChanged();
+    void daemonDryRunSyncChanged();
     void writeConfirmationChanged(int deviceIndex);
     void dryRunEnabledChanged();
     void deviceGroupsChanged();
@@ -163,6 +170,15 @@ signals:
     void profileApplyFinished(QVariantMap result);
 
 private:
+    struct CachedSetupStatus {
+        bool valid {false};
+        QString level;
+        QString summary;
+        QString detail;
+        QString action;
+    };
+
+    [[nodiscard]] const CachedSetupStatus& cachedSetupStatus() const;
     [[nodiscard]] RgbDevice* deviceAt(int deviceIndex);
     [[nodiscard]] const RgbDevice* deviceAt(int deviceIndex) const;
     [[nodiscard]] const RgbZone* zoneAt(int deviceIndex, int zoneIndex) const;
@@ -174,6 +190,11 @@ private:
     void syncDaemonDryRun();
     void beginDaemonOperation();
     void endDaemonOperation();
+    // Starts host frame streaming for an applied animated effect that the device
+    // renders on the host, or stops any streaming for that zone otherwise. Shared
+    // by the single-zone, global, and profile apply paths so all three animate
+    // consistently.
+    void syncZoneFrameStreaming(int deviceIndex, int zoneIndex, const RgbEffect& effect);
     bool applyGlobalEffectInternal(
         int effectType,
         const QColor& color,
@@ -194,10 +215,12 @@ private:
     QStringList m_logLines;
     int m_pendingDaemonOperations {0};
     bool m_daemonRecoveryEnabled {false};
+    bool m_daemonDevicesLoaded {false};
     bool m_daemonRefreshInProgress {false};
     bool m_profileApplyInProgress {false};
     bool m_daemonDryRunSyncInProgress {false};
     bool m_pendingDaemonDryRunSync {false};
+    mutable CachedSetupStatus m_setupStatus;
 };
 
 } // namespace lumacore

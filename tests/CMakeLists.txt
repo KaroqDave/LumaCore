@@ -52,6 +52,9 @@ lumacore_add_test_executable(lumacore_probe_result_test probe_result
     ${PROJECT_SOURCE_DIR}/backends/windows/WindowsDiscoveredDevice.h
     ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.cpp
     ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.h
+    ${PROJECT_SOURCE_DIR}/hardware/common/ProbeResultCommon.cpp
+    ${PROJECT_SOURCE_DIR}/hardware/common/ProbeResultCommon.h
+    ${PROJECT_SOURCE_DIR}/hardware/common/ProbeTypes.h
     ${PROJECT_SOURCE_DIR}/hardware/windows/HidapiProbe.cpp
     ${PROJECT_SOURCE_DIR}/hardware/windows/HidapiProbe.h
     ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.cpp
@@ -100,6 +103,11 @@ lumacore_add_test_executable(lumacore_app_controller_test app_controller
     AppControllerTest.cpp
 )
 target_link_libraries(lumacore_app_controller_test PRIVATE lumacore_ui Qt6::Core)
+
+lumacore_add_test_executable(lumacore_device_tree_model_test device_tree_model
+    DeviceTreeModelTest.cpp
+)
+target_link_libraries(lumacore_device_tree_model_test PRIVATE lumacore_ui lumacore_core Qt6::Core)
 
 qt_add_executable(lumacore_daemon_launch_exit_fixture DaemonLaunchFixture.cpp)
 target_link_libraries(lumacore_daemon_launch_exit_fixture PRIVATE Qt6::Core)

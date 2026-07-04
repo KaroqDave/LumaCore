@@ -13,6 +13,7 @@ The client and server share one internal frame codec for newline extraction, exa
 - Linux defaults to `/run/lumacore/lumacore.sock`; Windows uses a versioned, per-user name beginning with `lumacore-daemon-v1-`. Both binaries accept `--socket` to override the endpoint.
 - The daemon default backend is `auto`, which aggregates available hardware backends with read-only platform discovery inventory, then falls back to mock.
 - On Windows builds, the GUI starts the sibling daemon with `--backend auto --exit-on-disconnect` unless `--no-auto-start-daemon` is supplied. The endpoint is restricted to the current Windows user.
+- The daemon accepts one active GUI client at a time. A new connection replaces the previous client socket.
 
 ## Request Shape
 
@@ -33,7 +34,8 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 - `updateZone` updates zone metadata such as name and LED count without hardware-write confirmation.
 - `confirmWrites` and `revokeWrites` manage per-device in-memory write confirmation for the current daemon session.
 - `allOff` runs the backend all-off path through the same confirmation gate.
-- `setDryRun` changes daemon dry-run state.
+- `paintZoneFrame` streams one host-computed LED frame through `DeviceManager::paintZoneFrame` and the active backend. Write requests require the same explicit `dryRunEnabled` guard as `applyEffect` and `allOff`. Animated GUI effects set `clientStreamsFrames` on `applyEffect` so the daemon primes hardware while the GUI streams frames over `paintZoneFrame`.
+- `setDryRun` changes daemon dry-run state and echoes the daemon's effective dry-run state. The GUI tracks both its local setting and the daemon-reported value so diagnostics can expose synchronization problems instead of inferring daemon state from the GUI. Write requests (`applyEffect`, `allOff`, `paintZoneFrame`) always carry the GUI's own dry-run expectation, never the daemon-reported value, so the daemon's synchronization guard can refuse writes when the two states drift apart.
 - `activityLogSnapshot` returns formatted activity log lines for the GUI.
 
 Hardware writes are not exposed as raw packet methods. Backends must build approved packets internally and pass the existing permission/write gates.

@@ -38,6 +38,21 @@ ApplicationWindow {
     readonly property var settings: root.settingsController
     readonly property bool animationsEnabled: settings.animationsEnabled
     readonly property int animationDuration: animationsEnabled ? 180 : 0
+    readonly property bool daemonDryRunMismatch: controller && controller.daemonDryRunMismatch
+    readonly property string dryRunBannerText: {
+        if (!controller) {
+            return qsTr("Windows package: hardware writes require validated ASUS Aura HID hardware and confirmation.")
+        }
+        if (daemonDryRunMismatch) {
+            return qsTr("Daemon dry-run mismatch: GUI dry-run is %1, but the daemon reports dry-run %2. Synchronize before applying hardware changes.")
+                .arg(controller.dryRunEnabled ? qsTr("enabled") : qsTr("disabled"))
+                .arg(controller.daemonDryRunEnabled ? qsTr("enabled") : qsTr("disabled"))
+        }
+        if (controller.dryRunEnabled) {
+            return qsTr("Windows package: dry-run is enabled. Hardware writes are logged until dry-run is disabled, and still require validated ASUS Aura HID hardware and confirmation.")
+        }
+        return qsTr("Windows package: dry-run is disabled. Real hardware writes still require a verified ASUS Aura HID device and per-session confirmation.")
+    }
 
     palette.window: Theme.surface
     palette.windowText: Theme.primaryText
@@ -96,6 +111,28 @@ ApplicationWindow {
         selectedZoneName = controller.zoneName(deviceIndex, zoneIndex)
         selectedZoneFallbackIndex = zoneIndex
         selectedColor = controller.zoneEffectColor(deviceIndex, zoneIndex)
+    }
+
+    function validateSelectionForFilter() {
+        if (!deviceTreeModel || !controller || selectedDeviceIndex < 0) {
+            return
+        }
+        if (deviceTreeModel.isDeviceVisible(selectedDeviceIndex)) {
+            return
+        }
+
+        for (let deviceIndex = 0; deviceIndex < controller.backendDeviceCount; ++deviceIndex) {
+            if (deviceTreeModel.isDeviceVisible(deviceIndex)) {
+                selectDevice(deviceIndex)
+                return
+            }
+        }
+
+        selectedDeviceIndex = -1
+        selectedZoneIndex = -1
+        selectedDeviceId = ""
+        selectedZoneName = ""
+        selectedZoneFallbackIndex = -1
     }
 
     function restoreSelection() {
@@ -350,7 +387,9 @@ ApplicationWindow {
             }
 
             Rectangle {
-                visible: Qt.platform.os === "windows"
+                // The dry-run mismatch hazard is platform-independent; only the
+                // packaging notes are Windows-specific.
+                visible: Qt.platform.os === "windows" || root.daemonDryRunMismatch
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? 58 : 0
                 radius: 8
@@ -372,7 +411,7 @@ ApplicationWindow {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Windows package: dry-run is enabled by default. Hardware writes require validated ASUS Aura HID hardware and confirmation.")
+                        text: root.dryRunBannerText
                         color: Theme.primaryText
                         font.pixelSize: 12
                         font.bold: true
@@ -551,6 +590,14 @@ ApplicationWindow {
 
         function onDaemonDevicesRefreshed() {
             root.restoreSelection()
+        }
+    }
+
+    Connections {
+        target: root.deviceTreeModel
+
+        function onDeviceFilterChanged() {
+            root.validateSelectionForFilter()
         }
     }
 

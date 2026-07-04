@@ -30,6 +30,7 @@ enum class DaemonMethod {
     ConfirmWrites,
     RevokeWrites,
     AllOff,
+    PaintZoneFrame,
     SetDryRun,
     ActivityLogSnapshot,
 };
@@ -55,7 +56,13 @@ enum class DaemonMethod {
 [[nodiscard]] BackendDescriptor backendDescriptorFromJson(const QJsonObject& object);
 [[nodiscard]] QJsonObject zoneToJson(const RgbDevice& device, int zoneIndex);
 [[nodiscard]] QJsonObject permissionResultsToJson(const RgbDevice& device);
-[[nodiscard]] QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed = false);
+[[nodiscard]] QJsonObject deviceToJson(
+    const RgbDevice& device,
+    int index,
+    bool writeConfirmed = false
+);
 [[nodiscard]] RgbEffect effectFromJson(const QJsonObject& object);
+[[nodiscard]] QJsonArray colorsToJson(const QVector<RgbColor>& colors);
+[[nodiscard]] QVector<RgbColor> colorsFromJson(const QJsonArray& values);
 
 } // namespace lumacore

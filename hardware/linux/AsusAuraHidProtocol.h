@@ -19,6 +19,9 @@ inline constexpr quint16 kAsusAuraTerminalProductId = 0x1939;
 inline constexpr int kAsusAuraResearchReportLength = 65;
 inline constexpr int kAsusAuraMaxResearchLeds = 120;
 inline constexpr int kAsusAuraHeaderCount = 3;
+// EC36 fixed-channel writes address LEDs through a 16-bit mask, so at most
+// 16 fixed-channel LEDs are reachable per report.
+inline constexpr int kAsusAuraFixedColorMaskLeds = 16;
 
 enum class AsusAuraHidPacketKind {
     ResearchPreview,
@@ -77,6 +80,8 @@ struct AsusAuraConfigTable {
 [[nodiscard]] QByteArray buildAsusAuraConfigTableRequest();
 [[nodiscard]] AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response);
 [[nodiscard]] bool isAsusAuraConfigTableWriteReady(const AsusAuraConfigTable& config);
+[[nodiscard]] int asusAuraFixedExposedZoneCount(const AsusAuraConfigTable& config);
+[[nodiscard]] int asusAuraExposedZoneCount(const AsusAuraConfigTable& config);
 [[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraStaticColorPreview(
     int zoneIndex,
     const RgbColor& color,

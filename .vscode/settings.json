@@ -6,6 +6,8 @@
     "--query-driver=C:/Qt/Tools/**/bin/g++.exe,/usr/bin/g++,/usr/bin/clang++"
   ],
   "qt-qml.qmlls.additionalImportPaths": [
-    "${workspaceFolder}/build"
+    "${workspaceFolder}/build/qml",
+    "${workspaceFolder}/build-windows/qml",
+    "${workspaceFolder}/build-windows-release/qml"
   ]
 }

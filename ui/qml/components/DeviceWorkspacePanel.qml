@@ -26,6 +26,15 @@ Item {
     // `zoneTick >= 0` stays a genuine "has a valid zone" check rather than an always-true guard.
     readonly property int zoneTick: hasZone ? selectedZoneRevision : -1
     readonly property bool selectedDeviceWritable: zoneTick >= 0 ? appController.deviceWritable(selectedDeviceIndex) : false
+    readonly property bool selectedDeviceRequiresConfirmation: zoneTick >= 0 ? appController.deviceRequiresConfirmation(selectedDeviceIndex) : false
+    readonly property bool selectedDeviceWriteConfirmed: zoneTick >= 0 ? appController.deviceWriteConfirmed(selectedDeviceIndex) : false
+    // A writable device that still needs per-session confirmation is not yet
+    // arming real writes, so it is surfaced distinctly from a granted device.
+    readonly property bool selectedDeviceNeedsConfirmation: appController
+        && !appController.dryRunEnabled
+        && selectedDeviceWritable
+        && selectedDeviceRequiresConfirmation
+        && !selectedDeviceWriteConfirmed
     readonly property int selectedEffectType: zoneTick >= 0 ? appController.zoneEffectType(selectedDeviceIndex, selectedZoneIndex) : 0
     readonly property int selectedBrightness: zoneTick >= 0 ? appController.zoneEffectBrightness(selectedDeviceIndex, selectedZoneIndex) : 100
     readonly property real selectedSpeed: zoneTick >= 0 ? appController.zoneEffectSpeed(selectedDeviceIndex, selectedZoneIndex) : 1.0
@@ -136,9 +145,38 @@ Item {
 
     function allOffPresetLabel() {
         if (selectedZoneMode) {
-            return qsTr("All Off Selected Zone")
+            // In zone mode the action targets the whole selected device
+            // (allOffDevice), so the label must reflect device scope, not zone.
+            return qsTr("All Off Device")
         }
         return groupTargetSelected ? qsTr("All Off Group") : qsTr("All Off All Devices")
+    }
+
+    function allOffSelectedTarget() {
+        if (!appController) {
+            return
+        }
+        if (selectedZoneMode) {
+            appController.allOffDevice(selectedDeviceIndex)
+            return
+        }
+        if (groupTargetSelected) {
+            appController.allOffDeviceGroup(selectedTargetName)
+            return
+        }
+        appController.allOffAllDevices()
+    }
+
+    function allOffSupported() {
+        if (!appController) {
+            return false
+        }
+        if (selectedZoneMode) {
+            // Only enable the write control when the device can actually accept
+            // writes; a read-only device would fail the all-off command.
+            return hasZone && selectedDeviceIndex >= 0 && selectedDeviceWritable
+        }
+        return selectedZoneRevision >= 0
     }
 
     function refreshSelectedZone() {
@@ -278,15 +316,12 @@ Item {
                 spacing: 6
 
                 StatusBadge {
-                    visible: panel.selectedDeviceWritable
-                    text: panel.selectedDeviceWritable ? qsTr("Writable") : qsTr("Read-only")
-                    colorValue: panel.selectedDeviceWritable ? Theme.success : Theme.warning
-                }
-
-                StatusBadge {
-                    visible: !panel.selectedDeviceWritable
-                    text: qsTr("Read-only")
-                    colorValue: Theme.warning
+                    text: panel.selectedDeviceNeedsConfirmation
+                          ? qsTr("Confirm")
+                          : (panel.selectedDeviceWritable ? qsTr("Writable") : qsTr("Read-only"))
+                    colorValue: panel.selectedDeviceWritable && !panel.selectedDeviceNeedsConfirmation
+                          ? Theme.success
+                          : Theme.warning
                 }
 
                 StatusBadge {
@@ -403,9 +438,9 @@ Item {
                     text: panel.allOffPresetLabel()
                     compact: true
                     variant: "secondary"
-                    enabled: panel.presetSupported(0)
+                    enabled: panel.allOffSupported()
                     animationsEnabled: panel.animationsEnabled
-                    onClicked: panel.applyPreset(0, Qt.rgba(0, 0, 0, 1.0), 1.0, 0)
+                    onClicked: panel.allOffSelectedTarget()
                 }
             }
 

@@ -48,6 +48,7 @@ private:
     [[nodiscard]] QJsonObject confirmWrites(const QJsonObject& params);
     [[nodiscard]] QJsonObject revokeWrites(const QJsonObject& params);
     [[nodiscard]] QJsonObject allOff(const QJsonObject& params);
+    [[nodiscard]] QJsonObject paintZoneFrame(const QJsonObject& params);
     [[nodiscard]] QJsonObject setDryRun(const QJsonObject& params);
     [[nodiscard]] QJsonObject activityLogSnapshot() const;
 
@@ -55,6 +56,7 @@ private:
     QLocalServer m_server;
     QString m_socketPath;
     QHash<QLocalSocket*, QByteArray> m_buffers;
+    QLocalSocket* m_activeClient {nullptr};
     std::unique_ptr<QLockFile> m_endpointLock;
     bool m_exitWhenIdle {false};
     bool m_acceptedConnection {false};

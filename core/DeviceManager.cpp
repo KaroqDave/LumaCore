@@ -110,13 +110,15 @@ void DeviceManager::initializeBackends(const QString& backendId)
         }
     }
 
+    if (deviceCount() == 0) {
+        const QString discoverError = backend->lastDiscoverError();
+        if (!discoverError.isEmpty()) {
+            m_activityLog.warning(LogCategory::Backend, discoverError);
+        }
+    }
+
     emit devicesChanged();
     m_activityLog.info(LogCategory::Device, QStringLiteral("Loaded %1 device(s).").arg(deviceCount()));
-}
-
-void DeviceManager::initializeMockDevices()
-{
-    initializeBackends(QStringLiteral("mock"));
 }
 
 bool DeviceManager::dryRunEnabled() const
@@ -232,7 +234,7 @@ bool DeviceManager::confirmDeviceWrites(int deviceIndex)
     }
 
     const PermissionResult permission = PermissionGate::checkAnyWrite(*device);
-    if (permission.status != PermissionStatus::RequiresConfirmation && !permission.isGranted()) {
+    if (!PermissionGate::allowsWriteOrConfirmation(permission)) {
         m_activityLog.warning(LogCategory::Permission, permission.reason);
         return false;
     }
@@ -264,7 +266,7 @@ bool DeviceManager::revokeDeviceWrites(int deviceIndex)
         );
         emit devicesChanged();
     }
-    return removed;
+    return true;
 }
 
 bool DeviceManager::deviceWriteConfirmed(int deviceIndex) const
@@ -370,7 +372,12 @@ bool DeviceManager::setZoneStaticColor(int deviceIndex, int zoneIndex, const Rgb
     return applyZoneEffect(deviceIndex, zoneIndex, RgbEffect(RgbEffectType::Static, color));
 }
 
-bool DeviceManager::applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEffect& effect)
+bool DeviceManager::applyZoneEffect(
+    int deviceIndex,
+    int zoneIndex,
+    const RgbEffect& effect,
+    bool clientStreamsFrames
+)
 {
     RgbDevice* device = deviceForZone(deviceIndex, zoneIndex);
     if (device == nullptr) {
@@ -443,7 +450,7 @@ bool DeviceManager::applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEff
     }
 
     if (effectToApply.isAnimated()) {
-        if (localFrameRendering) {
+        if (localFrameRendering && !clientStreamsFrames) {
             m_effectsEngine->startZone(deviceIndex, zoneIndex);
         } else {
             m_effectsEngine->stopZone(deviceIndex, zoneIndex);
@@ -523,7 +530,9 @@ bool DeviceManager::applyAllOff(int deviceIndex, QString* errorMessage)
         m_activityLog.info(LogCategory::Backend, hardwareStatus);
     }
 
-    m_effectsEngine->stopAll();
+    for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+        m_effectsEngine->stopZone(deviceIndex, zoneIndex);
+    }
     for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
         emit zoneChanged(deviceIndex, zoneIndex);
         emit zoneColorChanged(deviceIndex, zoneIndex);
@@ -532,15 +541,15 @@ bool DeviceManager::applyAllOff(int deviceIndex, QString* errorMessage)
     return true;
 }
 
-void DeviceManager::paintZoneFrame(int deviceIndex, int zoneIndex, const QVector<RgbColor>& colors)
+bool DeviceManager::paintZoneFrame(int deviceIndex, int zoneIndex, const QVector<RgbColor>& colors)
 {
     RgbDevice* device = deviceAt(deviceIndex);
     if (device == nullptr) {
-        return;
+        return false;
     }
 
     if (m_dryRunEnabled) {
-        return;
+        return false;
     }
 
     const PermissionResult permission = PermissionGate::checkWrite(*device, BackendCapability::ZoneEffectWrite);
@@ -549,12 +558,34 @@ void DeviceManager::paintZoneFrame(int deviceIndex, int zoneIndex, const QVector
     if (!permission.isGranted() && !confirmationSatisfied) {
         m_effectsEngine->stopZone(deviceIndex, zoneIndex);
         m_activityLog.warning(LogCategory::Permission, permission.reason);
-        return;
+        return false;
     }
 
-    if (device->applyZoneFrame(zoneIndex, colors)) {
-        emit zoneFrameUpdated(deviceIndex, zoneIndex);
+    if (!device->applyZoneFrame(zoneIndex, colors)) {
+        return false;
     }
+    emit zoneFrameUpdated(deviceIndex, zoneIndex);
+    return true;
+}
+
+void DeviceManager::startZoneFrameStreaming(int deviceIndex, int zoneIndex)
+{
+    m_effectsEngine->startZone(deviceIndex, zoneIndex);
+}
+
+void DeviceManager::stopZoneFrameStreaming(int deviceIndex, int zoneIndex)
+{
+    m_effectsEngine->stopZone(deviceIndex, zoneIndex);
+}
+
+void DeviceManager::stopDeviceFrameStreaming(int deviceIndex)
+{
+    m_effectsEngine->stopDevice(deviceIndex);
+}
+
+void DeviceManager::stopAllFrameStreaming()
+{
+    m_effectsEngine->stopAll();
 }
 
 bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessage)

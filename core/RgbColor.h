@@ -31,6 +31,7 @@ public:
     [[nodiscard]] static RgbColor fromQColor(const QColor& color);
     [[nodiscard]] static RgbColor fromHexString(const QString& value, bool* ok = nullptr);
     [[nodiscard]] static RgbColor fromRgb(int red, int green, int blue);
+    [[nodiscard]] static RgbColor fromJson(const QJsonObject& object);
 
     [[nodiscard]] friend constexpr bool operator==(const RgbColor&, const RgbColor&) = default;
 

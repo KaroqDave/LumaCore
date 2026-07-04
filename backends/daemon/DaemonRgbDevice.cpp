@@ -172,6 +172,10 @@ bool DaemonRgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
         {QStringLiteral("zoneIndex"), zoneIndex},
         {QStringLiteral("effect"), effect.toJson()},
+        {QStringLiteral("clientStreamsFrames"), usesLocalFrameRenderingForEffect(zoneIndex, effect)},
+        // Synchronous writes are only reachable through WriteGate when dry-run is
+        // disabled, so the request always declares a real-write expectation. The
+        // daemon refuses the call if its own dry-run state disagrees.
         {QStringLiteral("dryRunEnabled"), false},
     });
     m_lastHardwareWriteStatus = daemonHardwareStatus(result);
@@ -186,7 +190,7 @@ bool DaemonRgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
 quint64 DaemonRgbDevice::applyZoneEffectAsync(
     int zoneIndex,
     const RgbEffect& effect,
-    bool updateLocalState,
+    bool dryRunExpected,
     OperationHandler handler
 )
 {
@@ -200,20 +204,24 @@ quint64 DaemonRgbDevice::applyZoneEffectAsync(
     }
 
     const QPointer<DaemonRgbDevice> self(this);
+    const bool clientStreamsFrames = usesLocalFrameRenderingForEffect(zoneIndex, effect);
     return m_client->callAsync(
         daemonMethodName(DaemonMethod::ApplyEffect),
         {
             {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
             {QStringLiteral("zoneIndex"), zoneIndex},
             {QStringLiteral("effect"), effect.toJson()},
-            {QStringLiteral("dryRunEnabled"), !updateLocalState},
+            {QStringLiteral("clientStreamsFrames"), clientStreamsFrames},
+            // Carry the caller's (GUI) dry-run expectation so the daemon's
+            // synchronization guard can refuse the write on state drift.
+            {QStringLiteral("dryRunEnabled"), dryRunExpected},
         },
-        [self, zoneIndex, effect, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
+        [self, zoneIndex, effect, dryRunExpected, handler = std::move(handler)](DaemonCallResult result) mutable {
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);
             if (self != nullptr) {
                 self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
-                if (success && updateLocalState) {
+                if (success && !dryRunExpected) {
                     self->applyLocalZoneEffect(zoneIndex, effect);
                 } else if (error.isEmpty()) {
                     error = self->m_lastHardwareWriteStatus;
@@ -228,9 +236,23 @@ quint64 DaemonRgbDevice::applyZoneEffectAsync(
 
 bool DaemonRgbDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& colors)
 {
-    Q_UNUSED(zoneIndex)
-    Q_UNUSED(colors)
-    return false;
+    if (m_client == nullptr || m_daemonDeviceIndex < 0 || zoneIndex < 0 || zoneIndex >= zones().size()) {
+        return false;
+    }
+
+    const quint64 requestId = m_client->callAsync(
+        daemonMethodName(DaemonMethod::PaintZoneFrame),
+        {
+            {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
+            {QStringLiteral("zoneIndex"), zoneIndex},
+            {QStringLiteral("colors"), colorsToJson(colors)},
+            {QStringLiteral("dryRunEnabled"), false},
+        },
+        [](DaemonCallResult) {},
+        500
+    );
+    Q_UNUSED(requestId)
+    return true;
 }
 
 bool DaemonRgbDevice::applyAllOff()
@@ -243,6 +265,7 @@ bool DaemonRgbDevice::applyAllOff()
 
     const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::AllOff), {
         {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
+        // See applyZoneEffect: sync writes always expect a real hardware write.
         {QStringLiteral("dryRunEnabled"), false},
     });
     m_lastHardwareWriteStatus = daemonHardwareStatus(result);
@@ -254,7 +277,7 @@ bool DaemonRgbDevice::applyAllOff()
     return true;
 }
 
-quint64 DaemonRgbDevice::applyAllOffAsync(bool updateLocalState, OperationHandler handler)
+quint64 DaemonRgbDevice::applyAllOffAsync(bool dryRunExpected, OperationHandler handler)
 {
     m_lastHardwareWriteStatus.clear();
     if (m_client == nullptr || m_daemonDeviceIndex < 0) {
@@ -270,14 +293,14 @@ quint64 DaemonRgbDevice::applyAllOffAsync(bool updateLocalState, OperationHandle
         daemonMethodName(DaemonMethod::AllOff),
         {
             {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
-            {QStringLiteral("dryRunEnabled"), !updateLocalState},
+            {QStringLiteral("dryRunEnabled"), dryRunExpected},
         },
-        [self, updateLocalState, handler = std::move(handler)](DaemonCallResult result) mutable {
+        [self, dryRunExpected, handler = std::move(handler)](DaemonCallResult result) mutable {
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);
             if (self != nullptr) {
                 self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
-                if (success && updateLocalState) {
+                if (success && !dryRunExpected) {
                     self->applyLocalAllOff();
                 } else if (error.isEmpty()) {
                     error = self->m_lastHardwareWriteStatus;
@@ -355,6 +378,26 @@ quint64 DaemonRgbDevice::updateZoneMetadataAsync(
 bool DaemonRgbDevice::usesLocalFrameRendering() const
 {
     return false;
+}
+
+bool DaemonRgbDevice::usesLocalFrameRenderingForEffect(int zoneIndex, const RgbEffect& effect) const
+{
+    return supportsHostStreamedEffect(zoneIndex, static_cast<int>(effect.type()));
+}
+
+bool DaemonRgbDevice::supportsHostStreamedEffect(int zoneIndex, int effectType) const
+{
+    if (zoneIndex < 0 || zoneIndex >= zones().size()) {
+        return false;
+    }
+
+    if (effectType != static_cast<int>(RgbEffectType::Rainbow)
+        && effectType != static_cast<int>(RgbEffectType::Breathing)
+        && effectType != static_cast<int>(RgbEffectType::ColorCycle)) {
+        return false;
+    }
+
+    return supportsZoneEffect(zoneIndex, effectType) && zones().at(zoneIndex).ledCount() > 0;
 }
 
 QString DaemonRgbDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const
@@ -472,12 +515,7 @@ PermissionResult DaemonRgbDevice::checkRuntimePermission(BackendCapability capab
     const QString key = backendCapabilityToString(capability);
     if (m_permissions.contains(key)) {
         PermissionResult permission = m_permissions.value(key);
-        if ((capability == BackendCapability::ZoneColorWrite || capability == BackendCapability::ZoneEffectWrite)
-            && m_writeConfirmed
-            && permission.status == PermissionStatus::RequiresConfirmation) {
-            return {PermissionStatus::Granted, QStringLiteral("Daemon confirmed hardware writes for this session.")};
-        }
-        return permission;
+        return PermissionGate::withSessionConfirmation(permission, m_writeConfirmed);
     }
 
     if (!m_capabilities.testFlag(capability)) {

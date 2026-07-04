@@ -1,4 +1,4 @@
 CompileFlags:
-  CompilationDatabase: build
+  CompilationDatabase: build-windows
   Remove:
     - -mno-direct-extern-access

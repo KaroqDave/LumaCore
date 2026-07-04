@@ -55,4 +55,20 @@ RgbColor RgbColor::fromRgb(int red, int green, int blue)
     );
 }
 
+RgbColor RgbColor::fromJson(const QJsonObject& object)
+{
+    // Mirror toJson()'s "red"/"green"/"blue" keys so serialize/deserialize
+    // round-trip; fall back to a hex string when the numeric keys are absent.
+    if (object.contains(QStringLiteral("red"))
+        || object.contains(QStringLiteral("green"))
+        || object.contains(QStringLiteral("blue"))) {
+        return fromRgb(
+            object.value(QStringLiteral("red")).toInt(),
+            object.value(QStringLiteral("green")).toInt(),
+            object.value(QStringLiteral("blue")).toInt()
+        );
+    }
+    return fromHexString(object.value(QStringLiteral("hex")).toString());
+}
+
 } // namespace lumacore

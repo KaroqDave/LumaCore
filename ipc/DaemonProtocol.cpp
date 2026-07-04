@@ -2,6 +2,7 @@
 
 #include "ipc/DaemonProtocol.h"
 
+#include "core/RgbColor.h"
 #include "core/PermissionGate.h"
 #include "core/PortablePaths.h"
 
@@ -33,6 +34,8 @@ QString daemonMethodName(DaemonMethod method)
         return QStringLiteral("revokeWrites");
     case DaemonMethod::AllOff:
         return QStringLiteral("allOff");
+    case DaemonMethod::PaintZoneFrame:
+        return QStringLiteral("paintZoneFrame");
     case DaemonMethod::SetDryRun:
         return QStringLiteral("setDryRun");
     case DaemonMethod::ActivityLogSnapshot:
@@ -56,6 +59,7 @@ DaemonMethod daemonMethodFromName(const QString& name)
              DaemonMethod::ConfirmWrites,
              DaemonMethod::RevokeWrites,
              DaemonMethod::AllOff,
+             DaemonMethod::PaintZoneFrame,
              DaemonMethod::SetDryRun,
              DaemonMethod::ActivityLogSnapshot,
          }) {
@@ -271,7 +275,11 @@ QJsonObject permissionResultsToJson(const RgbDevice& device)
     };
 }
 
-QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed)
+QJsonObject deviceToJson(
+    const RgbDevice& device,
+    int index,
+    bool writeConfirmed
+)
 {
     QJsonArray zones;
     for (int zoneIndex = 0; zoneIndex < device.zones().size(); ++zoneIndex) {
@@ -280,38 +288,31 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
     QJsonObject permissions = permissionResultsToJson(device);
     const BackendCapabilities capabilities = device.capabilities();
     PermissionResult writePermission = PermissionGate::checkAnyWrite(device);
-    PermissionResult colorPermission = permissionResultFromJson(
-        permissions.value(backendCapabilityToString(BackendCapability::ZoneColorWrite)).toObject()
+    PermissionResult colorPermission = PermissionGate::withSessionConfirmation(
+        permissionResultFromJson(
+            permissions.value(backendCapabilityToString(BackendCapability::ZoneColorWrite)).toObject()
+        ),
+        writeConfirmed
     );
-    if (writeConfirmed && colorPermission.status == PermissionStatus::RequiresConfirmation) {
-        colorPermission = {
-            PermissionStatus::Granted,
-            QStringLiteral("Hardware writes are confirmed for this daemon session."),
-        };
+    if (writeConfirmed) {
         permissions.insert(
             backendCapabilityToString(BackendCapability::ZoneColorWrite),
             permissionResultToJson(colorPermission)
         );
     }
-    PermissionResult effectPermission = permissionResultFromJson(
-        permissions.value(backendCapabilityToString(BackendCapability::ZoneEffectWrite)).toObject()
+    PermissionResult effectPermission = PermissionGate::withSessionConfirmation(
+        permissionResultFromJson(
+            permissions.value(backendCapabilityToString(BackendCapability::ZoneEffectWrite)).toObject()
+        ),
+        writeConfirmed
     );
-    if (writeConfirmed && effectPermission.status == PermissionStatus::RequiresConfirmation) {
-        effectPermission = {
-            PermissionStatus::Granted,
-            QStringLiteral("Hardware writes are confirmed for this daemon session."),
-        };
+    if (writeConfirmed) {
         permissions.insert(
             backendCapabilityToString(BackendCapability::ZoneEffectWrite),
             permissionResultToJson(effectPermission)
         );
     }
-    if (writeConfirmed && writePermission.status == PermissionStatus::RequiresConfirmation) {
-        writePermission = {
-            PermissionStatus::Granted,
-            QStringLiteral("Hardware writes are confirmed for this daemon session."),
-        };
-    }
+    writePermission = PermissionGate::withSessionConfirmation(writePermission, writeConfirmed);
     const bool writeRequiresConfirmation =
         colorPermission.status == PermissionStatus::RequiresConfirmation
         || effectPermission.status == PermissionStatus::RequiresConfirmation;
@@ -323,6 +324,10 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
         {QStringLiteral("vendor"), device.vendor()},
         {QStringLiteral("type"), device.typeName()},
         {QStringLiteral("backendId"), device.backendId()},
+        // The actual backend driving this device. Under the aggregating 'auto'
+        // backend each device is tagged with its concrete sub-backend
+        // (asus-aura-hid, windows-discovery, mock, ...), so this reports the real
+        // running backend type rather than the aggregator id.
         {QStringLiteral("realBackendId"), device.backendId()},
         {QStringLiteral("discoveryIdentity"), device.discoveryIdentity()},
         {QStringLiteral("discoverySupportStage"), device.discoverySupportStage()},
@@ -351,6 +356,25 @@ QJsonObject deviceToJson(const RgbDevice& device, int index, bool writeConfirmed
 RgbEffect effectFromJson(const QJsonObject& object)
 {
     return RgbEffect::fromJson(object);
+}
+
+QJsonArray colorsToJson(const QVector<RgbColor>& colors)
+{
+    QJsonArray values;
+    for (const RgbColor& color : colors) {
+        values.append(color.toJson());
+    }
+    return values;
+}
+
+QVector<RgbColor> colorsFromJson(const QJsonArray& values)
+{
+    QVector<RgbColor> colors;
+    colors.reserve(values.size());
+    for (const QJsonValue& value : values) {
+        colors.append(RgbColor::fromJson(value.toObject()));
+    }
+    return colors;
 }
 
 } // namespace lumacore

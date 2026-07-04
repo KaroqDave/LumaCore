@@ -21,11 +21,6 @@ BackendDescriptor DaemonBackend::descriptor() const
     return m_descriptor;
 }
 
-std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::createDevices() const
-{
-    return discoverDevices();
-}
-
 std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::discoverDevices() const
 {
     if (m_client == nullptr) {
@@ -34,9 +29,13 @@ std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::discoverDevices() const
 
     const DaemonCallResult response = m_client->call(daemonMethodName(DaemonMethod::ListDevices));
     if (!response.ok) {
+        m_lastDiscoverError = response.error.isEmpty()
+            ? QStringLiteral("Could not list devices from LumaCore daemon.")
+            : response.error;
         return {};
     }
 
+    m_lastDiscoverError.clear();
     return devicesFromPayload(response.result);
 }
 
@@ -55,6 +54,11 @@ std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::devicesFromPayload(const 
 BackendDescriptor DaemonBackend::effectiveDescriptor() const
 {
     return m_effectiveDescriptor.id.isEmpty() ? m_descriptor : m_effectiveDescriptor;
+}
+
+QString DaemonBackend::lastDiscoverError() const
+{
+    return m_lastDiscoverError;
 }
 
 void DaemonBackend::updateDescriptor(const QJsonObject& payload) const

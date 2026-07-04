@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QHash>
 #include <QJsonObject>
+#include <QList>
 #include <QString>
 #include <QTimer>
 
@@ -36,6 +37,8 @@ public:
     [[nodiscard]] bool isConnected() const;
     [[nodiscard]] QString daemonVersion() const;
     [[nodiscard]] int daemonProtocolVersion() const;
+    [[nodiscard]] bool daemonDryRunKnown() const;
+    [[nodiscard]] bool daemonDryRunEnabled() const;
     [[nodiscard]] bool protocolCompatible() const;
     [[nodiscard]] QString lastError() const;
     [[nodiscard]] bool automaticReconnectEnabled() const;
@@ -75,6 +78,8 @@ private:
     void setLastError(const QString& message);
     void setDaemonVersion(const QString& version);
     void setDaemonProtocolVersion(int version);
+    void setDaemonDryRunEnabled(bool enabled);
+    void clearDaemonDryRunState();
     void updateDaemonInfo(const DaemonCallResult& result);
     [[nodiscard]] bool ensureConnected(int timeoutMs);
     void startAsyncConnection();
@@ -91,8 +96,11 @@ private:
     QByteArray m_buffer;
     quint64 m_nextRequestId {1};
     QHash<quint64, PendingCall> m_pendingCalls;
+    QList<quint64> m_pendingCallOrder;
     QString m_daemonVersion;
     int m_daemonProtocolVersion {0};
+    bool m_daemonDryRunKnown {false};
+    bool m_daemonDryRunEnabled {false};
     QString m_lastError;
     QTimer m_reconnectTimer;
     int m_reconnectAttempt {0};

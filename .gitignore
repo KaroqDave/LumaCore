@@ -88,6 +88,7 @@ install-check/
 
 # Machine-local CMake paths and presets
 CMakeUserPresets.json
+.qmlls.ini
 
 # OS
 .DS_Store

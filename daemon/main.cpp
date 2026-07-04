@@ -107,13 +107,12 @@ int runDaemon(const lumacore::DaemonOptions& options)
     }
 
     lumacore::DeviceManager deviceManager;
+    if (options.dryRunEnabled.has_value()) {
+        deviceManager.setDryRunEnabled(*options.dryRunEnabled);
+    }
     registerBackends(deviceManager);
     if (!initializeRequestedBackend(deviceManager, options.backendId)) {
         return 1;
-    }
-
-    if (options.dryRunEnabled.has_value()) {
-        deviceManager.setDryRunEnabled(*options.dryRunEnabled);
     }
 
     lumacore::DaemonServer server(&deviceManager);

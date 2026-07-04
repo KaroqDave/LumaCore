@@ -107,6 +107,7 @@ int GuiApplication::run()
         m_settingsController.dryRunEnabled()
     );
     m_backendContext.deviceManager.initializeBackends(QStringLiteral("daemon"));
+    m_deviceTreeModel.setWriteConfirmationSource(&m_appController);
     if (!daemonAvailable && !m_daemonLauncher->lastError().isEmpty()) {
         m_backendContext.daemonClient->reportConnectionError(m_daemonLauncher->lastError());
     }

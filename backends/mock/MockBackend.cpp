@@ -14,7 +14,7 @@ BackendDescriptor MockBackend::descriptor() const
         QStringLiteral("mock"),
         QStringLiteral("Mock Backend"),
 #ifdef Q_OS_WIN
-        QStringLiteral("Simulated Windows-safe backend. No hardware discovery or RGB writes are performed."),
+        QStringLiteral("Simulated backend with in-memory RGB devices for development and tests."),
 #else
         QStringLiteral("In-memory ASUS motherboard simulation with no hardware access."),
 #endif
@@ -22,7 +22,7 @@ BackendDescriptor MockBackend::descriptor() const
     };
 }
 
-std::vector<std::unique_ptr<RgbDevice>> MockBackend::createDevices() const
+std::vector<std::unique_ptr<RgbDevice>> MockBackend::discoverDevices() const
 {
     std::vector<std::unique_ptr<RgbDevice>> devices;
     devices.push_back(std::make_unique<MockRgbDevice>());

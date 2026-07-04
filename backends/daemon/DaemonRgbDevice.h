@@ -41,6 +41,7 @@ public:
     [[nodiscard]] bool applyAllOff() override;
     [[nodiscard]] bool updateZoneMetadata(int zoneIndex, const QString& name, int ledCount) override;
     [[nodiscard]] bool usesLocalFrameRendering() const override;
+    [[nodiscard]] bool usesLocalFrameRenderingForEffect(int zoneIndex, const RgbEffect& effect) const override;
     [[nodiscard]] QString previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const override;
     [[nodiscard]] QString lastHardwareWriteStatus() const override;
     [[nodiscard]] BackendCapabilities capabilities() const override;
@@ -57,10 +58,10 @@ public:
     [[nodiscard]] quint64 applyZoneEffectAsync(
         int zoneIndex,
         const RgbEffect& effect,
-        bool updateLocalState,
+        bool dryRunExpected,
         OperationHandler handler
     );
-    [[nodiscard]] quint64 applyAllOffAsync(bool updateLocalState, OperationHandler handler);
+    [[nodiscard]] quint64 applyAllOffAsync(bool dryRunExpected, OperationHandler handler);
     [[nodiscard]] quint64 updateZoneMetadataAsync(
         int zoneIndex,
         const QString& name,
@@ -71,6 +72,7 @@ public:
 private:
     void applyLocalZoneEffect(int zoneIndex, const RgbEffect& effect);
     void applyLocalAllOff();
+    [[nodiscard]] bool supportsHostStreamedEffect(int zoneIndex, int effectType) const;
 
     int m_daemonDeviceIndex {-1};
     QString m_discoveryIdentity;

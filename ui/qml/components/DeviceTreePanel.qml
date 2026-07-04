@@ -16,7 +16,7 @@ Item {
     property int selectedZoneIndex: -1
     property bool animationsEnabled: true
     readonly property int animationDuration: animationsEnabled ? Theme.animationDuration : 0
-    readonly property int activeFilter: treeModel ? treeModel.deviceFilter : 1
+    readonly property int activeFilter: treeModel ? treeModel.deviceFilter : 0
     readonly property string activeFilterLabel: activeFilter === 0 ? qsTr("All") : qsTr("RGB")
 
     signal deviceSelected(int deviceIndex)

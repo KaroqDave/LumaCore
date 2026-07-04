@@ -170,11 +170,6 @@ bool AsusAuraHidBackend::prefersProbeDevice(
     return isBetterAuraInterface(candidate, current);
 }
 
-std::vector<std::unique_ptr<RgbDevice>> AsusAuraHidBackend::createDevices() const
-{
-    return discoverDevices();
-}
-
 std::vector<std::unique_ptr<RgbDevice>> AsusAuraHidBackend::discoverDevices() const
 {
     std::vector<std::unique_ptr<RgbDevice>> devices;

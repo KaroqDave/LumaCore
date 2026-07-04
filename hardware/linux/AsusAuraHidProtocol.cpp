@@ -36,6 +36,8 @@ constexpr int kAuraConfigRgbHeaderOffset = 0x1D;
 constexpr int kAuraConfigTableOffset = 0x04;
 constexpr int kAuraConfigTableLength = 60;
 
+int fixedExposedZoneCount(const AsusAuraConfigTable& config);
+
 const QString kOpenRgbProvenance = QStringLiteral(
     "OpenRGB-referenced ASUS Aura USB 65-byte EC35/EC36 mode/color sequence"
 );
@@ -168,7 +170,7 @@ bool appendFixedColorReport(
     QString* error
 )
 {
-    if (startLed < 0 || ledCount < 1 || startLed + ledCount > 16) {
+    if (startLed < 0 || ledCount < 1 || startLed + ledCount > kAsusAuraFixedColorMaskLeds) {
         if (error != nullptr) {
             *error = QStringLiteral("ASUS Aura fixed-channel write target is outside the 16-bit effect-color mask: start=%1 count=%2.")
                          .arg(startLed)
@@ -312,7 +314,7 @@ QString configValidationError(const AsusAuraConfigTable& config)
                     .arg(channel.ledCount)
                     .arg(channel.headerCount);
             }
-            if (channel.headerCount > 0 && channel.ledCount > 16) {
+            if (channel.headerCount > 0 && channel.ledCount > kAsusAuraFixedColorMaskLeds) {
                 return QStringLiteral(
                     "ASUS Aura fixed RGB headers fall outside the 16-bit effect-color mask: leds=%1 headers=%2."
                 )
@@ -366,7 +368,14 @@ QString configValidationError(const AsusAuraConfigTable& config)
         )
             .arg(config.mainboardLedCount);
     }
-    if (config.rgbHeaderCount == 0 && addressableChannels == 0) {
+    if (addressableChannels == 0 && fixedExposedZoneCount(config) == 0) {
+        if (config.mainboardLedCount > kAsusAuraFixedColorMaskLeds) {
+            return QStringLiteral(
+                "ASUS Aura mainboard channel spans %1 LEDs, beyond the %2-LED effect-color mask, and no addressable headers are available."
+            )
+                .arg(config.mainboardLedCount)
+                .arg(kAsusAuraFixedColorMaskLeds);
+        }
         return QStringLiteral("ASUS Aura config table contains no controllable RGB headers.");
     }
 
@@ -394,19 +403,26 @@ QVector<int> addressableChannelIndices(const AsusAuraConfigTable& config)
     return indices;
 }
 
-int fixedExposedHeaderCount(const AsusAuraConfigTable& config)
+int fixedExposedZoneCount(const AsusAuraConfigTable& config)
 {
     const int fixedIndex = fixedChannelIndex(config);
     if (fixedIndex < 0) {
         return 0;
     }
 
-    return qBound(0, config.channels.at(fixedIndex).headerCount, kAsusAuraHeaderCount);
+    const AsusAuraConfigChannel& fixed = config.channels.at(fixedIndex);
+    const int headers = qBound(0, fixed.headerCount, kAsusAuraHeaderCount);
+    if (headers > 0) {
+        return headers;
+    }
+    // The aggregate mainboard zone is written through the fixed-channel
+    // effect-color mask, so wider channels cannot be exposed as a zone.
+    return fixed.ledCount > 0 && fixed.ledCount <= kAsusAuraFixedColorMaskLeds ? 1 : 0;
 }
 
 int exposedZoneCount(const AsusAuraConfigTable& config)
 {
-    return fixedExposedHeaderCount(config) + addressableChannelIndices(config).size();
+    return fixedExposedZoneCount(config) + addressableChannelIndices(config).size();
 }
 
 AsusAuraHidProtocolResult validateConfigWriteInput(
@@ -447,10 +463,13 @@ bool resolveEffectTarget(
 )
 {
     const int fixedIndex = fixedChannelIndex(config);
-    const int fixedHeaderCount = fixedExposedHeaderCount(config);
-    if (fixedIndex >= 0 && zoneIndex < fixedHeaderCount) {
+    const int fixedZoneCount = fixedExposedZoneCount(config);
+    if (fixedIndex >= 0 && zoneIndex < fixedZoneCount) {
         const AsusAuraConfigChannel fixed = config.channels.at(fixedIndex);
-        const int startLed = qMax(0, fixed.ledCount - fixed.headerCount) + zoneIndex;
+        const int fixedHeaders = qBound(0, fixed.headerCount, kAsusAuraHeaderCount);
+        const int startLed = fixedHeaders > 0
+            ? qMax(0, fixed.ledCount - fixedHeaders) + zoneIndex
+            : 0;
         if (channel != nullptr) {
             *channel = fixed;
         }
@@ -458,17 +477,23 @@ bool resolveEffectTarget(
             *colorOffset = startLed;
         }
         if (targetSummary != nullptr) {
-            *targetSummary = QStringLiteral("fixedHeader=%1 effectChannel=%2 directChannel=%3 colorOffset=%4")
-                                 .arg(zoneIndex + 1)
-                                 .arg(fixed.effectChannel)
-                                 .arg(fixed.directChannel)
-                                 .arg(startLed);
+            *targetSummary = fixedHeaders > 0
+                ? QStringLiteral("fixedHeader=%1 effectChannel=%2 directChannel=%3 colorOffset=%4")
+                      .arg(zoneIndex + 1)
+                      .arg(fixed.effectChannel)
+                      .arg(fixed.directChannel)
+                      .arg(startLed)
+                : QStringLiteral("fixedMainboard=true effectChannel=%1 directChannel=%2 colorOffset=%3 leds=%4")
+                      .arg(fixed.effectChannel)
+                      .arg(fixed.directChannel)
+                      .arg(startLed)
+                      .arg(fixed.ledCount);
         }
         return true;
     }
 
     const QVector<int> addressableIndices = addressableChannelIndices(config);
-    const int addressableZone = zoneIndex - fixedHeaderCount;
+    const int addressableZone = zoneIndex - fixedZoneCount;
     if (addressableZone < 0 || addressableZone >= addressableIndices.size()) {
         return false;
     }
@@ -603,7 +628,8 @@ AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response)
     const QByteArray table = response.mid(tableOffset, qMin(kAuraConfigTableLength, response.size() - tableOffset));
     const int addressableHeaders = static_cast<quint8>(table.at(kAuraConfigAddressableHeaderOffset));
     const int mainboardLeds = static_cast<quint8>(table.at(kAuraConfigMainboardLedOffset));
-    const int rgbHeaders = static_cast<quint8>(table.at(kAuraConfigRgbHeaderOffset));
+    const int reportedRgbHeaders = static_cast<quint8>(table.at(kAuraConfigRgbHeaderOffset));
+    int rgbHeaders = reportedRgbHeaders;
     if (addressableHeaders > kAuraMaxDirectChannels) {
         return invalidConfigTable(
             response,
@@ -612,15 +638,25 @@ AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response)
                 .arg(kAuraMaxDirectChannels)
         );
     }
-    if (rgbHeaders > kAsusAuraHeaderCount || rgbHeaders > mainboardLeds) {
+    QStringList normalizationNotes;
+    if (rgbHeaders > mainboardLeds) {
+        normalizationNotes.append(
+            QStringLiteral("reportedRgbHeaders=%1 exceeds mainboardLeds=%2; fixed RGB headers are not exposed")
+                .arg(reportedRgbHeaders)
+                .arg(mainboardLeds)
+        );
+        rgbHeaders = 0;
+    }
+    if (rgbHeaders > kAsusAuraHeaderCount) {
         return invalidConfigTable(
             response,
-            QStringLiteral("ASUS Aura config reports invalid fixed-channel geometry: mainboardLeds=%1 rgbHeaders=%2.")
+            QStringLiteral("ASUS Aura config reports too many fixed RGB headers for the validated path: mainboardLeds=%1 rgbHeaders=%2 maxHeaders=%3.")
                 .arg(mainboardLeds)
                 .arg(rgbHeaders)
+                .arg(kAsusAuraHeaderCount)
         );
     }
-    if (rgbHeaders > 0 && mainboardLeds > 16) {
+    if (rgbHeaders > 0 && mainboardLeds > kAsusAuraFixedColorMaskLeds) {
         return invalidConfigTable(
             response,
             QStringLiteral("ASUS Aura fixed RGB headers fall outside the 16-bit effect-color mask: mainboardLeds=%1 rgbHeaders=%2.")
@@ -628,7 +664,14 @@ AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response)
                 .arg(rgbHeaders)
         );
     }
-    if (rgbHeaders == 0 && addressableHeaders == 0) {
+    if (rgbHeaders == 0 && mainboardLeds > kAsusAuraFixedColorMaskLeds) {
+        normalizationNotes.append(
+            QStringLiteral("mainboardLeds=%1 exceeds the %2-LED effect-color mask; the aggregate mainboard zone is not exposed")
+                .arg(mainboardLeds)
+                .arg(kAsusAuraFixedColorMaskLeds)
+        );
+    }
+    if (rgbHeaders == 0 && addressableHeaders == 0 && mainboardLeds == 0) {
         return invalidConfigTable(response, QStringLiteral("ASUS Aura config response contains no controllable RGB headers."));
     }
 
@@ -660,13 +703,17 @@ AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response)
     }
 
     config.summary = QStringLiteral(
-        "ASUS Aura config table OK: addressableHeaders=%1 mainboardLeds=%2 rgbHeaders=%3 channels=%4 firstBytes=%5"
+        "ASUS Aura config table OK: addressableHeaders=%1 mainboardLeds=%2 rgbHeaders=%3 reportedRgbHeaders=%4 channels=%5 firstBytes=%6%7"
     )
         .arg(addressableHeaders)
         .arg(mainboardLeds)
         .arg(rgbHeaders)
+        .arg(reportedRgbHeaders)
         .arg(channels.size())
-        .arg(bytesPreview(response));
+        .arg(bytesPreview(response))
+        .arg(normalizationNotes.isEmpty()
+                 ? QString()
+                 : QStringLiteral(" notes=%1").arg(normalizationNotes.join(QStringLiteral("; "))));
 
     return config;
 }
@@ -674,6 +721,16 @@ AsusAuraConfigTable parseAsusAuraConfigTableResponse(const QByteArray& response)
 bool isAsusAuraConfigTableWriteReady(const AsusAuraConfigTable& config)
 {
     return configValidationError(config).isEmpty();
+}
+
+int asusAuraFixedExposedZoneCount(const AsusAuraConfigTable& config)
+{
+    return fixedExposedZoneCount(config);
+}
+
+int asusAuraExposedZoneCount(const AsusAuraConfigTable& config)
+{
+    return exposedZoneCount(config);
 }
 
 // --- write serializers ---
@@ -749,48 +806,31 @@ AsusAuraHidProtocolResult buildAsusAuraStaticColorWrite(
     const quint8 green = scaledChannel(color.green(), brightness);
     const quint8 blue = scaledChannel(color.blue(), brightness);
 
-    QVector<QByteArray> reports {buildAuraGen1Report()};
+    AsusAuraConfigChannel target;
+    int colorOffset = 0;
     QString targetSummary;
-    const int fixedIndex = fixedChannelIndex(config);
-    const int fixedHeaderCount = fixedExposedHeaderCount(config);
-    if (fixedIndex >= 0 && zoneIndex < fixedHeaderCount) {
-        const AsusAuraConfigChannel fixed = config.channels.at(fixedIndex);
-        const int startLed = qMax(0, fixed.ledCount - fixed.headerCount) + zoneIndex;
-        reports.append(buildAuraModeReport(static_cast<quint8>(fixed.effectChannel), kAuraStaticMode));
+    if (!resolveEffectTarget(config, zoneIndex, &target, &colorOffset, &targetSummary)) {
+        return makeError(
+            QStringLiteral("ASUS Aura zone %1 is not present in config table: exposedZones=%2.")
+                .arg(zoneIndex + 1)
+                .arg(exposedZoneCount(config))
+        );
+    }
 
-        QString error;
-        if (!appendFixedColorReport(reports, startLed, 1, red, green, blue, &error)) {
+    QVector<QByteArray> reports {buildAuraGen1Report()};
+    QString error;
+    if (target.type == AsusAuraChannelType::Fixed) {
+        const int fixedHeaders = qBound(0, target.headerCount, kAsusAuraHeaderCount);
+        const int targetLedCount = fixedHeaders > 0 ? 1 : target.ledCount;
+        reports.append(buildAuraModeReport(static_cast<quint8>(target.effectChannel), kAuraStaticMode));
+        if (!appendFixedColorReport(reports, colorOffset, targetLedCount, red, green, blue, &error)) {
             return makeError(error);
         }
-        targetSummary = QStringLiteral("fixedHeader=%1 effectChannel=%2 directChannel=%3 startLed=%4")
-                            .arg(zoneIndex + 1)
-                            .arg(fixed.effectChannel)
-                            .arg(fixed.directChannel)
-                            .arg(startLed);
     } else {
-        const QVector<int> addressableIndices = addressableChannelIndices(config);
-        const int addressableZone = zoneIndex - fixedHeaderCount;
-        if (addressableZone < 0 || addressableZone >= addressableIndices.size()) {
-            return makeError(
-                QStringLiteral("ASUS Aura zone %1 is not present in config table: fixedRgbHeaders=%2 addressableHeaders=%3.")
-                    .arg(zoneIndex + 1)
-                    .arg(fixedHeaderCount)
-                    .arg(addressableIndices.size())
-            );
-        }
-
-        const int channelIndex = addressableIndices.at(addressableZone);
-        const AsusAuraConfigChannel addressable = config.channels.at(channelIndex);
-        reports.append(buildAuraModeReport(static_cast<quint8>(addressable.effectChannel), kAuraDirectMode));
-        QString error;
-        if (!appendDirectColorReports(reports, addressable.directChannel, ledCount, red, green, blue, &error)) {
+        reports.append(buildAuraModeReport(static_cast<quint8>(target.effectChannel), kAuraDirectMode));
+        if (!appendDirectColorReports(reports, target.directChannel, ledCount, red, green, blue, &error)) {
             return makeError(error);
         }
-        targetSummary = QStringLiteral("addressableHeader=%1 effectChannel=%2 directChannel=%3 directLeds=%4")
-                            .arg(addressableZone + 1)
-                            .arg(addressable.effectChannel)
-                            .arg(addressable.directChannel)
-                            .arg(ledCount);
     }
 
     AsusAuraHidPacket packet {

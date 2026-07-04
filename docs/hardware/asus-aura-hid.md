@@ -106,6 +106,24 @@ Two takeaways for this backend:
    LumaCore now uses that certain path for addressable rainbow, breathing, and color-cycle effects
    without depending on the unvalidated `EC35`/`EC36` native effect commands.
 
+### Direct-channel numbering (addressable `0/1/2`, fixed mainboard `0x04`) — confirmed
+
+The capture addresses the three addressable headers as direct channels `0/1/2` and the small onboard
+fixed zone as direct channel `0x04` (`EC 40 84 00 02 …`). This matches OpenRGB's mainboard controller
+exactly: `AsusAuraMainboardController` hardcodes the fixed mainboard device to `direct_channel = 0x04`
+and enumerates addressable headers as `direct_channel = i` (`0,1,2,…`). The channel index is a fixed
+convention, not a per-entry field — the `EC 30` config table is a flat 60-byte block carrying only
+counts at `0x02` (addressable headers), `0x1B` (mainboard LEDs), and `0x1D` (RGB headers).
+`parseAsusAuraConfigTableResponse` already encodes this: the fixed channel is built with
+`directChannel = 0x04` and each addressable channel with `directChannel = index`, so the parsed channel
+map reproduces the captured numbering. No change is required to the channel mapping.
+
+One transport nuance remains a future-validation item. Armoury Crate drives the fixed zone over the
+validated `EC40` direct path (channel `0x04`), whereas LumaCore routes the fixed zone through the
+`EC35`/`EC36` 16-bit-mask path and `buildAsusAuraDirectFrameWrite` rejects non-addressable targets.
+Both are legitimate; the fixed path stays on the gated OpenRGB-referenced route until an owned-hardware
+capture validates a fixed-zone `EC40` write for more than the single 2-LED zone observed here.
+
 ### Effect speed has no wire field — it is a host animation rate (finding)
 
 The rainbow was captured at three speed-slider positions and the timing measured. Speed is **not**

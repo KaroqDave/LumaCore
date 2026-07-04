@@ -30,7 +30,6 @@
 #include <QTimer>
 #include <QtGlobal>
 
-#include <algorithm>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -181,8 +180,13 @@ QString diagnosticsSummaryTextFor(const QVariantMap& report)
                     ? QStringLiteral("unavailable")
                     : daemon.value(QStringLiteral("version")).toString()
             ),
-        QStringLiteral("Safety: dry-run=%1, writable=%2, confirmation-required=%3, read-only=%4")
+        QStringLiteral("Safety: dry-run=%1, daemon dry-run=%2, writable=%3, confirmation-required=%4, read-only=%5")
             .arg(safety.value(QStringLiteral("dryRunEnabled")).toBool() ? QStringLiteral("enabled") : QStringLiteral("disabled"))
+            .arg(
+                safety.value(QStringLiteral("daemonDryRunKnown")).toBool()
+                    ? (safety.value(QStringLiteral("daemonDryRunEnabled")).toBool() ? QStringLiteral("enabled") : QStringLiteral("disabled"))
+                    : QStringLiteral("unknown")
+            )
             .arg(counts.value(QStringLiteral("writableDevices")).toInt())
             .arg(counts.value(QStringLiteral("confirmationRequiredDevices")).toInt())
             .arg(counts.value(QStringLiteral("readOnlyDevices")).toInt()),
@@ -251,6 +255,21 @@ SetupStatus setupStatusFor(const AppController& controller)
     }
 
     const int deviceCount = controller.backendDeviceCount();
+    if (daemonBacked
+        && controller.daemonConnected()
+        && controller.daemonDryRunMismatch()) {
+        return {
+            QStringLiteral("warning"),
+            QStringLiteral("Daemon dry-run mismatch"),
+            QStringLiteral("The GUI dry-run setting is %1, but the daemon reports dry-run %2.")
+                .arg(
+                    controller.dryRunEnabled() ? QStringLiteral("enabled") : QStringLiteral("disabled"),
+                    controller.daemonDryRunEnabled() ? QStringLiteral("enabled") : QStringLiteral("disabled")
+                ),
+            QStringLiteral("Toggle dry-run or rescan to synchronize the daemon before applying hardware changes."),
+        };
+    }
+
     if (deviceCount == 0) {
         return {
             QStringLiteral("warning"),
@@ -276,10 +295,21 @@ SetupStatus setupStatusFor(const AppController& controller)
     }
 
     if (writableDevices == 0) {
+        QString readOnlyDetail = QStringLiteral("Devices are visible, but none of the loaded devices are verified for RGB writes.");
+        for (int deviceIndex = 0; deviceIndex < deviceCount; ++deviceIndex) {
+            const QString reason = controller.devicePermissionReason(deviceIndex).trimmed();
+            if (reason.isEmpty()) {
+                continue;
+            }
+
+            readOnlyDetail = QStringLiteral("%1 %2: %3")
+                                 .arg(readOnlyDetail, controller.deviceName(deviceIndex), reason);
+            break;
+        }
         return {
             QStringLiteral("info"),
             QStringLiteral("Read-only inventory"),
-            QStringLiteral("Devices are visible, but none of the loaded devices are verified for RGB writes."),
+            readOnlyDetail,
             QStringLiteral("Use diagnostics to check backend selection, device identity, and write-gate verification."),
         };
     }
@@ -321,6 +351,17 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
 {
     setStatusMessage(QStringLiteral("Connecting to LumaCore daemon."));
 
+    // Connected first so the cache is invalidated before any later-connected
+    // consumer (QML bindings, diagnostics) re-reads the setup status.
+    connect(this, &AppController::setupStatusChanged, this, [this] {
+        m_setupStatus.valid = false;
+    });
+
+    // daemonDryRunMismatch depends on both the daemon-reported state and the
+    // GUI setting, so re-notify it whenever either input changes.
+    connect(this, &AppController::daemonInfoChanged, this, &AppController::daemonDryRunSyncChanged);
+    connect(this, &AppController::dryRunEnabledChanged, this, &AppController::daemonDryRunSyncChanged);
+
     if (m_deviceManager == nullptr) {
         return;
     }
@@ -342,6 +383,9 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
     connect(m_deviceManager, &DeviceManager::devicesChanged, this, [this]() {
         refreshBackendInfo();
         emit deviceGroupsChanged();
+        // The setup status is derived from the device set (count + writability),
+        // so any device-set change must invalidate the cached status.
+        emit setupStatusChanged();
     });
 
     connect(m_deviceManager, &DeviceManager::dryRunEnabledChanged, this, [this]() {
@@ -353,8 +397,16 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
         connect(m_daemonClient.get(), &DaemonClient::connectionStateChanged, this, [this]() {
             emit daemonInfoChanged();
             emit setupStatusChanged();
-            if (daemonConnected()) {
+            if (m_daemonClient->isConnected()) {
                 syncDaemonDryRun();
+                if (m_daemonRecoveryEnabled && !m_daemonDevicesLoaded && !m_daemonRefreshInProgress) {
+                    QTimer::singleShot(0, this, [this] { refreshDaemonDevices(false); });
+                }
+            } else {
+                m_daemonDevicesLoaded = false;
+                if (m_deviceManager != nullptr) {
+                    m_deviceManager->stopAllFrameStreaming();
+                }
             }
             setStatusMessage(daemonConnected() ? QStringLiteral("Connected to LumaCore daemon.") : QStringLiteral("Daemon disconnected."));
         });
@@ -477,24 +529,37 @@ int AppController::backendDeviceCount() const
     return m_deviceManager == nullptr ? 0 : m_deviceManager->deviceCount();
 }
 
+const AppController::CachedSetupStatus& AppController::cachedSetupStatus() const
+{
+    if (!m_setupStatus.valid) {
+        const SetupStatus status = setupStatusFor(*this);
+        m_setupStatus.level = status.level;
+        m_setupStatus.summary = status.summary;
+        m_setupStatus.detail = status.detail;
+        m_setupStatus.action = status.action;
+        m_setupStatus.valid = true;
+    }
+    return m_setupStatus;
+}
+
 QString AppController::setupStatusLevel() const
 {
-    return setupStatusFor(*this).level;
+    return cachedSetupStatus().level;
 }
 
 QString AppController::setupStatusSummary() const
 {
-    return setupStatusFor(*this).summary;
+    return cachedSetupStatus().summary;
 }
 
 QString AppController::setupStatusDetail() const
 {
-    return setupStatusFor(*this).detail;
+    return cachedSetupStatus().detail;
 }
 
 QString AppController::setupStatusAction() const
 {
-    return setupStatusFor(*this).action;
+    return cachedSetupStatus().action;
 }
 
 bool AppController::setupAttentionRequired() const
@@ -554,6 +619,21 @@ bool AppController::daemonRecoveryBusy() const
     return m_daemonRefreshInProgress
         || (m_daemonClient != nullptr
             && (m_daemonClient->isConnecting() || m_daemonClient->isReconnectScheduled()));
+}
+
+bool AppController::daemonDryRunKnown() const
+{
+    return m_daemonClient != nullptr && m_daemonClient->daemonDryRunKnown();
+}
+
+bool AppController::daemonDryRunEnabled() const
+{
+    return m_daemonClient != nullptr && m_daemonClient->daemonDryRunEnabled();
+}
+
+bool AppController::daemonDryRunMismatch() const
+{
+    return daemonDryRunKnown() && daemonDryRunEnabled() != dryRunEnabled();
 }
 
 bool AppController::dryRunEnabled() const
@@ -694,13 +774,41 @@ bool AppController::deleteDeviceGroup(const QString& groupName)
     return true;
 }
 
+void AppController::syncZoneFrameStreaming(int deviceIndex, int zoneIndex, const RgbEffect& effect)
+{
+    if (m_deviceManager == nullptr) {
+        return;
+    }
+
+    const RgbDevice* device = deviceAt(deviceIndex);
+    if (effect.isAnimated()
+        && device != nullptr
+        && device->usesLocalFrameRenderingForEffect(zoneIndex, effect)) {
+        m_deviceManager->startZoneFrameStreaming(deviceIndex, zoneIndex);
+    } else {
+        m_deviceManager->stopZoneFrameStreaming(deviceIndex, zoneIndex);
+    }
+}
+
 void AppController::setDryRunEnabled(bool enabled)
 {
     if (m_deviceManager == nullptr) {
         return;
     }
 
-    m_deviceManager->setDryRunEnabled(enabled);
+    if (m_deviceManager->dryRunEnabled() != enabled) {
+        m_deviceManager->setDryRunEnabled(enabled);
+        // Enabling dry-run means the daemon would refuse streamed host frames via
+        // its synchronization guard, so stop streaming instead of silently
+        // freezing the animation while every frame is dropped.
+        if (enabled) {
+            m_deviceManager->stopAllFrameStreaming();
+        }
+    }
+
+    // Always push the current expectation to the daemon, even when the local
+    // value is unchanged, so a drifted daemon can be re-synchronized by
+    // re-asserting the setting rather than having to toggle it twice.
     syncDaemonDryRun();
 }
 
@@ -734,21 +842,27 @@ bool AppController::applyEffect(int deviceIndex, int zoneIndex, int effectType, 
         beginDaemonOperation();
         setStatusMessage(QStringLiteral("Applying effect to selected zone."));
         const QPointer<AppController> self(this);
+        const bool dryRunExpected = dryRunEnabled();
         const quint64 requestId = daemonDevice->applyZoneEffectAsync(
             zoneIndex,
             effect,
-            !dryRunEnabled(),
-            [self, deviceIndex, zoneIndex](bool success, const QString& error) {
+            dryRunExpected,
+            [self, deviceIndex, zoneIndex, dryRunExpected, effect](bool success, const QString& error) {
                 if (self == nullptr) {
                     return;
                 }
                 self->endDaemonOperation();
                 self->setStatusMessage(
                     success
-                        ? QStringLiteral("Applied effect to selected zone.")
+                        ? (dryRunExpected
+                            ? QStringLiteral("Previewed effect in dry-run.")
+                            : QStringLiteral("Applied effect to selected zone."))
                         : (error.isEmpty() ? QStringLiteral("Could not apply effect to selected zone.") : error)
                 );
-                emit self->zoneDataChanged(deviceIndex, zoneIndex);
+                if (success && !dryRunExpected) {
+                    self->syncZoneFrameStreaming(deviceIndex, zoneIndex, effect);
+                    emit self->zoneDataChanged(deviceIndex, zoneIndex);
+                }
                 self->refreshDaemonActivityLog();
             }
         );
@@ -902,7 +1016,7 @@ bool AppController::deviceWritable(int deviceIndex) const
         return false;
     }
 
-    return device->isWritable();
+    return PermissionGate::writeAllowedOrConfirmable(*device);
 }
 
 QString AppController::devicePermissionReason(int deviceIndex) const
@@ -912,13 +1026,24 @@ QString AppController::devicePermissionReason(int deviceIndex) const
         return {};
     }
 
-    const PermissionResult colorPermission = device->checkRuntimePermission(BackendCapability::ZoneColorWrite);
-    if (!colorPermission.reason.isEmpty()) {
-        return colorPermission.reason;
+    QString fallbackReason;
+    for (const BackendCapability capability : {
+             BackendCapability::ZoneColorWrite,
+             BackendCapability::ZoneEffectWrite,
+         }) {
+        const PermissionResult permission = device->checkRuntimePermission(capability);
+        if (permission.reason.isEmpty()) {
+            continue;
+        }
+        if (permission.status == PermissionStatus::RequiresConfirmation) {
+            return permission.reason;
+        }
+        if (fallbackReason.isEmpty()) {
+            fallbackReason = permission.reason;
+        }
     }
 
-    const PermissionResult effectPermission = device->checkRuntimePermission(BackendCapability::ZoneEffectWrite);
-    return effectPermission.reason;
+    return fallbackReason;
 }
 
 QString AppController::deviceLastHardwareWriteStatus(int deviceIndex) const
@@ -1214,19 +1339,29 @@ bool AppController::allOffDevice(int deviceIndex)
         beginDaemonOperation();
         setStatusMessage(QStringLiteral("Turning off selected device."));
         const QPointer<AppController> self(this);
+        const bool dryRunExpected = dryRunEnabled();
         const quint64 requestId = daemonDevice->applyAllOffAsync(
-            !dryRunEnabled(),
-            [self, deviceIndex](bool success, const QString& error) {
+            dryRunExpected,
+            [self, deviceIndex, dryRunExpected](bool success, const QString& error) {
                 if (self == nullptr) {
                     return;
                 }
                 self->endDaemonOperation();
                 self->setStatusMessage(
                     success
-                        ? QStringLiteral("Sent all-off command to selected device.")
+                        ? (dryRunExpected
+                            ? QStringLiteral("Previewed All Off in dry-run.")
+                            : QStringLiteral("Sent all-off command to selected device."))
                         : (error.isEmpty() ? QStringLiteral("Could not turn device off.") : error)
                 );
-                emit self->zoneDataChanged(deviceIndex, -1);
+                if (success && !dryRunExpected) {
+                    // All Off turns the device off, so any host-streamed animation
+                    // for this device must stop or it keeps pushing frames forever.
+                    if (self->m_deviceManager != nullptr) {
+                        self->m_deviceManager->stopDeviceFrameStreaming(deviceIndex);
+                    }
+                    emit self->zoneDataChanged(deviceIndex, -1);
+                }
                 self->refreshDaemonActivityLog();
             }
         );
@@ -1461,11 +1596,12 @@ bool AppController::applyGlobalEffectInternal(
             if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(device)) {
                 ++state->pending;
                 beginDaemonOperation();
+                const bool dryRunExpected = dryRunEnabled();
                 const quint64 requestId = daemonDevice->applyZoneEffectAsync(
                     zoneIndex,
                     effect,
-                    !dryRunEnabled(),
-                    [self, state, finish, deviceIndex, zoneIndex](bool success, const QString& error) {
+                    dryRunExpected,
+                    [self, state, finish, deviceIndex, zoneIndex, dryRunExpected, effect](bool success, const QString& error) {
                         if (self == nullptr) {
                             return;
                         }
@@ -1480,10 +1616,13 @@ bool AppController::applyGlobalEffectInternal(
                                     ? QStringLiteral("Device %1 / zone %2: write failed.")
                                           .arg(deviceIndex)
                                           .arg(zoneIndex)
-                                    : error
+                                : error
                             );
                         }
-                        emit self->zoneDataChanged(deviceIndex, zoneIndex);
+                        if (success && !dryRunExpected) {
+                            self->syncZoneFrameStreaming(deviceIndex, zoneIndex, effect);
+                            emit self->zoneDataChanged(deviceIndex, zoneIndex);
+                        }
                         (*finish)();
                     }
                 );
@@ -1605,9 +1744,10 @@ bool AppController::allOffDevicesInternal(const QStringList& targetDeviceIds, co
         if (auto* daemonDevice = dynamic_cast<DaemonRgbDevice*>(device)) {
             ++state->pending;
             beginDaemonOperation();
+            const bool dryRunExpected = dryRunEnabled();
             const quint64 requestId = daemonDevice->applyAllOffAsync(
-                !dryRunEnabled(),
-                [self, state, finish, deviceIndex](bool success, const QString& error) {
+                dryRunExpected,
+                [self, state, finish, deviceIndex, dryRunExpected](bool success, const QString& error) {
                     if (self == nullptr) {
                         return;
                     }
@@ -1623,7 +1763,12 @@ bool AppController::allOffDevicesInternal(const QStringList& targetDeviceIds, co
                                 : error
                         );
                     }
-                    emit self->zoneDataChanged(deviceIndex, -1);
+                    if (success && !dryRunExpected) {
+                        if (self->m_deviceManager != nullptr) {
+                            self->m_deviceManager->stopDeviceFrameStreaming(deviceIndex);
+                        }
+                        emit self->zoneDataChanged(deviceIndex, -1);
+                    }
                     (*finish)();
                 }
             );
@@ -1921,11 +2066,12 @@ bool AppController::applyProfileAsync(const QString& profileName)
                     }
 
                     self->beginDaemonOperation();
+                    const bool dryRunExpected = self->dryRunEnabled();
                     const quint64 effectRequestId = daemonDevicePointer->applyZoneEffectAsync(
                         target.zoneIndex,
                         target.effect,
-                        !self->dryRunEnabled(),
-                        [self, state, finish, target](bool effectSuccess, const QString& effectError) {
+                        dryRunExpected,
+                        [self, state, finish, target, dryRunExpected](bool effectSuccess, const QString& effectError) {
                             if (self == nullptr) {
                                 return;
                             }
@@ -1941,7 +2087,10 @@ bool AppController::applyProfileAsync(const QString& profileName)
                                         : effectError
                                 );
                             }
-                            emit self->zoneDataChanged(target.deviceIndex, target.zoneIndex);
+                            if (effectSuccess && !dryRunExpected) {
+                                self->syncZoneFrameStreaming(target.deviceIndex, target.zoneIndex, target.effect);
+                                emit self->zoneDataChanged(target.deviceIndex, target.zoneIndex);
+                            }
                             (*finish)();
                         }
                     );
@@ -2237,6 +2386,9 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("writableDeviceCount"), writableDeviceCount},
                 {QStringLiteral("confirmationRequiredDeviceCount"), confirmationRequiredDeviceCount},
                 {QStringLiteral("dryRunEnabled"), dryRunEnabled()},
+                {QStringLiteral("daemonDryRunKnown"), daemonDryRunKnown()},
+                {QStringLiteral("daemonDryRunEnabled"), daemonDryRunEnabled()},
+                {QStringLiteral("dryRunSynchronized"), !daemonDryRunMismatch()},
                 {QStringLiteral("daemonState"), daemonState()},
                 {QStringLiteral("daemonConnected"), daemonConnected()},
             },
@@ -2334,6 +2486,9 @@ QVariantMap AppController::diagnosticsReport() const
             QStringLiteral("safety"),
             QVariantMap {
                 {QStringLiteral("dryRunEnabled"), dryRunEnabled()},
+                {QStringLiteral("daemonDryRunKnown"), daemonDryRunKnown()},
+                {QStringLiteral("daemonDryRunEnabled"), daemonDryRunEnabled()},
+                {QStringLiteral("dryRunSynchronized"), !daemonDryRunMismatch()},
                 {QStringLiteral("profilesDirectory"), sanitize(profilesDirectory)},
             },
         },
@@ -2653,6 +2808,7 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
             }
 
             self->m_deviceManager->replaceDevices(daemonBackend->devicesFromPayload(response.result));
+            self->m_daemonDevicesLoaded = true;
             self->setStatusMessage(
                 recoveredConnection
                     ? QStringLiteral("Reconnected and refreshed %1 device(s).")

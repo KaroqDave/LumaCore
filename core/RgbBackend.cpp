@@ -6,14 +6,19 @@
 
 namespace lumacore {
 
-std::vector<std::unique_ptr<RgbDevice>> RgbBackend::discoverDevices() const
+std::vector<std::unique_ptr<RgbDevice>> RgbBackend::createDevices() const
 {
-    return createDevices();
+    return discoverDevices();
 }
 
 PermissionResult RgbBackend::probe() const
 {
     return {PermissionStatus::Granted, {}};
+}
+
+QString RgbBackend::lastDiscoverError() const
+{
+    return {};
 }
 
 QString backendCapabilityDisplayName(BackendCapability capability)

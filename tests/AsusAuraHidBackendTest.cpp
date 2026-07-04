@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "backends/asus/AsusAuraHidBackend.h"
+#include "backends/asus/AsusAuraHidDevice.h"
+#include "hardware/linux/AsusAuraHidProtocol.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -74,6 +76,59 @@ int main(int argc, char* argv[])
         || !require(
             !lumacore::AsusAuraHidBackend::prefersProbeDevice(unknownInterface, numberedInterface),
             "unknown interface numbers should not displace known interface numbers"
+        )) {
+        return 1;
+    }
+
+    lumacore::hardware::linux::AsusAuraConfigTable config;
+    config.valid = true;
+    config.addressableHeaderCount = 1;
+    config.mainboardLedCount = 3;
+    config.rgbHeaderCount = 1;
+    config.channels = {
+        {
+            lumacore::hardware::linux::AsusAuraChannelType::Fixed,
+            0,
+            0,
+            3,
+            1,
+        },
+        {
+            lumacore::hardware::linux::AsusAuraChannelType::Addressable,
+            1,
+            1,
+            20,
+            0,
+        },
+    };
+    lumacore::AsusAuraHidDevice device(
+        auraProbeDevice(QStringLiteral("19AF"), QStringLiteral("test-hid-path"), 2),
+        true,
+        config,
+        QStringLiteral("verified test config")
+    );
+    if (!require(device.zones().size() == 2, "config-derived ASUS fixture should expose fixed and addressable zones")) {
+        return 1;
+    }
+    if (!require(
+            !device.updateZoneMetadata(0, QStringLiteral("Header 1"), 2),
+            "fixed ASUS zones should reject LED-count edits that drift from protocol geometry"
+        )
+        || !require(
+            device.zones().at(0).ledCount() == 1,
+            "rejected fixed-zone LED-count edits should leave metadata unchanged"
+        )
+        || !require(
+            device.updateZoneMetadata(0, QStringLiteral("Renamed Header"), 1),
+            "fixed ASUS zones should still allow metadata renames when the config LED count is preserved"
+        )
+        || !require(
+            device.updateZoneMetadata(1, QStringLiteral("Addressable Header"), 30),
+            "addressable ASUS zones should keep their editable LED count"
+        )
+        || !require(
+            device.zones().at(1).ledCount() == 30,
+            "addressable ASUS LED-count edits should be retained"
         )) {
         return 1;
     }

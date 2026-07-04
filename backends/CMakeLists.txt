@@ -32,6 +32,9 @@ if(LUMACORE_ENABLE_LINUX_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ${PROJECT_SOURCE_DIR}/hardware/linux/LibusbProbe.h
         ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.cpp
         ${PROJECT_SOURCE_DIR}/hardware/linux/ProbeResult.h
+        ${PROJECT_SOURCE_DIR}/hardware/common/ProbeResultCommon.cpp
+        ${PROJECT_SOURCE_DIR}/hardware/common/ProbeResultCommon.h
+        ${PROJECT_SOURCE_DIR}/hardware/common/ProbeTypes.h
     )
 
     target_include_directories(lumacore_linux_backend PUBLIC ${PROJECT_SOURCE_DIR})
@@ -62,6 +65,9 @@ if(LUMACORE_ENABLE_WINDOWS_DISCOVERY AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
         ${PROJECT_SOURCE_DIR}/hardware/windows/HidapiProbe.h
         ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.cpp
         ${PROJECT_SOURCE_DIR}/hardware/windows/ProbeResult.h
+        ${PROJECT_SOURCE_DIR}/hardware/common/ProbeResultCommon.cpp
+        ${PROJECT_SOURCE_DIR}/hardware/common/ProbeResultCommon.h
+        ${PROJECT_SOURCE_DIR}/hardware/common/ProbeTypes.h
     )
 
     target_include_directories(lumacore_windows_backend PUBLIC ${PROJECT_SOURCE_DIR})

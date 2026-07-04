@@ -43,10 +43,6 @@ void configureParser(QCommandLineParser& parser)
         QStringLiteral("exit-on-disconnect"),
         QStringLiteral("Exit after the last client disconnects, once at least one client has connected.")
     );
-    const QCommandLineOption experimentalWritesOption(
-        QStringLiteral("enable-experimental-writes"),
-        QStringLiteral("Deprecated compatibility flag; ASUS Aura HID writes are now enabled by config verification and confirmation.")
-    );
     const QCommandLineOption dryRunOption(
         QStringLiteral("dry-run"),
         QStringLiteral("Override the startup dry-run state ('true' logs write intent only, 'false' arms writes). Defaults to the platform default."),
@@ -57,7 +53,6 @@ void configureParser(QCommandLineParser& parser)
     parser.addOption(allowUnprivilegedOption);
     parser.addOption(backendOption);
     parser.addOption(exitOnDisconnectOption);
-    parser.addOption(experimentalWritesOption);
     parser.addOption(dryRunOption);
 }
 
@@ -111,11 +106,6 @@ DaemonOptions parseDaemonOptions(QCoreApplication& application)
     QCommandLineParser parser;
     configureParser(parser);
     parser.process(application);
-
-    if (parser.isSet(QStringLiteral("enable-experimental-writes"))) {
-        qWarning().noquote()
-            << QStringLiteral("--enable-experimental-writes is deprecated and ignored; ASUS writes remain config-verified and confirmation-gated.");
-    }
 
     QString errorMessage;
     DaemonOptions options = optionsFromParser(parser, &errorMessage);

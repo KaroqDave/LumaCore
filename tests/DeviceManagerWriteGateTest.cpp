@@ -81,7 +81,7 @@ public:
         };
     }
 
-    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> createDevices() const override
+    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> discoverDevices() const override
     {
         std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
         devices.push_back(std::make_unique<ConfirmationDevice>());
@@ -166,7 +166,7 @@ public:
         };
     }
 
-    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> createDevices() const override
+    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> discoverDevices() const override
     {
         std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
         devices.push_back(std::make_unique<EffectOnlyConfirmationDevice>());
@@ -250,6 +250,18 @@ int main(int argc, char* argv[])
             manager.deviceAt(0)->zones().at(0).currentColor() == lumacore::RgbColor(9, 8, 7),
             "confirmed local animation frames should remain allowed"
         )) {
+        return 1;
+    }
+    if (!require(manager.revokeDeviceWrites(0), "test device writes should revoke")) {
+        return 1;
+    }
+    if (!require(!manager.deviceWriteConfirmed(0), "revoked device should no longer be confirmed")) {
+        return 1;
+    }
+    if (!require(manager.revokeDeviceWrites(0), "revoking an already-unconfirmed valid device should be idempotent")) {
+        return 1;
+    }
+    if (!require(!manager.deviceWriteConfirmed(0), "idempotent revoke should leave the device unconfirmed")) {
         return 1;
     }
 

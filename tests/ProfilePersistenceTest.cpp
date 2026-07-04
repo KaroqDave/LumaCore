@@ -123,7 +123,7 @@ public:
         };
     }
 
-    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> createDevices() const override
+    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> discoverDevices() const override
     {
         std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
         devices.push_back(std::make_unique<PreviewNormalizationDevice>());

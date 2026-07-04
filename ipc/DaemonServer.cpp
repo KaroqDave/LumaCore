@@ -36,9 +36,21 @@ bool dryRunMatchesClientExpectation(
     QString* errorMessage
 )
 {
-    const QJsonValue expectedDryRun = params.value(QStringLiteral("dryRunEnabled"));
-    if (!expectedDryRun.isBool() || deviceManager == nullptr) {
+    if (deviceManager == nullptr) {
         return true;
+    }
+
+    // Write requests must declare an explicit dry-run expectation so the daemon
+    // can refuse when its own state has drifted from the caller. A missing or
+    // non-bool field is treated as a mismatch rather than silently allowed.
+    const QJsonValue expectedDryRun = params.value(QStringLiteral("dryRunEnabled"));
+    if (!expectedDryRun.isBool()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral(
+                "Daemon requires an explicit dry-run expectation on write requests; refusing hardware write."
+            );
+        }
+        return false;
     }
     if (expectedDryRun.toBool() == deviceManager->dryRunEnabled()) {
         return true;
@@ -76,7 +88,7 @@ bool DaemonServer::listen(const QString& socketPath, QString* errorMessage)
 
     m_endpointLock = std::make_unique<QLockFile>(endpointLockPath(m_socketPath));
 #ifdef Q_OS_WIN
-    m_endpointLock->setStaleLockTime(0);
+    m_endpointLock->setStaleLockTime(30'000);
 #endif
     if (!m_endpointLock->tryLock(0)) {
         const QString message = QStringLiteral(
@@ -161,7 +173,16 @@ void DaemonServer::setExitWhenIdle(bool enabled)
 void DaemonServer::handleNewConnection()
 {
     while (QLocalSocket* socket = m_server.nextPendingConnection()) {
+        QLocalSocket* previousClient =
+            (m_activeClient != nullptr && m_activeClient != socket) ? m_activeClient : nullptr;
+
+        // Register the replacement as the active client (and insert its buffer)
+        // BEFORE tearing down the previous one. disconnectFromServer() can emit
+        // disconnected() synchronously; if the new socket were not yet tracked,
+        // handleDisconnected() would see an empty m_buffers and, under
+        // --exit-on-disconnect, wrongly fire idleExitRequested() mid-handover.
         m_acceptedConnection = true;
+        m_activeClient = socket;
         socket->setReadBufferSize(kDaemonMaxFrameBytes);
         m_buffers.insert(socket, {});
         connect(socket, &QLocalSocket::readyRead, this, [this, socket] {
@@ -170,6 +191,12 @@ void DaemonServer::handleNewConnection()
         connect(socket, &QLocalSocket::disconnected, this, [this, socket] {
             handleDisconnected(socket);
         });
+
+        if (previousClient != nullptr) {
+            m_buffers.remove(previousClient);
+            previousClient->disconnectFromServer();
+            previousClient->deleteLater();
+        }
     }
 }
 
@@ -227,14 +254,19 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
             encodedResponse =
                 encodeDaemonMessage(makeDaemonError(requestId, QStringLiteral("Daemon response exceeds the maximum message size.")));
         }
-        socket->write(encodedResponse);
-        socket->flush();
+        if (socket->write(encodedResponse) != encodedResponse.size() || !socket->flush()) {
+            socket->disconnectFromServer();
+            return;
+        }
     }
 }
 
 void DaemonServer::handleDisconnected(QLocalSocket* socket)
 {
     m_buffers.remove(socket);
+    if (socket == m_activeClient) {
+        m_activeClient = nullptr;
+    }
     if (socket != nullptr) {
         socket->deleteLater();
     }
@@ -275,6 +307,8 @@ QJsonObject DaemonServer::handleRequest(const QJsonObject& request)
         return makeDaemonResult(requestId, revokeWrites(params));
     case DaemonMethod::AllOff:
         return makeDaemonResult(requestId, allOff(params));
+    case DaemonMethod::PaintZoneFrame:
+        return makeDaemonResult(requestId, paintZoneFrame(params));
     case DaemonMethod::SetDryRun:
         return makeDaemonResult(requestId, setDryRun(params));
     case DaemonMethod::ActivityLogSnapshot:
@@ -308,7 +342,11 @@ QJsonObject DaemonServer::listDevicesPayload() const
         for (int index = 0; index < m_deviceManager->deviceCount(); ++index) {
             const RgbDevice* device = m_deviceManager->deviceAt(index);
             if (device != nullptr) {
-                devices.append(deviceToJson(*device, index, m_deviceManager->deviceWriteConfirmed(index)));
+                devices.append(deviceToJson(
+                    *device,
+                    index,
+                    m_deviceManager->deviceWriteConfirmed(index)
+                ));
             }
         }
     }
@@ -357,12 +395,17 @@ QJsonObject DaemonServer::applyEffect(const QJsonObject& params)
             {QStringLiteral("dryRunEnabled"), m_deviceManager->dryRunEnabled()},
         };
     }
-    const bool success = m_deviceManager->applyZoneEffect(deviceIndex, zoneIndex, effect);
-    const QString hardwareStatus = device == nullptr ? QString() : device->lastHardwareWriteStatus();
+    const bool dryRunEnabled = m_deviceManager->dryRunEnabled();
+    const bool clientStreamsFrames = params.value(QStringLiteral("clientStreamsFrames")).toBool(false);
+    const bool success = m_deviceManager->applyZoneEffect(deviceIndex, zoneIndex, effect, clientStreamsFrames);
+    const QString hardwareStatus = success && dryRunEnabled
+        ? QStringLiteral("Dry-run accepted; no hardware write was sent.")
+        : (device == nullptr ? QString() : device->lastHardwareWriteStatus());
     return {
         {QStringLiteral("success"), success},
         {QStringLiteral("hardwareStatus"), hardwareStatus},
         {QStringLiteral("error"), success ? QString() : hardwareStatus},
+        {QStringLiteral("dryRunEnabled"), dryRunEnabled},
     };
 }
 
@@ -429,19 +472,57 @@ QJsonObject DaemonServer::allOff(const QJsonObject& params)
             {QStringLiteral("dryRunEnabled"), m_deviceManager->dryRunEnabled()},
         };
     }
+    const bool dryRunEnabled = m_deviceManager->dryRunEnabled();
     const bool success = m_deviceManager->applyAllOff(deviceIndex, &errorMessage);
-    const QString hardwareStatus = device == nullptr ? QString() : device->lastHardwareWriteStatus();
+    const QString hardwareStatus = success && dryRunEnabled
+        ? QStringLiteral("Dry-run accepted; no hardware write was sent.")
+        : (device == nullptr ? QString() : device->lastHardwareWriteStatus());
     return {
         {QStringLiteral("success"), success},
         {QStringLiteral("error"), errorMessage},
         {QStringLiteral("hardwareStatus"), hardwareStatus},
+        {QStringLiteral("dryRunEnabled"), dryRunEnabled},
+    };
+}
+
+QJsonObject DaemonServer::paintZoneFrame(const QJsonObject& params)
+{
+    if (m_deviceManager == nullptr) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), QStringLiteral("Device manager is not available.")}};
+    }
+
+    const int deviceIndex = params.value(QStringLiteral("deviceIndex")).toInt(-1);
+    const int zoneIndex = params.value(QStringLiteral("zoneIndex")).toInt(-1);
+    QString dryRunError;
+    if (!dryRunMatchesClientExpectation(params, m_deviceManager, &dryRunError)) {
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("error"), dryRunError},
+            {QStringLiteral("dryRunEnabled"), m_deviceManager->dryRunEnabled()},
+        };
+    }
+
+    const bool dryRunEnabled = m_deviceManager->dryRunEnabled();
+    const bool painted =
+        m_deviceManager->paintZoneFrame(deviceIndex, zoneIndex, colorsFromJson(params.value(QStringLiteral("colors")).toArray()));
+    // Under dry-run the frame is intentionally not written, which still counts as
+    // an accepted call. Outside dry-run, report the real paint outcome so a
+    // dropped frame (invalid target or write not permitted) is not masked.
+    const bool success = dryRunEnabled || painted;
+    return {
+        {QStringLiteral("success"), success},
+        {QStringLiteral("error"), success ? QString() : QStringLiteral("Frame was not applied (invalid target or write not permitted).")},
+        {QStringLiteral("dryRunEnabled"), dryRunEnabled},
     };
 }
 
 QJsonObject DaemonServer::setDryRun(const QJsonObject& params)
 {
     if (m_deviceManager == nullptr) {
-        return {{QStringLiteral("success"), false}};
+        return {
+            {QStringLiteral("success"), false},
+            {QStringLiteral("error"), QStringLiteral("Device manager is not available.")},
+        };
     }
 
     m_deviceManager->setDryRunEnabled(params.value(QStringLiteral("enabled")).toBool(false));

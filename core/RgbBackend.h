@@ -26,9 +26,10 @@ public:
     virtual ~RgbBackend() = default;
 
     [[nodiscard]] virtual BackendDescriptor descriptor() const = 0;
-    [[nodiscard]] virtual std::vector<std::unique_ptr<RgbDevice>> createDevices() const = 0;
-    [[nodiscard]] virtual std::vector<std::unique_ptr<RgbDevice>> discoverDevices() const;
+    [[nodiscard]] virtual std::vector<std::unique_ptr<RgbDevice>> discoverDevices() const = 0;
+    [[nodiscard]] virtual std::vector<std::unique_ptr<RgbDevice>> createDevices() const;
     [[nodiscard]] virtual PermissionResult probe() const;
+    [[nodiscard]] virtual QString lastDiscoverError() const;
 };
 
 [[nodiscard]] QString backendCapabilityDisplayName(BackendCapability capability);

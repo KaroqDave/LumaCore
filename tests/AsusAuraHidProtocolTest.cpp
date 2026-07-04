@@ -136,18 +136,104 @@ int main(int argc, char* argv[])
     if (!require(!parseAsusAuraConfigTableResponse(invalidConfigResponse).valid, "non-EC30 config responses should be rejected")) {
         return 1;
     }
-    QByteArray inconsistentConfigResponse(kAsusAuraResearchReportLength, '\0');
-    inconsistentConfigResponse[0] = static_cast<char>(0xEC);
-    inconsistentConfigResponse[1] = static_cast<char>(0x30);
-    inconsistentConfigResponse[0x04 + 0x1B] = static_cast<char>(1);
-    inconsistentConfigResponse[0x04 + 0x1D] = static_cast<char>(3);
-    const AsusAuraConfigTable inconsistentConfig = parseAsusAuraConfigTableResponse(inconsistentConfigResponse);
-    if (!require(!inconsistentConfig.valid, "config responses with inconsistent RGB header counts should be rejected")) {
+    QByteArray impossibleHeaderConfigResponse(kAsusAuraResearchReportLength, '\0');
+    impossibleHeaderConfigResponse[0] = static_cast<char>(0xEC);
+    impossibleHeaderConfigResponse[1] = static_cast<char>(0x30);
+    impossibleHeaderConfigResponse[0x04 + 0x1B] = static_cast<char>(2);
+    impossibleHeaderConfigResponse[0x04 + 0x1D] = static_cast<char>(4);
+    const AsusAuraConfigTable impossibleHeaderConfig = parseAsusAuraConfigTableResponse(impossibleHeaderConfigResponse);
+    if (!require(impossibleHeaderConfig.valid, "impossible fixed RGB header counts should not reject the whole config table")) {
         return 1;
     }
     if (!require(
-            inconsistentConfig.error.contains(QStringLiteral("invalid fixed-channel geometry")),
-            "inconsistent RGB header counts should report invalid geometry"
+            impossibleHeaderConfig.rgbHeaderCount == 0,
+            "impossible fixed RGB header counts should be normalized to no exposed fixed headers"
+        )) {
+        return 1;
+    }
+    if (!require(
+            impossibleHeaderConfig.summary.contains(QStringLiteral("reportedRgbHeaders=4")),
+            "normalized configs should preserve the raw fixed RGB header count in the summary"
+        )) {
+        return 1;
+    }
+    const AsusAuraHidProtocolResult normalizedStaticWrite = buildAsusAuraStaticColorWrite(
+        impossibleHeaderConfig,
+        0,
+        lumacore::RgbColor(12, 24, 36),
+        2,
+        100
+    );
+    if (!require(normalizedStaticWrite.ok, "normalized fixed-mainboard config should still allow aggregate static writes")) {
+        return 1;
+    }
+    const QByteArray normalizedColorReport = normalizedStaticWrite.packet.reports.at(2);
+    if (!require(
+            static_cast<unsigned char>(normalizedColorReport.at(2)) == 0x00
+                && static_cast<unsigned char>(normalizedColorReport.at(3)) == 0x03,
+            "normalized fixed-mainboard writes should target the verified mainboard LED mask"
+        )) {
+        return 1;
+    }
+    if (!require(
+            normalizedStaticWrite.packet.summary.contains(QStringLiteral("fixedMainboard=true")),
+            "normalized fixed-mainboard writes should identify the aggregate target"
+        )) {
+        return 1;
+    }
+    QByteArray wideMainboardOnlyConfigResponse(kAsusAuraResearchReportLength, '\0');
+    wideMainboardOnlyConfigResponse[0] = static_cast<char>(0xEC);
+    wideMainboardOnlyConfigResponse[1] = static_cast<char>(0x30);
+    wideMainboardOnlyConfigResponse[0x04 + 0x1B] = static_cast<char>(20);
+    const AsusAuraConfigTable wideMainboardOnlyConfig = parseAsusAuraConfigTableResponse(wideMainboardOnlyConfigResponse);
+    if (!require(
+            !wideMainboardOnlyConfig.valid,
+            "mainboard channels beyond the effect-color mask with no addressable headers should be rejected"
+        )
+        || !require(
+            wideMainboardOnlyConfig.error.contains(QStringLiteral("effect-color mask")),
+            "rejected wide mainboard configs should explain the mask limit"
+        )) {
+        return 1;
+    }
+    QByteArray wideMainboardMixedConfigResponse(kAsusAuraResearchReportLength, '\0');
+    wideMainboardMixedConfigResponse[0] = static_cast<char>(0xEC);
+    wideMainboardMixedConfigResponse[1] = static_cast<char>(0x30);
+    wideMainboardMixedConfigResponse[0x04 + 0x02] = static_cast<char>(1);
+    wideMainboardMixedConfigResponse[0x04 + 0x1B] = static_cast<char>(20);
+    const AsusAuraConfigTable wideMainboardMixedConfig = parseAsusAuraConfigTableResponse(wideMainboardMixedConfigResponse);
+    if (!require(
+            wideMainboardMixedConfig.valid,
+            "wide mainboard channels should not reject configs that still expose addressable headers"
+        )
+        || !require(
+            asusAuraFixedExposedZoneCount(wideMainboardMixedConfig) == 0,
+            "mainboard channels beyond the effect-color mask should not be exposed as a zone"
+        )
+        || !require(
+            asusAuraExposedZoneCount(wideMainboardMixedConfig) == 1,
+            "wide mainboard configs should expose only their addressable headers"
+        )
+        || !require(
+            wideMainboardMixedConfig.summary.contains(QStringLiteral("aggregate mainboard zone is not exposed")),
+            "wide mainboard configs should note the unexposed aggregate zone in the summary"
+        )) {
+        return 1;
+    }
+    const AsusAuraHidProtocolResult wideMainboardWrite = buildAsusAuraStaticColorWrite(
+        wideMainboardMixedConfig,
+        0,
+        lumacore::RgbColor(12, 24, 36),
+        2,
+        100
+    );
+    if (!require(
+            wideMainboardWrite.ok,
+            "zone 0 of a wide mainboard config should resolve to the first addressable header"
+        )
+        || !require(
+            wideMainboardWrite.packet.summary.contains(QStringLiteral("addressableHeader=1")),
+            "wide mainboard configs should route zone 0 writes to the addressable channel"
         )) {
         return 1;
     }

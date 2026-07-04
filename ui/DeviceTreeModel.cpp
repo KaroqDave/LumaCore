@@ -2,7 +2,9 @@
 
 #include "ui/DeviceTreeModel.h"
 
+#include "core/PermissionGate.h"
 #include "core/RgbColor.h"
+#include "ui/AppController.h"
 
 namespace lumacore {
 
@@ -18,15 +20,10 @@ QString effectDisplayName(RgbEffectType type)
     case RgbEffectType::Breathing:
         return QStringLiteral("Breathing");
     case RgbEffectType::ColorCycle:
-        return QStringLiteral("Color Cycle");
+        return QStringLiteral("Cycle");
     }
 
     return QStringLiteral("Static");
-}
-
-bool deviceWritable(const RgbDevice& device)
-{
-    return device.isWritable();
 }
 
 bool hasGuardedWriteBackend(const RgbDevice& device)
@@ -34,15 +31,19 @@ bool hasGuardedWriteBackend(const RgbDevice& device)
     return device.discoveryWriteCapableBackend();
 }
 
-QString deviceBadgeText(const RgbDevice& device)
+// checkAnyWrite reports RequiresConfirmation ahead of Granted, so one
+// PermissionResult answers both the writable and needs-confirmation questions.
+QString deviceBadgeText(const RgbDevice& device, const PermissionResult& writePermission)
 {
-    if (deviceWritable(device)) {
-        return QStringLiteral("Writable");
+    if (PermissionGate::allowsWriteOrConfirmation(writePermission)) {
+        return writePermission.status == PermissionStatus::RequiresConfirmation
+            ? QStringLiteral("Confirm")
+            : QStringLiteral("Writable");
     }
 
     const QString stage = device.discoverySupportStage();
     if (hasGuardedWriteBackend(device)) {
-        return QStringLiteral("Guarded");
+        return QStringLiteral("Blocked");
     }
     if (stage == QStringLiteral("research-only")) {
         return QStringLiteral("Research");
@@ -57,10 +58,15 @@ QString deviceBadgeText(const RgbDevice& device)
     return {};
 }
 
-QString deviceBadgeLevel(const RgbDevice& device)
+QString deviceBadgeLevel(const RgbDevice& device, const PermissionResult& writePermission)
 {
-    if (deviceWritable(device) || hasGuardedWriteBackend(device)) {
-        return QStringLiteral("ready");
+    if (PermissionGate::allowsWriteOrConfirmation(writePermission)) {
+        return writePermission.status == PermissionStatus::RequiresConfirmation
+            ? QStringLiteral("warning")
+            : QStringLiteral("ready");
+    }
+    if (hasGuardedWriteBackend(device)) {
+        return QStringLiteral("warning");
     }
 
     const QString stage = device.discoverySupportStage();
@@ -204,11 +210,11 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
         case RgbControllerOverrideRole:
             return device->rgbControllerOverride();
         case DeviceWritableRole:
-            return deviceWritable(*device);
+            return PermissionGate::writeAllowedOrConfirmable(*device);
         case DeviceBadgeTextRole:
-            return deviceBadgeText(*device);
+            return deviceBadgeText(*device, PermissionGate::checkAnyWrite(*device));
         case DeviceBadgeLevelRole:
-            return deviceBadgeLevel(*device);
+            return deviceBadgeLevel(*device, PermissionGate::checkAnyWrite(*device));
         case DiscoverySupportStageRole:
             return device->discoverySupportStage();
         case DiscoverySupportStatusRole:
@@ -267,11 +273,11 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
     case RgbControllerOverrideRole:
         return device->rgbControllerOverride();
     case DeviceWritableRole:
-        return deviceWritable(*device);
+        return PermissionGate::writeAllowedOrConfirmable(*device);
     case DeviceBadgeTextRole:
-        return deviceBadgeText(*device);
+        return deviceBadgeText(*device, PermissionGate::checkAnyWrite(*device));
     case DeviceBadgeLevelRole:
-        return deviceBadgeLevel(*device);
+        return deviceBadgeLevel(*device, PermissionGate::checkAnyWrite(*device));
     case DiscoverySupportStageRole:
         return device->discoverySupportStage();
     case DiscoverySupportStatusRole:
@@ -340,6 +346,63 @@ void DeviceTreeModel::setDeviceFilter(int deviceFilter)
     rebuild();
     endResetModel();
     emit deviceFilterChanged();
+}
+
+void DeviceTreeModel::setWriteConfirmationSource(AppController* controller)
+{
+    if (m_writeConfirmationSource == controller) {
+        return;
+    }
+
+    if (m_writeConfirmationSource != nullptr) {
+        disconnect(m_writeConfirmationSource, nullptr, this, nullptr);
+    }
+
+    m_writeConfirmationSource = controller;
+    if (m_writeConfirmationSource == nullptr) {
+        return;
+    }
+
+    connect(
+        m_writeConfirmationSource,
+        &AppController::writeConfirmationChanged,
+        this,
+        &DeviceTreeModel::refreshDeviceBadges
+    );
+}
+
+bool DeviceTreeModel::isDeviceVisible(int deviceIndex) const
+{
+    if (deviceIndex < 0 || m_deviceManager == nullptr) {
+        return false;
+    }
+
+    const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
+    if (device == nullptr) {
+        return false;
+    }
+
+    if (m_deviceFilter == RgbControllers && !device->isRgbController()) {
+        return false;
+    }
+
+    return true;
+}
+
+void DeviceTreeModel::refreshDeviceBadges(int deviceIndex)
+{
+    if (!isDeviceVisible(deviceIndex)) {
+        return;
+    }
+
+    const QModelIndex changedDevice = indexForDevice(deviceIndex);
+    if (changedDevice.isValid()) {
+        emit dataChanged(
+            changedDevice,
+            changedDevice,
+            {DeviceWritableRole, DeviceBadgeTextRole, DeviceBadgeLevelRole}
+        );
+    }
 }
 
 void DeviceTreeModel::rebuild()

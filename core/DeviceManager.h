@@ -31,7 +31,6 @@ public:
     void registerBackend(std::unique_ptr<RgbBackend> backend);
     [[nodiscard]] bool activateBackend(const QString& id);
     void initializeBackends(const QString& backendId = {});
-    void initializeMockDevices();
 
     [[nodiscard]] bool dryRunEnabled() const;
     void setDryRunEnabled(bool enabled);
@@ -49,9 +48,18 @@ public:
 
     [[nodiscard]] bool updateZone(int deviceIndex, int zoneIndex, const QString& name, int ledCount, QString* errorMessage = nullptr);
     [[nodiscard]] bool setZoneStaticColor(int deviceIndex, int zoneIndex, const RgbColor& color);
-    [[nodiscard]] bool applyZoneEffect(int deviceIndex, int zoneIndex, const RgbEffect& effect);
+    [[nodiscard]] bool applyZoneEffect(
+        int deviceIndex,
+        int zoneIndex,
+        const RgbEffect& effect,
+        bool clientStreamsFrames = false
+    );
     [[nodiscard]] bool applyAllOff(int deviceIndex, QString* errorMessage = nullptr);
-    void paintZoneFrame(int deviceIndex, int zoneIndex, const QVector<RgbColor>& colors);
+    bool paintZoneFrame(int deviceIndex, int zoneIndex, const QVector<RgbColor>& colors);
+    void startZoneFrameStreaming(int deviceIndex, int zoneIndex);
+    void stopZoneFrameStreaming(int deviceIndex, int zoneIndex);
+    void stopDeviceFrameStreaming(int deviceIndex);
+    void stopAllFrameStreaming();
     [[nodiscard]] bool saveProfile(const QString& profileName, QString* errorMessage = nullptr);
     [[nodiscard]] bool loadProfile(const QString& profileName, QString* errorMessage = nullptr);
     [[nodiscard]] QVariantMap applyProfileWithReport(const QString& profileName);

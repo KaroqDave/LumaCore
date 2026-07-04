@@ -201,6 +201,8 @@ set_source_files_properties(
     PROPERTIES QT_QML_SKIP_QMLLINT TRUE
 )
 
+set(QT_QML_GENERATE_QMLLS_INI ON)
+
 qt_add_qml_module(lumacore
     URI LumaCore
     VERSION 1.0

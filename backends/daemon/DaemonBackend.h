@@ -15,9 +15,9 @@ public:
     explicit DaemonBackend(std::shared_ptr<DaemonClient> client);
 
     [[nodiscard]] BackendDescriptor descriptor() const override;
-    [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> createDevices() const override;
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> discoverDevices() const override;
     [[nodiscard]] PermissionResult probe() const override;
+    [[nodiscard]] QString lastDiscoverError() const override;
     [[nodiscard]] std::vector<std::unique_ptr<RgbDevice>> devicesFromPayload(const QJsonObject& payload) const;
     [[nodiscard]] BackendDescriptor effectiveDescriptor() const;
 
@@ -32,6 +32,7 @@ private:
         BackendCapability::DiscoveryRead | BackendCapability::ZoneColorWrite | BackendCapability::ZoneEffectWrite,
     };
     mutable BackendDescriptor m_effectiveDescriptor;
+    mutable QString m_lastDiscoverError;
 };
 
 } // namespace lumacore

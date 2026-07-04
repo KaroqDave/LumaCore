@@ -59,6 +59,21 @@ void EffectsEngine::stopZone(int deviceIndex, int zoneIndex)
     updateTimerState();
 }
 
+void EffectsEngine::stopDevice(int deviceIndex)
+{
+    // Remove every streaming zone for the device by device index rather than by
+    // its current zone count, so a zone that outlived a metadata edit / device
+    // replace (an index no longer in zones()) is still stopped.
+    QSet<QPair<int, int>> remaining;
+    for (const QPair<int, int>& zoneKey : m_activeZones) {
+        if (zoneKey.first != deviceIndex) {
+            remaining.insert(zoneKey);
+        }
+    }
+    m_activeZones = remaining;
+    updateTimerState();
+}
+
 void EffectsEngine::stopAll()
 {
     m_activeZones.clear();

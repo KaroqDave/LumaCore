@@ -39,15 +39,13 @@ BackendDescriptor AutoBackend::descriptor() const
         backendId(),
         QStringLiteral("Auto Backend"),
         QStringLiteral("Aggregates available hardware backends and falls back to mock devices."),
+        // Aggregated hardware backends can write, so the descriptor advertises the
+        // write capabilities its devices expose; per-device permission/write gates
+        // still decide whether any individual write is allowed.
         BackendCapability::DiscoveryRead
             | BackendCapability::ZoneColorWrite
             | BackendCapability::ZoneEffectWrite,
     };
-}
-
-std::vector<std::unique_ptr<RgbDevice>> AutoBackend::createDevices() const
-{
-    return discoverDevices();
 }
 
 std::vector<std::unique_ptr<RgbDevice>> AutoBackend::discoverDevices() const

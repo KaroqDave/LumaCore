@@ -11,6 +11,8 @@
 
 namespace lumacore {
 
+class AppController;
+
 class DeviceTreeModel final : public QAbstractItemModel
 {
     Q_OBJECT
@@ -62,6 +64,8 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
     [[nodiscard]] int deviceFilter() const;
     void setDeviceFilter(int deviceFilter);
+    void setWriteConfirmationSource(AppController* controller);
+    [[nodiscard]] Q_INVOKABLE bool isDeviceVisible(int deviceIndex) const;
 
 signals:
     void deviceFilterChanged();
@@ -87,9 +91,12 @@ private:
     [[nodiscard]] QModelIndex indexForDevice(int deviceIndex) const;
     [[nodiscard]] QModelIndex indexForZone(int deviceIndex, int zoneIndex) const;
 
+    void refreshDeviceBadges(int deviceIndex);
+
     DeviceManager* m_deviceManager {nullptr};
+    AppController* m_writeConfirmationSource {nullptr};
     std::unique_ptr<TreeNode> m_root;
-    DeviceFilter m_deviceFilter {RgbControllers};
+    DeviceFilter m_deviceFilter {AllDevices};
 };
 
 } // namespace lumacore

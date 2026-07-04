@@ -96,6 +96,20 @@ void AsusAuraHidDevice::initializeZones()
             }
 
             const int fixedHeaders = qBound(0, channel.headerCount, hardware::linux::kAsusAuraHeaderCount);
+            if (fixedHeaders == 0) {
+                // The protocol decides whether the headerless fixed channel is
+                // exposable as one aggregate zone; zone indices must match it.
+                if (hardware::linux::asusAuraFixedExposedZoneCount(m_configTable) > 0) {
+                    const RgbColor color = previewColors[(zoneNumber - 1) % 3];
+                    mutableZones().append(
+                        RgbZone(QStringLiteral("Mainboard LEDs"), RgbZoneType::Motherboard, channel.ledCount, color)
+                    );
+                    mutableZones().last().setEffect(RgbEffect(RgbEffectType::Static, color, 1.0, 25));
+                    ++zoneNumber;
+                }
+                continue;
+            }
+
             for (int headerIndex = 0; headerIndex < fixedHeaders; ++headerIndex) {
                 const RgbColor color = previewColors[(zoneNumber - 1) % 3];
                 mutableZones().append(
@@ -280,6 +294,12 @@ bool AsusAuraHidDevice::updateZoneMetadata(int zoneIndex, const QString& name, i
     if (zoneIndex < 0 || zoneIndex >= zones().size() || ledCount < 1 || ledCount > hardware::linux::kAsusAuraMaxResearchLeds) {
         return false;
     }
+    if (zoneIndex < fixedZoneCount() && ledCount != zones().at(zoneIndex).ledCount()) {
+        m_lastHardwareWriteStatus = QStringLiteral(
+            "ASUS Aura HID fixed-zone LED counts are defined by the verified config table."
+        );
+        return false;
+    }
 
     return RgbDevice::updateZoneMetadata(zoneIndex, name, ledCount);
 }
@@ -432,13 +452,7 @@ int AsusAuraHidDevice::fixedZoneCount() const
         return 0;
     }
 
-    int count = 0;
-    for (const hardware::linux::AsusAuraConfigChannel& channel : m_configTable.channels) {
-        if (channel.type == hardware::linux::AsusAuraChannelType::Fixed) {
-            count += qBound(0, channel.headerCount, hardware::linux::kAsusAuraHeaderCount);
-        }
-    }
-    return count;
+    return hardware::linux::asusAuraFixedExposedZoneCount(m_configTable);
 }
 
 bool AsusAuraHidDevice::isAddressableZone(int zoneIndex) const

@@ -192,7 +192,7 @@ public:
     {
         return m_mode == Mode::UnverifiedAsus
             ? QStringLiteral("ASUS Aura HID write skipped: config-table probe failed.")
-            : QString();
+            : QStringLiteral("Previous hardware write.");
     }
 
     [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
@@ -355,6 +355,16 @@ int main(int argc, char* argv[])
     Q_UNUSED(app)
 
     using namespace lumacore;
+
+    // colorsToJson/colorsFromJson must round-trip: the paintZoneFrame path relies
+    // on it, and the dry-run daemon tests below never exercise the decode step.
+    const QVector<RgbColor> roundTripColors {RgbColor(1, 2, 3), RgbColor(250, 128, 64), RgbColor(0, 0, 0)};
+    if (!require(
+            colorsFromJson(colorsToJson(roundTripColors)) == roundTripColors,
+            "colorsToJson/colorsFromJson should round-trip RGB frame colors"
+        )) {
+        return 1;
+    }
 
     for (const DaemonMethod method : {
              DaemonMethod::Hello,
@@ -612,6 +622,10 @@ int main(int argc, char* argv[])
             "daemon should allow dry-run effect requests when dry-run state matches the client"
         )
         || !require(
+            matchedApply.result.value(QStringLiteral("hardwareStatus")).toString().contains(QStringLiteral("Dry-run accepted")),
+            "dry-run effect responses should not leak stale hardware status"
+        )
+        || !require(
             mismatchedAllOff.ok
                 && !mismatchedAllOff.result.value(QStringLiteral("success")).toBool(true)
                 && mismatchedAllOff.result.value(QStringLiteral("error")).toString().contains(QStringLiteral("dry-run mode")),
@@ -619,8 +633,281 @@ int main(int argc, char* argv[])
         )) {
         return 1;
     }
+    const DaemonCallResult mismatchedPaint = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::PaintZoneFrame),
+        {
+            {QStringLiteral("deviceIndex"), 0},
+            {QStringLiteral("zoneIndex"), 0},
+            {QStringLiteral("colors"), colorsToJson({RgbColor(1, 2, 3)})},
+            {QStringLiteral("dryRunEnabled"), false},
+        },
+        3000
+    );
+    const DaemonCallResult matchedPaint = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::PaintZoneFrame),
+        {
+            {QStringLiteral("deviceIndex"), 0},
+            {QStringLiteral("zoneIndex"), 0},
+            {QStringLiteral("colors"), colorsToJson({RgbColor(4, 5, 6)})},
+            {QStringLiteral("dryRunEnabled"), true},
+        },
+        3000
+    );
+    if (!require(
+            mismatchedPaint.ok
+                && !mismatchedPaint.result.value(QStringLiteral("success")).toBool(true)
+                && mismatchedPaint.result.value(QStringLiteral("error")).toString().contains(QStringLiteral("dry-run mode")),
+            "daemon should reject paintZoneFrame when dry-run state differs from the client"
+        )
+        || !require(
+            matchedPaint.ok && matchedPaint.result.value(QStringLiteral("success")).toBool(false),
+            "daemon should accept paintZoneFrame when dry-run state matches the client"
+        )) {
+        return 1;
+    }
+    const DaemonCallResult idempotentRevoke = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::RevokeWrites),
+        {{QStringLiteral("deviceIndex"), 0}},
+        3000
+    );
+    const DaemonCallResult confirmWrites = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::ConfirmWrites),
+        {{QStringLiteral("deviceIndex"), 0}},
+        3000
+    );
+    const DaemonCallResult revokeConfirmedWrites = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::RevokeWrites),
+        {{QStringLiteral("deviceIndex"), 0}},
+        3000
+    );
+    const DaemonCallResult secondRevoke = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::RevokeWrites),
+        {{QStringLiteral("deviceIndex"), 0}},
+        3000
+    );
+    if (!require(
+            idempotentRevoke.ok
+                && idempotentRevoke.result.value(QStringLiteral("success")).toBool(false)
+                && !idempotentRevoke.result.value(QStringLiteral("writeConfirmed")).toBool(true),
+            "daemon revoke should succeed for an already-unconfirmed valid device"
+        )
+        || !require(
+            confirmWrites.ok
+                && confirmWrites.result.value(QStringLiteral("success")).toBool(false)
+                && confirmWrites.result.value(QStringLiteral("writeConfirmed")).toBool(false),
+            "daemon confirm should mark a confirmable device"
+        )
+        || !require(
+            revokeConfirmedWrites.ok
+                && revokeConfirmedWrites.result.value(QStringLiteral("success")).toBool(false)
+                && !revokeConfirmedWrites.result.value(QStringLiteral("writeConfirmed")).toBool(true),
+            "daemon revoke should clear a confirmed device"
+        )
+        || !require(
+            secondRevoke.ok
+                && secondRevoke.result.value(QStringLiteral("success")).toBool(false)
+                && !secondRevoke.result.value(QStringLiteral("writeConfirmed")).toBool(true),
+            "daemon revoke should stay idempotent after confirmation was cleared"
+        )) {
+        return 1;
+    }
+    const DaemonCallResult missingExpectationApply = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::ApplyEffect),
+        {
+            {QStringLiteral("deviceIndex"), 0},
+            {QStringLiteral("zoneIndex"), 0},
+            {QStringLiteral("effect"), dryRunGuardEffect},
+        },
+        3000
+    );
+    const DaemonCallResult missingExpectationAllOff = dryRunGuardClient.call(
+        daemonMethodName(DaemonMethod::AllOff),
+        {{QStringLiteral("deviceIndex"), 0}},
+        3000
+    );
+    if (!require(
+            missingExpectationApply.ok
+                && !missingExpectationApply.result.value(QStringLiteral("success")).toBool(true)
+                && missingExpectationApply.result.value(QStringLiteral("error")).toString().contains(QStringLiteral("explicit dry-run expectation")),
+            "daemon should refuse effect writes that omit the dry-run expectation"
+        )
+        || !require(
+            missingExpectationAllOff.ok
+                && !missingExpectationAllOff.result.value(QStringLiteral("success")).toBool(true)
+                && missingExpectationAllOff.result.value(QStringLiteral("error")).toString().contains(QStringLiteral("explicit dry-run expectation")),
+            "daemon should refuse all-off writes that omit the dry-run expectation"
+        )) {
+        return 1;
+    }
     dryRunGuardClient.disconnectFromDaemon();
     dryRunGuardServer.close();
+
+    {
+        lumacore::DeviceManager disconnectManager;
+        lumacore::DaemonServer disconnectServer(&disconnectManager);
+        const QString disconnectServerName = testSocketName(QStringLiteral("disconnect-pending"));
+        QString disconnectError;
+        if (!require(
+                disconnectServer.listen(disconnectServerName, &disconnectError),
+                "disconnect pending fixture daemon should listen"
+            )) {
+            return 1;
+        }
+
+        lumacore::DaemonClient disconnectClient(disconnectServerName);
+        bool pendingFailed = false;
+        const quint64 disconnectRequestId = disconnectClient.callAsync(
+            daemonMethodName(DaemonMethod::Status),
+            {},
+            [&pendingFailed](DaemonCallResult result) {
+                pendingFailed = !result.ok;
+            },
+            5000
+        );
+        Q_UNUSED(disconnectRequestId)
+        disconnectClient.disconnectFromDaemon();
+        if (!require(pendingFailed, "disconnectFromDaemon should fail pending calls even when already unconnected")) {
+            return 1;
+        }
+        disconnectServer.close();
+    }
+
+    DeviceManager dryRunTrackingManager;
+    dryRunTrackingManager.setDryRunEnabled(true);
+    DaemonServer dryRunTrackingServer(&dryRunTrackingManager);
+    const QString dryRunTrackingServerName = testSocketName(QStringLiteral("dryrun-tracking"));
+    QString dryRunTrackingError;
+    if (!require(
+            dryRunTrackingServer.listen(dryRunTrackingServerName, &dryRunTrackingError),
+            "dry-run tracking daemon server should listen"
+        )) {
+        return 1;
+    }
+    DaemonClient dryRunTrackingClient(dryRunTrackingServerName);
+    const DaemonCallResult dryRunStatus = dryRunTrackingClient.call(
+        daemonMethodName(DaemonMethod::Status),
+        {},
+        3000
+    );
+    if (!require(
+            dryRunStatus.ok
+                && dryRunTrackingClient.daemonDryRunKnown()
+                && dryRunTrackingClient.daemonDryRunEnabled(),
+            "daemon client should learn dry-run state from status payloads"
+        )) {
+        return 1;
+    }
+    const DaemonCallResult dryRunDisabled = dryRunTrackingClient.call(
+        daemonMethodName(DaemonMethod::SetDryRun),
+        {{QStringLiteral("enabled"), false}},
+        3000
+    );
+    if (!require(
+            dryRunDisabled.ok
+                && dryRunTrackingClient.daemonDryRunKnown()
+                && !dryRunTrackingClient.daemonDryRunEnabled()
+                && !dryRunTrackingManager.dryRunEnabled(),
+            "daemon client should update dry-run state from setDryRun responses"
+        )) {
+        return 1;
+    }
+    dryRunTrackingClient.disconnectFromDaemon();
+    if (!require(
+            !dryRunTrackingClient.daemonDryRunKnown(),
+            "daemon client should clear daemon dry-run state after disconnect"
+        )) {
+        return 1;
+    }
+    dryRunTrackingServer.close();
+
+    DeviceManager dryRunProxyManager;
+    std::vector<std::unique_ptr<RgbDevice>> dryRunProxyDevices;
+    dryRunProxyDevices.push_back(std::make_unique<SnapshotDevice>(SnapshotDevice::Mode::ConfirmableAsus));
+    dryRunProxyManager.replaceDevices(std::move(dryRunProxyDevices));
+    dryRunProxyManager.setDryRunEnabled(true);
+    DaemonServer dryRunProxyServer(&dryRunProxyManager);
+    const QString dryRunProxyServerName = testSocketName(QStringLiteral("dryrun-proxy-sync"));
+    QString dryRunProxyError;
+    if (!require(
+            dryRunProxyServer.listen(dryRunProxyServerName, &dryRunProxyError),
+            "dry-run proxy daemon server should listen"
+        )) {
+        return 1;
+    }
+    auto dryRunProxyClient = std::make_shared<DaemonClient>(dryRunProxyServerName);
+    const DaemonCallResult dryRunProxyStatus = dryRunProxyClient->call(
+        daemonMethodName(DaemonMethod::Status),
+        {},
+        3000
+    );
+    if (!require(
+            dryRunProxyStatus.ok
+                && dryRunProxyClient->daemonDryRunKnown()
+                && dryRunProxyClient->daemonDryRunEnabled(),
+            "daemon proxy test client should learn daemon dry-run state before synchronous writes"
+        )) {
+        return 1;
+    }
+    DaemonRgbDevice dryRunProxyDevice(
+        deviceToJson(*dryRunProxyManager.deviceAt(0), 0, false),
+        dryRunProxyClient
+    );
+    if (!require(
+            !dryRunProxyDevice.applyZoneEffect(
+                0,
+                RgbEffect(RgbEffectType::Static, RgbColor(9, 18, 27), 1.0, 70)
+            ),
+            "synchronous daemon proxy writes should be refused while the daemon is in dry-run"
+        )) {
+        return 1;
+    }
+    const RgbEffect dryRunPreviewEffect(RgbEffectType::Static, RgbColor(31, 63, 95), 1.0, 45);
+    const RgbEffect dryRunOriginalEffect = dryRunProxyDevice.zoneEffect(0);
+    bool dryRunPreviewFinished = false;
+    bool dryRunPreviewSucceeded = false;
+    const quint64 dryRunPreviewOperation = dryRunProxyDevice.applyZoneEffectAsync(
+        0,
+        dryRunPreviewEffect,
+        true,
+        [&](bool success, const QString&) {
+            dryRunPreviewFinished = true;
+            dryRunPreviewSucceeded = success;
+        }
+    );
+    if (!require(dryRunPreviewOperation > 0, "dry-run proxy apply should queue asynchronously")
+        || !require(waitUntil([&] { return dryRunPreviewFinished; }), "dry-run proxy apply should complete")
+        || !require(dryRunPreviewSucceeded, "dry-run proxy apply should report success when expectations match")
+        || !require(
+            dryRunProxyDevice.zoneEffect(0) == dryRunOriginalEffect,
+            "dry-run proxy apply should leave the local UI model untouched"
+        )) {
+        return 1;
+    }
+    bool dryRunMismatchFinished = false;
+    bool dryRunMismatchSucceeded = true;
+    const quint64 dryRunMismatchOperation = dryRunProxyDevice.applyZoneEffectAsync(
+        0,
+        dryRunPreviewEffect,
+        false,
+        [&](bool success, const QString&) {
+            dryRunMismatchFinished = true;
+            dryRunMismatchSucceeded = success;
+        }
+    );
+    if (!require(dryRunMismatchOperation > 0, "mismatched proxy apply should queue asynchronously")
+        || !require(waitUntil([&] { return dryRunMismatchFinished; }), "mismatched proxy apply should complete")
+        || !require(
+            !dryRunMismatchSucceeded,
+            "the daemon should refuse writes whose dry-run expectation differs from its own state"
+        )
+        || !require(
+            dryRunProxyDevice.zoneEffect(0) == dryRunOriginalEffect,
+            "refused proxy writes should leave the local UI model untouched"
+        )) {
+        return 1;
+    }
+    dryRunProxyClient->disconnectFromDaemon();
+    dryRunProxyServer.close();
 
     const ClientExchange oversizedResponseExchange = runClientExchange(
         QStringLiteral("oversized-response"),
@@ -717,8 +1004,9 @@ int main(int argc, char* argv[])
         const QString asyncServerName = testSocketName(QStringLiteral("async-correlation"));
         std::promise<bool> listeningPromise;
         std::future<bool> listeningFuture = listeningPromise.get_future();
+        QStringList requestOrder;
         std::jthread asyncServerThread(
-            [asyncServerName, promise = std::move(listeningPromise)]() mutable {
+            [asyncServerName, &requestOrder, promise = std::move(listeningPromise)]() mutable {
                 QLocalServer::removeServer(asyncServerName);
                 QLocalServer localServer;
                 const bool listening = localServer.listen(asyncServerName);
@@ -745,6 +1033,9 @@ int main(int argc, char* argv[])
                 }
 
                 if (requests.size() == 2) {
+                    for (const QJsonObject& request : requests) {
+                        requestOrder.append(request.value(QStringLiteral("method")).toString());
+                    }
                     for (int index = 1; index >= 0; --index) {
                         const QJsonObject& request = requests.at(index);
                         socket->write(encodeDaemonMessage(makeDaemonResult(
@@ -806,6 +1097,124 @@ int main(int argc, char* argv[])
 
         asyncClient.disconnectFromDaemon();
         asyncServerThread.join();
+        if (!require(
+                requestOrder == QStringList({QStringLiteral("first"), QStringLiteral("second")}),
+                "queued asynchronous requests should be sent to the daemon in FIFO order"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        const auto exactResponseFor = [](quint64 requestId, const QString& label) {
+            QByteArray response = encodeDaemonMessage(makeDaemonResult(
+                requestId,
+                {{QStringLiteral("label"), label}, {QStringLiteral("payload"), QStringLiteral("x")}}
+            ));
+            const int payloadLength = kDaemonMaxFrameBytes - response.size() + 1;
+            response = encodeDaemonMessage(makeDaemonResult(
+                requestId,
+                {
+                    {QStringLiteral("label"), label},
+                    {QStringLiteral("payload"), QString(payloadLength, QLatin1Char('x'))},
+                }
+            ));
+            return response;
+        };
+        const QString burstServerName = testSocketName(QStringLiteral("async-large-burst"));
+        std::promise<bool> listeningPromise;
+        std::future<bool> listeningFuture = listeningPromise.get_future();
+        std::jthread burstServerThread(
+            [burstServerName, exactResponseFor, promise = std::move(listeningPromise)]() mutable {
+                QLocalServer::removeServer(burstServerName);
+                QLocalServer localServer;
+                const bool listening = localServer.listen(burstServerName);
+                promise.set_value(listening);
+                if (!listening || !localServer.waitForNewConnection(3000)) {
+                    return;
+                }
+
+                QLocalSocket* socket = localServer.nextPendingConnection();
+                if (socket == nullptr) {
+                    return;
+                }
+
+                QList<QJsonObject> requests;
+                QElapsedTimer requestTimer;
+                requestTimer.start();
+                while (requests.size() < 2 && requestTimer.elapsed() < 3000) {
+                    if (!socket->canReadLine()) {
+                        socket->waitForReadyRead(100);
+                    }
+                    while (socket->canReadLine()) {
+                        requests.append(QJsonDocument::fromJson(socket->readLine()).object());
+                    }
+                }
+
+                if (requests.size() == 2) {
+                    QByteArray burst;
+                    burst.append(exactResponseFor(
+                        requests.at(0).value(QStringLiteral("id")).toString().toULongLong(),
+                        QStringLiteral("first-large")
+                    ));
+                    burst.append(exactResponseFor(
+                        requests.at(1).value(QStringLiteral("id")).toString().toULongLong(),
+                        QStringLiteral("second-large")
+                    ));
+                    socket->write(burst);
+                    socket->waitForBytesWritten(3000);
+                }
+                socket->disconnectFromServer();
+                socket->waitForDisconnected(3000);
+                delete socket;
+            }
+        );
+
+        if (!require(listeningFuture.get(), "large burst daemon test server should listen")) {
+            return 1;
+        }
+
+        DaemonClient burstClient(burstServerName);
+        bool firstLargeFinished = false;
+        bool secondLargeFinished = false;
+        QString firstLargeLabel;
+        QString secondLargeLabel;
+        const quint64 firstLargeRequestId = burstClient.callAsync(
+            QStringLiteral("firstLarge"),
+            {},
+            [&](DaemonCallResult result) {
+                firstLargeFinished = result.ok;
+                firstLargeLabel = result.result.value(QStringLiteral("label")).toString();
+            },
+            3000
+        );
+        const quint64 secondLargeRequestId = burstClient.callAsync(
+            QStringLiteral("secondLarge"),
+            {},
+            [&](DaemonCallResult result) {
+                secondLargeFinished = result.ok;
+                secondLargeLabel = result.result.value(QStringLiteral("label")).toString();
+            },
+            3000
+        );
+        if (!require(
+                firstLargeRequestId != secondLargeRequestId,
+                "large burst async requests should receive unique IDs"
+            )
+            || !require(
+                waitUntil([&] { return firstLargeFinished && secondLargeFinished; }),
+                "client should drain multiple exact-limit responses from one burst"
+            )
+            || !require(
+                firstLargeLabel == QStringLiteral("first-large")
+                    && secondLargeLabel == QStringLiteral("second-large"),
+                "large burst responses should reach their matching callbacks"
+            )) {
+            return 1;
+        }
+
+        burstClient.disconnectFromDaemon();
+        burstServerThread.join();
     }
 
     {
@@ -1055,7 +1464,7 @@ int main(int argc, char* argv[])
         const quint64 operationId = asyncDevice.applyZoneEffectAsync(
             0,
             requestedEffect,
-            true,
+            false,
             [&](bool success, const QString&) {
                 operationFinished = true;
                 operationSucceeded = success;

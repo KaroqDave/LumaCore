@@ -47,11 +47,17 @@ DaemonClient::DaemonClient(QString socketPath, QObject* parent)
         }
     });
     connect(&m_socket, &QLocalSocket::readyRead, this, [this] {
-        if (!m_pendingCalls.isEmpty()) {
-            readAsyncResponses();
+        if (m_pendingCalls.isEmpty()) {
+            const qint64 remainingCapacity = daemonFrameReadCapacity(m_buffer);
+            if (remainingCapacity > 0 && m_socket.bytesAvailable() > 0) {
+                m_buffer.append(m_socket.read(remainingCapacity));
+            }
+            return;
         }
+        readAsyncResponses();
     });
     connect(&m_socket, &QLocalSocket::disconnected, this, [this] {
+        clearDaemonDryRunState();
         emit connectionStateChanged();
         if (!m_pendingCalls.isEmpty()) {
             failPendingCalls(
@@ -66,6 +72,12 @@ DaemonClient::DaemonClient(QString socketPath, QObject* parent)
             failPendingCalls(m_lastError);
         }
         if (m_socket.state() == QLocalSocket::UnconnectedState) {
+            scheduleReconnect();
+        } else if (m_socket.state() == QLocalSocket::ConnectingState && !m_pendingCalls.isEmpty()) {
+            failPendingCalls(
+                m_lastError.isEmpty() ? QStringLiteral("Could not connect to LumaCore daemon.") : m_lastError
+            );
+            m_socket.abort();
             scheduleReconnect();
         }
     });
@@ -106,10 +118,21 @@ int DaemonClient::daemonProtocolVersion() const
     return m_daemonProtocolVersion;
 }
 
+bool DaemonClient::daemonDryRunKnown() const
+{
+    return m_daemonDryRunKnown;
+}
+
+bool DaemonClient::daemonDryRunEnabled() const
+{
+    return m_daemonDryRunEnabled;
+}
+
 bool DaemonClient::protocolCompatible() const
 {
     // A value of 0 means the handshake has not reported a protocol version yet, so do not
-    // raise a false mismatch before the daemon has been queried.
+    // raise a false mismatch before the daemon has been queried. This also avoids latching
+    // "incompatible" permanently on the reconnect path, which never re-sends a status frame.
     return m_daemonProtocolVersion == 0 || m_daemonProtocolVersion == kDaemonProtocolVersion;
 }
 
@@ -148,7 +171,13 @@ void DaemonClient::disconnectFromDaemon()
 {
     m_manualDisconnect = true;
     resetReconnectState();
+    if (!m_pendingCalls.isEmpty()) {
+        failPendingCalls(QStringLiteral("LumaCore daemon disconnected."));
+    }
+    m_buffer.clear();
+    clearDaemonDryRunState();
     if (m_socket.state() == QLocalSocket::UnconnectedState) {
+        emit connectionStateChanged();
         return;
     }
 
@@ -156,7 +185,6 @@ void DaemonClient::disconnectFromDaemon()
     if (m_socket.state() != QLocalSocket::UnconnectedState) {
         m_socket.waitForDisconnected(250);
     }
-    m_buffer.clear();
     emit connectionStateChanged();
 }
 
@@ -257,6 +285,7 @@ quint64 DaemonClient::callAsync(
         .handler = std::move(handler),
         .timeoutTimer = timeoutTimer,
     });
+    m_pendingCallOrder.append(requestId);
     timeoutTimer->start(qMax(1, timeoutMs));
 
     // Defer transport work so callAsync() always returns before its handler can run,
@@ -318,6 +347,28 @@ void DaemonClient::setDaemonProtocolVersion(int version)
     emit daemonInfoChanged();
 }
 
+void DaemonClient::setDaemonDryRunEnabled(bool enabled)
+{
+    if (m_daemonDryRunKnown && m_daemonDryRunEnabled == enabled) {
+        return;
+    }
+
+    m_daemonDryRunKnown = true;
+    m_daemonDryRunEnabled = enabled;
+    emit daemonInfoChanged();
+}
+
+void DaemonClient::clearDaemonDryRunState()
+{
+    if (!m_daemonDryRunKnown && !m_daemonDryRunEnabled) {
+        return;
+    }
+
+    m_daemonDryRunKnown = false;
+    m_daemonDryRunEnabled = false;
+    emit daemonInfoChanged();
+}
+
 void DaemonClient::updateDaemonInfo(const DaemonCallResult& result)
 {
     if (result.ok && result.result.contains(QStringLiteral("daemonVersion"))) {
@@ -325,6 +376,9 @@ void DaemonClient::updateDaemonInfo(const DaemonCallResult& result)
     }
     if (result.ok && result.result.contains(QStringLiteral("protocolVersion"))) {
         setDaemonProtocolVersion(result.result.value(QStringLiteral("protocolVersion")).toInt());
+    }
+    if (result.ok && result.result.contains(QStringLiteral("dryRunEnabled"))) {
+        setDaemonDryRunEnabled(result.result.value(QStringLiteral("dryRunEnabled")).toBool(false));
     }
 }
 
@@ -383,7 +437,7 @@ void DaemonClient::sendPendingCall(quint64 requestId)
 
 void DaemonClient::sendPendingCalls()
 {
-    const QList<quint64> requestIds = m_pendingCalls.keys();
+    const QList<quint64> requestIds = m_pendingCallOrder;
     for (const quint64 requestId : requestIds) {
         sendPendingCall(requestId);
     }
@@ -399,6 +453,11 @@ void DaemonClient::readAsyncResponses()
     while (true) {
         const DaemonFrameResult frame = takeNextDaemonFrame(&m_buffer);
         if (frame.status == DaemonFrameStatus::NeedMoreData) {
+            const qint64 remainingCapacity = daemonFrameReadCapacity(m_buffer);
+            if (m_socket.bytesAvailable() > 0 && remainingCapacity > 0) {
+                m_buffer.append(m_socket.read(remainingCapacity));
+                continue;
+            }
             return;
         }
         if (frame.status == DaemonFrameStatus::OversizedFrame) {
@@ -425,6 +484,7 @@ void DaemonClient::readAsyncResponses()
 
         const quint64 requestId = object.value(QStringLiteral("id")).toString().toULongLong();
         if (!m_pendingCalls.contains(requestId)) {
+            qWarning("LumaCore daemon response for unknown request id %llu", requestId);
             continue;
         }
 
@@ -451,6 +511,7 @@ void DaemonClient::finishPendingCall(quint64 requestId, DaemonCallResult result)
 
     PendingCall completed = std::move(pending.value());
     m_pendingCalls.erase(pending);
+    m_pendingCallOrder.removeAll(requestId);
     if (completed.timeoutTimer != nullptr) {
         completed.timeoutTimer->stop();
         completed.timeoutTimer->deleteLater();
@@ -469,7 +530,7 @@ void DaemonClient::finishPendingCall(quint64 requestId, DaemonCallResult result)
 
 void DaemonClient::failPendingCalls(const QString& error)
 {
-    const QList<quint64> requestIds = m_pendingCalls.keys();
+    const QList<quint64> requestIds = m_pendingCallOrder;
     for (const quint64 requestId : requestIds) {
         finishPendingCall(requestId, {false, {}, error});
     }
