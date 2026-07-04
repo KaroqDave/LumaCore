@@ -20,7 +20,7 @@ Dialog {
 
     background: Rectangle {
         color: Theme.surface
-        radius: 8
+        radius: Theme.radiusLarge
         border.color: Theme.border
         border.width: 1
     }
@@ -65,7 +65,7 @@ Dialog {
             Rectangle {
                 Layout.preferredWidth: 60
                 Layout.preferredHeight: 60
-                radius: 8
+                radius: Theme.radiusSmall
                 color: Theme.subtleSurface
                 border.color: Theme.accentSoftBorder
                 border.width: 1

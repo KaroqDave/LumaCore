@@ -16,23 +16,27 @@ QtObject {
 
     readonly property int animationDuration: 160
 
-    // Surfaces
-    readonly property color window:   dark ? "#11161C" : "#F4F7FB"
-    readonly property color surface:  dark ? "#1A2027" : "#FFFFFF"
-    readonly property color elevated: dark ? "#222A33" : "#F8FAFD"
-    readonly property color inputBg:  dark ? "#151B22" : "#EEF3F8"
-    readonly property color border:   dark ? "#2D3742" : "#D8E0EA"
-    readonly property color divider:  dark ? "#29323D" : "#E3E9F1"
-    readonly property color treeLine: dark ? "#354150" : "#C9D4E2"
-    readonly property color subtleSurface: dark ? "#171D24" : "#FBFCFE"
-    readonly property color sunken: dark ? "#10161D" : "#EAF0F7"
+    // Corner radii: large for outer cards/panels, small for inner controls.
+    readonly property int radiusSmall: 8
+    readonly property int radiusMedium: 10
+    readonly property int radiusLarge: 14
 
-    // Accent / primary (clear modern blue)
-    readonly property color accent:       "#2F6FED"
-    readonly property color accentTop:    "#3F7DF2"
-    readonly property color accentBottom: "#2457C8"
-    readonly property color accentPressedTop:    "#245DD7"
-    readonly property color accentPressedBottom: "#1C46A8"
+    // Surfaces. Borders and dividers are translucent hairlines so they stay
+    // subtle over every surface tone instead of reading as heavy outlines.
+    readonly property color window:   dark ? "#0C1116" : "#F2F5F9"
+    readonly property color surface:  dark ? "#151C24" : "#FFFFFF"
+    readonly property color elevated: dark ? "#1D2630" : "#F7FAFD"
+    readonly property color inputBg:  dark ? "#111820" : "#EEF3F8"
+    readonly property color border:   dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0.10, 0.17, 0.26, 0.14)
+    readonly property color divider:  dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0.10, 0.17, 0.26, 0.10)
+    readonly property color treeLine: dark ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(0.18, 0.30, 0.44, 0.32)
+    readonly property color subtleSurface: dark ? "#12181F" : "#FBFCFE"
+    readonly property color sunken: dark ? "#0C1218" : "#E9EFF6"
+
+    // Accent / primary (clear modern blue, flat fills)
+    readonly property color accent:        "#2F6FED"
+    readonly property color accentHover:   "#3F7DF2"
+    readonly property color accentPressed: "#2457C8"
     readonly property color accentSoft: dark ? "#1B3158" : "#E7F0FF"
     readonly property color accentSoftHover: dark ? "#203A68" : "#DCE9FF"
     readonly property color accentSoftBorder: dark ? "#315DA4" : "#BBD2FF"
@@ -45,8 +49,8 @@ QtObject {
     readonly property color mutedText: dark ? "#7F8B98" : "#7B8795"
 
     // States
-    readonly property color hover:           dark ? "#242D37" : "#E8EEF6"
-    readonly property color hoverStrong:     dark ? "#2A3541" : "#DDE7F3"
+    readonly property color hover:           dark ? "#1F2933" : "#E8EEF6"
+    readonly property color hoverStrong:     dark ? "#263240" : "#DDE7F3"
     readonly property color selectionBg:     dark ? "#244F9D" : "#2F6FED"
     readonly property color selectionBorder: dark ? "#4D86F7" : "#5D91F5"
     readonly property color selectionText:   "#FFFFFF"

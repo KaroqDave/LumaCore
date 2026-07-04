@@ -28,7 +28,7 @@ Control {
             anchors.fill: parent
             radius: height / 2
             color: control.checked ? Theme.accent : Theme.sunken
-            border.color: control.checked ? Theme.accentSoftBorder : Theme.border
+            border.color: control.checked ? "transparent" : Theme.border
             border.width: 1
 
             Behavior on color {

@@ -17,7 +17,7 @@ Rectangle {
     default property alias content: body.data
 
     color: surfaceColor
-    radius: 8
+    radius: Theme.radiusLarge
     border.color: Theme.border
     border.width: 1
     implicitHeight: body.implicitHeight + cardPadding * 2

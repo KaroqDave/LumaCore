@@ -106,7 +106,7 @@ Item {
                 }
 
                 background: Rectangle {
-                    radius: 8
+                    radius: Theme.radiusSmall
                     color: filterButton.down
                            ? Theme.hover
                            : (filterButton.hovered || filterPopup.opened ? Theme.elevated : Theme.sunken)
@@ -167,7 +167,7 @@ Item {
             }
 
             background: Rectangle {
-                radius: 8
+                radius: Theme.radiusMedium
                 color: Theme.surface
                 border.color: Theme.border
                 border.width: 1
@@ -201,7 +201,7 @@ Item {
                     onClicked: panel.applyFilter(0)
 
                     background: Rectangle {
-                        radius: 8
+                        radius: Theme.radiusSmall
                         color: allDevicesFilter.down
                                ? Theme.hover
                                : (allDevicesFilter.hovered ? Theme.elevated : "transparent")
@@ -246,7 +246,7 @@ Item {
                     onClicked: panel.applyFilter(1)
 
                     background: Rectangle {
-                        radius: 8
+                        radius: Theme.radiusSmall
                         color: rgbControllersFilter.down
                                ? Theme.hover
                                : (rgbControllersFilter.hovered ? Theme.elevated : "transparent")
@@ -360,7 +360,7 @@ Item {
                     anchors.rightMargin: 8
                     anchors.topMargin: 1
                     anchors.bottomMargin: 1
-                    radius: 8
+                    radius: Theme.radiusSmall
                     scale: treeDelegate.down ? 0.985 : 1
                     color: treeDelegate.selectedNode
                            ? Theme.accentSoft
@@ -572,7 +572,7 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                         Layout.preferredWidth: Math.min(88, deviceBadgeLabel.implicitWidth + 16)
                         Layout.preferredHeight: 20
-                        radius: 8
+                        radius: Theme.radiusSmall
                         color: Qt.rgba(
                             panel.badgeColor(treeDelegate.model.deviceBadgeLevel).r,
                             panel.badgeColor(treeDelegate.model.deviceBadgeLevel).g,
@@ -598,7 +598,7 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                         Layout.preferredWidth: Math.min(104, effectBadgeLabel.implicitWidth + 26)
                         Layout.preferredHeight: 20
-                        radius: 8
+                        radius: Theme.radiusSmall
                         color: treeDelegate.selectedNode ? Theme.surface : Theme.inputBg
                         border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : Theme.border
                         border.width: 1
@@ -698,7 +698,7 @@ Item {
                     }
 
                     background: Rectangle {
-                        radius: 8
+                        radius: Theme.radiusMedium
                         color: Theme.surface
                         border.color: Theme.border
                         border.width: 1
@@ -722,7 +722,7 @@ Item {
                             }
 
                             background: Rectangle {
-                                radius: 8
+                                radius: Theme.radiusSmall
                                 color: registerControllerAction.down
                                        ? Theme.hover
                                        : (registerControllerAction.hovered ? Theme.elevated : "transparent")
@@ -759,7 +759,7 @@ Item {
                             }
 
                             background: Rectangle {
-                                radius: 8
+                                radius: Theme.radiusSmall
                                 color: removeControllerAction.down
                                        ? Theme.hover
                                        : (removeControllerAction.hovered ? Theme.elevated : "transparent")
@@ -796,7 +796,7 @@ Item {
                             }
 
                             background: Rectangle {
-                                radius: 8
+                                radius: Theme.radiusSmall
                                 color: resetControllerAction.down
                                        ? Theme.hover
                                        : (resetControllerAction.hovered ? Theme.elevated : "transparent")

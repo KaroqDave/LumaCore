@@ -262,8 +262,8 @@ ApplicationWindow {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 8
+        anchors.margins: 12
+        spacing: 10
 
         NavRail {
             id: navRail
@@ -281,21 +281,18 @@ ApplicationWindow {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 8
+            spacing: 10
 
-            Rectangle {
+            // Frameless page header: the title sits directly on the window
+            // background so the chrome stays with the content cards below.
+            Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 58
-                radius: 8
-                color: Theme.surface
-                border.color: Theme.border
-                border.width: 1
-                antialiasing: true
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.rightMargin: 12
+                    anchors.leftMargin: 6
+                    anchors.rightMargin: 4
                     anchors.topMargin: 8
                     anchors.bottomMargin: 8
                     spacing: 12
@@ -308,7 +305,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             text: root.pageTitles[root.currentPage].title
                             color: Theme.primaryText
-                            font.pixelSize: 20
+                            font.pixelSize: 22
                             font.bold: true
                             elide: Text.ElideRight
                         }
@@ -392,11 +389,10 @@ ApplicationWindow {
                 visible: Qt.platform.os === "windows" || root.daemonDryRunMismatch
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? 58 : 0
-                radius: 8
+                radius: Theme.radiusLarge
                 color: Theme.warningBg
-                border.color: Theme.warning
+                border.color: Qt.alpha(Theme.warning, 0.45)
                 border.width: 1
-                opacity: 0.95
 
                 RowLayout {
                     anchors.fill: parent

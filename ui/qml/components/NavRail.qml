@@ -27,7 +27,7 @@ Rectangle {
     signal aboutRequested()
 
     color: Theme.subtleSurface
-    radius: 8
+    radius: Theme.radiusLarge
     border.color: Theme.border
     border.width: 1
     antialiasing: true
@@ -53,7 +53,7 @@ Rectangle {
 
                 width: 44
                 height: 44
-                radius: 8
+                radius: Theme.radiusSmall
                 color: Theme.surface
                 border.color: Theme.accentSoftBorder
                 border.width: 1
@@ -96,7 +96,7 @@ Rectangle {
 
                 width: 34
                 height: 34
-                radius: 8
+                radius: Theme.radiusSmall
                 color: toggleArea.containsMouse ? Theme.hover : Theme.surface
                 border.color: toggleArea.containsMouse ? Theme.accentSoftBorder : Theme.border
                 border.width: 1

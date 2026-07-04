@@ -59,33 +59,19 @@ Button {
     background: Rectangle {
         id: bg
 
-        radius: 8
-        border.width: 1
+        radius: Theme.radiusSmall
+        border.width: control.primary ? 0 : 1
         border.color: control.primary
-                      ? (control.hovered ? Theme.accentSoftBorder : Theme.accentBottom)
+                      ? "transparent"
                       : (control.hovered ? Theme.accentSoftBorder : Theme.border)
         opacity: control.enabled ? 1.0 : 0.45
         scale: control.down ? 0.985 : 1.0
 
         color: control.primary
-               ? (control.down ? Theme.accentPressedBottom
-                                : (control.hovered ? Theme.accentTop : Theme.accent))
+               ? (control.down ? Theme.accentPressed
+                                : (control.hovered ? Theme.accentHover : Theme.accent))
                : (control.down ? Theme.hoverStrong
                                 : (control.hovered ? Theme.elevated : Theme.subtleSurface))
-
-        Rectangle {
-            visible: control.primary
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.leftMargin: 2
-            anchors.rightMargin: 2
-            anchors.topMargin: 1
-            height: parent.height / 2
-            radius: parent.radius - 2
-            color: "#FFFFFF"
-            opacity: control.hovered ? 0.10 : 0.07
-        }
 
         Behavior on color {
             ColorAnimation {

@@ -164,7 +164,7 @@ Item {
 
                         Layout.fillWidth: true
                         Layout.preferredHeight: 54
-                        radius: 8
+                        radius: Theme.radiusSmall
                         color: Theme.subtleSurface
                         border.color: Theme.border
 
@@ -195,7 +195,7 @@ Item {
                 visible: manager.previewItems().length > 0
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(previewColumn.implicitHeight + 20, 260) : 0
-                radius: 8
+                radius: Theme.radiusSmall
                 color: Theme.sunken
                 border.color: Theme.border
 
@@ -222,9 +222,9 @@ Item {
 
                                 Layout.fillWidth: true
                                 implicitHeight: previewRow.implicitHeight + 18
-                                radius: 8
+                                radius: Theme.radiusSmall
                                 color: manager.previewStatusBackground(previewItem.modelData.status)
-                                border.color: manager.previewStatusColor(previewItem.modelData.status)
+                                border.color: Qt.alpha(manager.previewStatusColor(previewItem.modelData.status), 0.45)
                                 border.width: 1
 
                                 RowLayout {
@@ -314,7 +314,7 @@ Item {
                          : false
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(detailsLabel.implicitHeight + 20, 180) : 0
-                radius: 8
+                radius: Theme.radiusSmall
                 color: Theme.subtleSurface
                 border.color: Theme.border
 
@@ -456,7 +456,7 @@ Item {
                          : false
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(resultDetailsLabel.implicitHeight + 20, 180) : 0
-                radius: 8
+                radius: Theme.radiusSmall
                 color: Theme.subtleSurface
                 border.color: Theme.border
 
@@ -696,7 +696,7 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 30
-                radius: 8
+                radius: Theme.radiusSmall
                 color: manager.settingsController && manager.settingsController.activeProfile.length > 0
                        ? Theme.pillFill
                        : Theme.sunken
