@@ -10,14 +10,16 @@
 #include "core/PortablePaths.h"
 
 #include <QApplication>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QSize>
 #include <QtGlobal>
 
 #ifdef Q_OS_LINUX
 #include <unistd.h>
-#include <cstdio>
 #endif
 
+#include <cstdio>
 #include <memory>
 
 namespace {
@@ -138,6 +140,43 @@ int GuiApplication::run()
     );
 
     return QApplication::exec();
+}
+
+int GuiApplication::runSelfTest()
+{
+    // Headless QML smoke test. Load the real Main.qml with the production
+    // controller bindings and fail on any component error or QML warning. This
+    // exercises the initial render and Component.onCompleted paths that qmllint
+    // cannot see. No daemon is launched or connected; the controllers report
+    // their empty, disconnected state, which the interface must render cleanly.
+    // Callers run this under QT_QPA_PLATFORM=offscreen.
+    m_backendContext.deviceManager.initializeBackends(QStringLiteral("daemon"));
+    m_deviceTreeModel.setWriteConfirmationSource(&m_appController);
+
+    const QmlBindings bindings {
+        .deviceTreeModel = &m_deviceTreeModel,
+        .appController = &m_appController,
+        .settingsController = &m_settingsController,
+    };
+    if (!m_qmlHost.load(bindings, m_applicationIcon, false)) {
+        std::fprintf(stderr, "Self-test failed: the QML root did not load.\n");
+        return 1;
+    }
+
+    // Let queued binding evaluations and Component.onCompleted handlers run so
+    // any warnings they raise reach the engine before we inspect the count.
+    for (int pass = 0; pass < 5; ++pass) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    }
+
+    const int warnings = m_qmlHost.warningCount();
+    if (warnings > 0) {
+        std::fprintf(stderr, "Self-test failed: QML load produced %d warning(s).\n", warnings);
+        return 1;
+    }
+
+    std::fprintf(stdout, "Self-test passed: the QML interface loaded cleanly.\n");
+    return 0;
 }
 
 } // namespace lumacore

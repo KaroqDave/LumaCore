@@ -148,6 +148,16 @@ add_test(
 )
 lumacore_set_windows_test_runtime_path(daemon_end_to_end)
 
+# Headless smoke test: drive the real lumacore GUI's --self-test path, which
+# loads Main.qml with the production bindings and fails on any QML warning. The
+# offscreen platform lets it run without a display in CI.
+add_test(
+    NAME qml_smoke
+    COMMAND lumacore --self-test
+)
+set_property(TEST qml_smoke PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+lumacore_set_windows_test_runtime_path(qml_smoke)
+
 if(TARGET lumacore_asus_aura_backend)
     lumacore_add_test_executable(lumacore_asus_aura_backend_test asus_aura_hid_backend
         AsusAuraHidBackendTest.cpp

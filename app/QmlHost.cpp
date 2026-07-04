@@ -32,7 +32,8 @@ namespace lumacore {
 
 QmlHost::QmlHost()
 {
-    QObject::connect(&m_engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {
+    QObject::connect(&m_engine, &QQmlApplicationEngine::warnings, [this](const QList<QQmlError>& warnings) {
+        m_warningCount += warnings.size();
         reportQmlErrors(warnings);
     });
 }

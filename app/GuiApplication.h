@@ -31,6 +31,9 @@ public:
     [[nodiscard]] static bool validateEnvironment();
     static void configureQtApplication(QApplication& application);
     [[nodiscard]] int run();
+    // Load the QML interface once with the production bindings, without a live
+    // daemon or event loop, and return non-zero on any load or binding error.
+    [[nodiscard]] int runSelfTest();
 
 private:
     struct BackendContext {

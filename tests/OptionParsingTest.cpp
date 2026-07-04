@@ -30,15 +30,20 @@ int main(int argc, char* argv[])
         QStringLiteral("--socket"),
         QStringLiteral("custom-endpoint"),
         QStringLiteral("--no-auto-start-daemon"),
+        QStringLiteral("--self-test"),
     }, &error);
     if (!require(error.isEmpty(), "GUI options should parse without errors")
         || !require(guiOptions.daemonSocketPath == QStringLiteral("custom-endpoint"), "GUI socket option should be retained")
-        || !require(!guiOptions.autoStartDaemon, "GUI no-auto-start option should disable daemon startup")) {
+        || !require(!guiOptions.autoStartDaemon, "GUI no-auto-start option should disable daemon startup")
+        || !require(guiOptions.selfTest, "GUI self-test option should be retained")) {
         return 1;
     }
 
     const lumacore::GuiOptions defaultGuiOptions =
         lumacore::parseGuiOptionsArguments({QStringLiteral("lumacore")}, &error);
+    if (!require(!defaultGuiOptions.selfTest, "GUI self-test should default to off")) {
+        return 1;
+    }
 #ifdef Q_OS_WIN
     if (!require(defaultGuiOptions.autoStartDaemon, "Windows GUI should auto-start the daemon by default")) {
         return 1;

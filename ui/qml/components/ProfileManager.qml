@@ -310,7 +310,8 @@ Item {
 
             Rectangle {
                 visible: manager.compatibilityReport.details
-                         && manager.compatibilityReport.details.length > 0
+                         ? manager.compatibilityReport.details.length > 0
+                         : false
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(detailsLabel.implicitHeight + 20, 180) : 0
                 radius: 8
@@ -451,7 +452,8 @@ Item {
 
             Rectangle {
                 visible: manager.applyResultReport.details
-                         && manager.applyResultReport.details.length > 0
+                         ? manager.applyResultReport.details.length > 0
+                         : false
                 Layout.fillWidth: true
                 Layout.preferredHeight: visible ? Math.min(resultDetailsLabel.implicitHeight + 20, 180) : 0
                 radius: 8
@@ -504,12 +506,19 @@ Item {
         title: qsTr("Overwrite Profile?")
         standardButtons: Dialog.NoButton
 
-        contentItem: Label {
-            text: qsTr("A profile named '%1' already exists. Saving will replace its stored device and zone settings.")
-                  .arg(manager.pendingSaveProfile)
-            color: Theme.primaryText
-            font.pixelSize: 12
-            wrapMode: Text.WordWrap
+        // A bare word-wrapping Label as contentItem has no definite width, so
+        // its implicit height feeds back into the dialog's implicit size and
+        // trips a binding loop. Give it a definite width through a fillWidth
+        // layout, matching the deleteDialog content below.
+        contentItem: ColumnLayout {
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("A profile named '%1' already exists. Saving will replace its stored device and zone settings.")
+                      .arg(manager.pendingSaveProfile)
+                color: Theme.primaryText
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+            }
         }
 
         footer: RowLayout {

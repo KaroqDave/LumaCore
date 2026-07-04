@@ -281,8 +281,9 @@ reports, daemon frame limits and snapshots, auto-backend deduplication, option p
 settings, application controllers, daemon launch behavior, a full-stack end-to-end flow that
 launches the real daemon with the mock backend and drives handshake, inventory, dry-run
 effect/frame writes, the dry-run synchronization guard, All Off, and idle shutdown over the local
-socket, and, when the ASUS backend is built, the ASUS Aura HID configuration parser and protocol
-serializer.
+socket, a headless QML smoke test that loads the full interface through the GUI's `--self-test`
+path and fails on any QML load or binding warning, and, when the ASUS backend is built, the ASUS
+Aura HID configuration parser and protocol serializer.
 
 ## Project Layout
 
@@ -333,7 +334,7 @@ rather than a wire field (see `docs/hardware/asus-aura-hid.md`).
 
 ## Current Gaps
 
-- Automated coverage is still focused; a full-stack daemon end-to-end test now exercises the mock-backed socket flow, but broader mock-backend cases and QML/UI integration coverage remain beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
+- Automated coverage is still focused; a full-stack daemon end-to-end test and a headless QML load smoke test now exercise the mock-backed socket flow and the interface's initial render, but broader mock-backend cases and interaction-level QML/UI coverage remain beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
 - Startup and scheduled profile application still use the synchronous compatibility path; direct interactive device operations and GUI profile loads are asynchronous.
 - Profile scheduling currently runs inside the GUI session; daemon/systemd background scheduling is not implemented.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation follows the hardware contribution workflow.

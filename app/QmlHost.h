@@ -37,12 +37,16 @@ public:
         bool startMinimized
     );
     [[nodiscard]] QWindow* mainWindow() const;
+    // Number of QML warnings the engine has emitted since construction. The
+    // headless self-test treats any warning as a load regression.
+    [[nodiscard]] int warningCount() const { return m_warningCount; }
 
 private:
     QQmlApplicationEngine m_engine;
     std::unique_ptr<QQmlComponent> m_mainComponent;
     std::unique_ptr<QObject> m_rootObject;
     std::unique_ptr<VrrFlickerGuard> m_vrrFlickerGuard;
+    int m_warningCount {0};
 };
 
 } // namespace lumacore

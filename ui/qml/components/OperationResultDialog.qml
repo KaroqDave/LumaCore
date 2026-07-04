@@ -54,7 +54,8 @@ Dialog {
         Label {
             Layout.fillWidth: true
             visible: dialog.operationResult.details
-                && dialog.operationResult.details.length > 0
+                ? dialog.operationResult.details.length > 0
+                : false
             text: visible ? dialog.operationResult.details.join("\n") : ""
             color: Theme.secondaryText
             font.pixelSize: 11

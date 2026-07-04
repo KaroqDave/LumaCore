@@ -29,5 +29,8 @@ int main(int argc, char* argv[])
     lumacore::GuiApplication::configureQtApplication(qtApplication);
     const lumacore::GuiOptions options = lumacore::parseGuiOptions(qtApplication);
     lumacore::GuiApplication application(qtApplication, options);
+    if (options.selfTest) {
+        return application.runSelfTest();
+    }
     return application.run();
 }
