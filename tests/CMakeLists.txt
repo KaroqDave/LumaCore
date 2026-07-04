@@ -31,6 +31,11 @@ lumacore_add_test_executable(lumacore_profile_persistence_test profile_persisten
 )
 target_link_libraries(lumacore_profile_persistence_test PRIVATE lumacore_core Qt6::Core)
 
+lumacore_add_test_executable(lumacore_profile_store_import_test profile_store_import
+    ProfileStoreImportTest.cpp
+)
+target_link_libraries(lumacore_profile_store_import_test PRIVATE lumacore_core Qt6::Core)
+
 lumacore_add_test_executable(lumacore_effects_engine_test effects_engine
     EffectsEngineTest.cpp
 )
