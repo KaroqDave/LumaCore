@@ -254,10 +254,15 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
             encodedResponse =
                 encodeDaemonMessage(makeDaemonError(requestId, QStringLiteral("Daemon response exceeds the maximum message size.")));
         }
-        if (socket->write(encodedResponse) != encodedResponse.size() || !socket->flush()) {
+        // flush() returning false is not an error: on Windows the overlapped
+        // pipe writer often accepts the whole payload inside write(), leaving
+        // nothing pending, and flush() reports false exactly in that case.
+        // Only a short write is fatal for the connection.
+        if (socket->write(encodedResponse) != encodedResponse.size()) {
             socket->disconnectFromServer();
             return;
         }
+        socket->flush();
     }
 }
 
