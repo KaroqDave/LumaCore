@@ -65,6 +65,12 @@ lumacore_add_test_executable(lumacore_probe_result_test probe_result
 target_include_directories(lumacore_probe_result_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_probe_result_test PRIVATE lumacore_core Qt6::Core)
 
+lumacore_add_test_executable(lumacore_daemon_frame_codec_test daemon_frame_codec
+    DaemonFrameCodecTest.cpp
+)
+target_include_directories(lumacore_daemon_frame_codec_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(lumacore_daemon_frame_codec_test PRIVATE lumacore_ipc Qt6::Core)
+
 lumacore_add_test_executable(lumacore_daemon_protocol_test daemon_protocol
     DaemonProtocolTest.cpp
 )
