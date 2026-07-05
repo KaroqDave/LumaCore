@@ -37,7 +37,7 @@ Additional light-theme and confirmation screenshots are kept in `assets/screensh
 - Optional Windows read-only HID discovery through hidapi, with cataloged RGB-controller research identities and conservative heuristic classification. Windows discovery itself is inventory-only; the separate ASUS Aura HID backend owns the guarded write path.
 - ASUS Aura USB HID backend for the allowlisted `0B05:19AF` controller, including config-table-derived zones, static/direct color writes, host-streamed addressable rainbow/breathing/color-cycle effects over the validated `EC40` path, and All Off.
 - Profile save, load, rename, confirmed overwrite/delete, JSON import/export, compatibility reporting, partial-result summaries, and persisted active-profile selection with atomic writes and legacy color-only profile compatibility.
-- Portable Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, daily in-app profile scheduling, opt-in close-to-tray behavior, and an enabled-by-default Windows VRR flicker workaround.
+- Portable Auto/Light/Dark themes, animation and dry-run preferences, start-minimized and active-profile launch behavior, daily profile scheduling that runs in the daemon when supported with an in-app fallback, opt-in close-to-tray behavior, and an enabled-by-default Windows VRR flicker workaround.
 - Activity log with structured severity/category entries and console mirroring.
 - Backend capability dialog showing daemon connection/version details, active backend, dry-run state, supported operations, Retry/Rescan, and sanitized diagnostics export.
 
@@ -344,7 +344,7 @@ rather than a wire field (see `docs/hardware/asus-aura-hid.md`).
 
 - Automated coverage is still focused; a full-stack daemon end-to-end test, a headless QML load smoke test, and global/group partial-result reporting tests now exercise the mock-backed socket flow, the interface's initial render, and heterogeneous-device operation reporting, but interaction-level QML/UI coverage remains beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
 - Startup and scheduled profile application still use the synchronous compatibility path; direct interactive device operations and GUI profile loads are asynchronous.
-- Profile scheduling currently runs inside the GUI session; daemon/systemd background scheduling is not implemented.
+- Profile scheduling runs in the daemon when it advertises schedule support, so schedules fire while the GUI is closed on a persistent (systemd) daemon; against an older daemon the GUI falls back to session-only scheduling, and an older GUI paired with a newer daemon that holds a previously pushed schedule fires it daemon-side once per day.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation follows the hardware contribution workflow.
 - Profile validation is minimal.
 - Native installers and Linux distribution packages are not implemented; releases currently provide a Windows portable ZIP and a Linux x64 staged install tarball.

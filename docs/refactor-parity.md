@@ -52,6 +52,14 @@ Use this checklist for behavior-preserving modernization passes.
 - Effect support enumeration keeps the same order: Static, Rainbow, Breathing, ColorCycle.
 - Schedule-time parsing keeps invalid or empty settings normalized to `18:00` and stores
   valid values as `HH:mm`.
+- Schedule firing semantics are parity-frozen in both `ProfileScheduleRunner` (GUI fallback)
+  and `core/ScheduleService` (daemon): one attempt per calendar day, missed boundaries are
+  skipped on startup and after every config change, and the poll timer stays clamped to
+  1s-60s. The daemon persists the same `schedule/enabled`, `schedule/profile`, and
+  `schedule/time` keys in its own settings scope.
+- Daemon-side scheduled applies go through the unchanged permission, confirmation, and
+  dry-run gates; unconfirmed hardware zones are skipped with a logged reason and
+  confirmation remains in-memory and session-only.
 
 ## Hardware protocols
 
