@@ -1931,7 +1931,22 @@ bool AppController::saveProfile(const QString& profileName)
 
 bool AppController::loadProfile(const QString& profileName)
 {
-    return applyProfileWithReport(profileName).value(QStringLiteral("success")).toBool();
+    auto succeeded = std::make_shared<bool>(false);
+    auto completed = std::make_shared<bool>(false);
+    const bool started = applyProfileInternal(
+        profileName,
+        [succeeded, completed](const QVariantMap& report) {
+            *succeeded = report.value(QStringLiteral("success")).toBool();
+            *completed = true;
+        },
+        false
+    );
+    if (!started) {
+        return false;
+    }
+    // Local zones complete synchronously; daemon zones are still in flight, so
+    // a true return then means the apply has started.
+    return *completed ? *succeeded : true;
 }
 
 QVariantMap AppController::applyProfileWithReport(const QString& profileName)
@@ -1954,6 +1969,21 @@ QVariantMap AppController::applyProfileWithReport(const QString& profileName)
 
 bool AppController::applyProfileAsync(const QString& profileName)
 {
+    return applyProfileInternal(profileName, {}, true);
+}
+
+// Shared apply engine behind applyProfileAsync, loadProfile, and the
+// launch/scheduled entry points. With only local devices every dispatch
+// completes synchronously, so `completion` has already run when this returns;
+// daemon zones complete asynchronously and `completion` runs with the final
+// report. `emitFinished` controls the QML-facing profileApplyFinished signal,
+// which opens the apply-result dialog - silent internal applies keep it off.
+bool AppController::applyProfileInternal(
+    const QString& profileName,
+    std::function<void(const QVariantMap&)> completion,
+    bool emitFinished
+)
+{
     if (m_deviceManager == nullptr) {
         return false;
     }
@@ -1969,12 +1999,18 @@ bool AppController::applyProfileAsync(const QString& profileName)
     if (!profileStore.load(normalizedName, &profile, &storeError)) {
         m_deviceManager->activityLog().error(LogCategory::Profile, storeError);
         setStatusMessage(storeError);
-        emit profileApplyFinished(QVariantMap {
+        const QVariantMap failureReport {
             {QStringLiteral("success"), false},
             {QStringLiteral("partial"), false},
             {QStringLiteral("profileName"), normalizedName},
             {QStringLiteral("error"), storeError},
-        });
+        };
+        if (emitFinished) {
+            emit profileApplyFinished(failureReport);
+        }
+        if (completion) {
+            completion(failureReport);
+        }
         return false;
     }
 
@@ -1993,7 +2029,7 @@ bool AppController::applyProfileAsync(const QString& profileName)
 
     const QPointer<AppController> self(this);
     const auto finish = std::make_shared<std::function<void()>>();
-    *finish = [self, state]() {
+    *finish = [self, state, completion, emitFinished]() {
         if (self == nullptr || state->dispatching || state->pending > 0) {
             return;
         }
@@ -2021,7 +2057,12 @@ bool AppController::applyProfileAsync(const QString& profileName)
                 : report.value(QStringLiteral("error")).toString()
         );
         self->refreshDaemonActivityLog();
-        emit self->profileApplyFinished(report);
+        if (emitFinished) {
+            emit self->profileApplyFinished(report);
+        }
+        if (completion) {
+            completion(report);
+        }
     };
 
     for (const ProfileApplyStep& step : plan.steps) {
@@ -2620,12 +2661,26 @@ bool AppController::applyProfileOnLaunch(const QString& profileName)
         return false;
     }
 
-    if (!loadProfile(selectedProfile)) {
+    const QPointer<AppController> self(this);
+    auto succeeded = std::make_shared<bool>(false);
+    auto completed = std::make_shared<bool>(false);
+    const bool started = applyProfileInternal(
+        selectedProfile,
+        [self, selectedProfile, succeeded, completed](const QVariantMap& report) {
+            *succeeded = report.value(QStringLiteral("success")).toBool();
+            *completed = true;
+            if (self != nullptr && *succeeded) {
+                self->setStatusMessage(
+                    QStringLiteral("Applied active profile '%1' on launch.").arg(selectedProfile)
+                );
+            }
+        },
+        false
+    );
+    if (!started) {
         return false;
     }
-
-    setStatusMessage(QStringLiteral("Applied active profile '%1' on launch.").arg(selectedProfile));
-    return true;
+    return *completed ? *succeeded : true;
 }
 
 bool AppController::applyScheduledProfile(const QString& profileName)
@@ -2636,12 +2691,40 @@ bool AppController::applyScheduledProfile(const QString& profileName)
         return false;
     }
 
-    if (!loadProfile(selectedProfile)) {
-        return false;
+    // A daemon-backed session that has not received its first device snapshot
+    // would apply against an empty proxy set and burn the day's only attempt;
+    // park the apply until the snapshot arrives instead. A device set already
+    // populated by startup discovery applies immediately.
+    if (m_daemonClient != nullptr && !m_daemonDevicesLoaded
+        && m_deviceManager != nullptr && m_deviceManager->deviceCount() == 0) {
+        m_pendingScheduledProfile = selectedProfile;
+        setStatusMessage(
+            QStringLiteral("Waiting for daemon devices before applying scheduled profile '%1'.")
+                .arg(selectedProfile)
+        );
+        return true;
     }
 
-    setStatusMessage(QStringLiteral("Applied scheduled profile '%1'.").arg(selectedProfile));
-    return true;
+    const QPointer<AppController> self(this);
+    auto succeeded = std::make_shared<bool>(false);
+    auto completed = std::make_shared<bool>(false);
+    const bool started = applyProfileInternal(
+        selectedProfile,
+        [self, selectedProfile, succeeded, completed](const QVariantMap& report) {
+            *succeeded = report.value(QStringLiteral("success")).toBool();
+            *completed = true;
+            if (self != nullptr && *succeeded) {
+                self->setStatusMessage(
+                    QStringLiteral("Applied scheduled profile '%1'.").arg(selectedProfile)
+                );
+            }
+        },
+        false
+    );
+    if (!started) {
+        return false;
+    }
+    return *completed ? *succeeded : true;
 }
 
 void AppController::enableDaemonRecovery()
@@ -2824,6 +2907,12 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
             self->syncDaemonDryRun();
             self->refreshBackendInfo();
             emit self->daemonDevicesRefreshed();
+            if (!self->m_pendingScheduledProfile.isEmpty()) {
+                const QString pendingProfile = self->m_pendingScheduledProfile;
+                self->m_pendingScheduledProfile.clear();
+                const bool applied = self->applyScheduledProfile(pendingProfile);
+                Q_UNUSED(applied)
+            }
         },
         3000
     );

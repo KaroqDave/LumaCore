@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <QVariantList>
 
+#include <functional>
 #include <memory>
 
 namespace lumacore {
@@ -207,6 +208,11 @@ private:
         const QString& targetName = {}
     );
     bool allOffDevicesInternal(const QStringList& targetDeviceIds = {}, const QString& targetName = {});
+    bool applyProfileInternal(
+        const QString& profileName,
+        std::function<void(const QVariantMap&)> completion,
+        bool emitFinished
+    );
     [[nodiscard]] static QString normalizeDeviceGroupName(const QString& groupName);
     [[nodiscard]] QStringList storedDeviceGroupIds(const QString& groupName) const;
     bool refreshDaemonDevices(bool recoveredConnection);
@@ -218,6 +224,7 @@ private:
     int m_pendingDaemonOperations {0};
     bool m_daemonRecoveryEnabled {false};
     bool m_daemonDevicesLoaded {false};
+    QString m_pendingScheduledProfile;
     bool m_daemonRefreshInProgress {false};
     bool m_profileApplyInProgress {false};
     bool m_daemonDryRunSyncInProgress {false};

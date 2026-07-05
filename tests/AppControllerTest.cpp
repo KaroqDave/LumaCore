@@ -1227,5 +1227,36 @@ int main(int argc, char* argv[])
         daemonClient->disconnectFromDaemon();
     }
 
+    // A daemon-backed controller with no device snapshot yet parks a scheduled
+    // apply instead of burning the day's attempt against an empty device set.
+    {
+        QTemporaryDir pendingProfilesDirectory;
+        if (!require(pendingProfilesDirectory.isValid(), "pending schedule profile directory should be available")) {
+            return 1;
+        }
+        auto pendingClient = std::make_shared<lumacore::DaemonClient>(
+            QStringLiteral("lumacore-app-controller-pending-%1").arg(QCoreApplication::applicationPid())
+        );
+        lumacore::DeviceManager pendingManager(
+            nullptr,
+            pendingProfilesDirectory.filePath(QStringLiteral("profiles"))
+        );
+        lumacore::AppController pendingController(&pendingManager, pendingClient);
+        if (!require(
+                pendingController.applyScheduledProfile(QStringLiteral("Evening")),
+                "scheduled applies should park while no daemon snapshot has arrived"
+            )
+            || !require(
+                pendingController.statusMessage().contains(QStringLiteral("Waiting for daemon devices")),
+                "parked scheduled applies should report that they are waiting for devices"
+            )
+            || !require(
+                !pendingController.profileApplyInProgress(),
+                "parked scheduled applies should not start a profile apply"
+            )) {
+            return 1;
+        }
+    }
+
     return 0;
 }
