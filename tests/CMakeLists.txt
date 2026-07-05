@@ -127,6 +127,14 @@ lumacore_add_test_executable(lumacore_profile_schedule_runner_test profile_sched
 target_include_directories(lumacore_profile_schedule_runner_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_profile_schedule_runner_test PRIVATE lumacore_ui Qt6::Core)
 
+lumacore_add_test_executable(lumacore_daemon_schedule_bridge_test daemon_schedule_bridge
+    DaemonScheduleBridgeTest.cpp
+    ${PROJECT_SOURCE_DIR}/app/DaemonScheduleBridge.cpp
+    ${PROJECT_SOURCE_DIR}/app/DaemonScheduleBridge.h
+)
+target_include_directories(lumacore_daemon_schedule_bridge_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(lumacore_daemon_schedule_bridge_test PRIVATE lumacore_ui lumacore_ipc Qt6::Core)
+
 lumacore_add_test_executable(lumacore_app_controller_test app_controller
     AppControllerTest.cpp
 )

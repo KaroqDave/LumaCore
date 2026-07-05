@@ -30,8 +30,13 @@ public:
         const QTime& scheduledTime
     );
 
+    [[nodiscard]] bool suspended() const;
+
 public slots:
     void evaluateNow();
+    // Stand the local runner down while the daemon owns the schedule; resuming
+    // re-arms without retro-firing a boundary that passed while suspended.
+    void setSuspended(bool suspended);
 
 private:
     void resetAndSchedule();
@@ -42,6 +47,7 @@ private:
     QTimer m_timer;
     QDate m_lastAttemptDate;
     bool m_skipMissedRun {true};
+    bool m_suspended {false};
 };
 
 } // namespace lumacore

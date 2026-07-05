@@ -631,6 +631,11 @@ bool AppController::daemonDryRunEnabled() const
     return m_daemonClient != nullptr && m_daemonClient->daemonDryRunEnabled();
 }
 
+bool AppController::daemonScheduleSupported() const
+{
+    return m_daemonClient != nullptr && m_daemonClient->daemonScheduleSupported();
+}
+
 bool AppController::daemonDryRunMismatch() const
 {
     return daemonDryRunKnown() && daemonDryRunEnabled() != dryRunEnabled();

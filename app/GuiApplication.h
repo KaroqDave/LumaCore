@@ -19,6 +19,7 @@ class QApplication;
 namespace lumacore {
 
 class DaemonLauncher;
+class DaemonScheduleBridge;
 class ProfileScheduleRunner;
 class TrayController;
 
@@ -52,6 +53,7 @@ private:
     QmlHost m_qmlHost;
     std::unique_ptr<TrayController> m_trayController;
     std::unique_ptr<ProfileScheduleRunner> m_profileScheduleRunner;
+    std::unique_ptr<DaemonScheduleBridge> m_daemonScheduleBridge;
     bool m_autoStartDaemon {false};
 };
 
