@@ -30,6 +30,10 @@ public:
 
     [[nodiscard]] static double streamedEffectPeriodSeconds(double speed);
     [[nodiscard]] static QVector<RgbColor> computeFrame(const RgbEffect& effect, int ledCount, double elapsedSeconds);
+    // Fractional [0,1) position within the streamed-effect period for the
+    // given speed, from the same clock that drives frame streaming, so UI
+    // previews can move in lockstep with the streamed zone animations.
+    [[nodiscard]] double streamPhase(double speed) const;
 
 private:
     void tick();

@@ -779,6 +779,11 @@ bool AppController::deleteDeviceGroup(const QString& groupName)
     return true;
 }
 
+double AppController::effectStreamPhase(double speed) const
+{
+    return m_deviceManager == nullptr ? 0.0 : m_deviceManager->effectStreamPhase(speed);
+}
+
 void AppController::syncZoneFrameStreaming(int deviceIndex, int zoneIndex, const RgbEffect& effect)
 {
     if (m_deviceManager == nullptr) {

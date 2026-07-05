@@ -595,6 +595,11 @@ void DeviceManager::stopAllFrameStreaming()
     m_effectsEngine->stopAll();
 }
 
+double DeviceManager::effectStreamPhase(double speed) const
+{
+    return m_effectsEngine->streamPhase(speed);
+}
+
 bool DeviceManager::saveProfile(const QString& profileName, QString* errorMessage)
 {
     const QString normalizedName = normalizeProfileName(profileName);

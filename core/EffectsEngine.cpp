@@ -45,6 +45,9 @@ EffectsEngine::EffectsEngine(DeviceManager* deviceManager, QObject* parent)
     m_timer.setInterval(kFrameIntervalMs);
     m_timer.setTimerType(Qt::PreciseTimer);
     connect(&m_timer, &QTimer::timeout, this, &EffectsEngine::tick);
+    // The phase clock runs from construction so previews can animate before
+    // the first streamed zone; streaming reuses the same monotonic clock.
+    m_clock.start();
 }
 
 void EffectsEngine::startZone(int deviceIndex, int zoneIndex)
@@ -128,6 +131,16 @@ double EffectsEngine::streamedEffectPeriodSeconds(double speed)
 {
     const double boundedSpeed = qBound(kMinEffectSpeed, speed, kMaxEffectSpeed);
     return streamPeriodOffset() + (streamPeriodScale() / boundedSpeed);
+}
+
+double EffectsEngine::streamPhase(double speed) const
+{
+    if (!m_clock.isValid()) {
+        return 0.0;
+    }
+
+    const double elapsedSeconds = static_cast<double>(m_clock.elapsed()) / 1000.0;
+    return fractional(elapsedSeconds / streamedEffectPeriodSeconds(speed));
 }
 
 QVector<RgbColor> EffectsEngine::computeFrame(const RgbEffect& effect, int ledCount, double elapsedSeconds)

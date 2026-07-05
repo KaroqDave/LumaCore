@@ -50,8 +50,6 @@ Item {
     readonly property bool usesBaseColor: effectType !== 1 && effectType !== 3
     readonly property bool usesSpeed: effectType !== 0
     readonly property real brightnessFactor: brightness / 100.0
-    readonly property int streamPeriodMs: streamedEffectPeriodMs(effectSpeed)
-    readonly property int breathingHalfPeriodMs: Math.max(150, Math.round(streamPeriodMs / 2))
     readonly property bool roomyHeader: width >= 760
     readonly property var disabledEffectSegments: [
         !targetSupportsEffect(0),
@@ -64,11 +62,6 @@ Item {
     signal selectedColorSyncRequested(color colorValue)
 
     implicitHeight: content.implicitHeight
-
-    function streamedEffectPeriodMs(speedValue) {
-        const boundedSpeed = Math.max(0.1, Math.min(5.0, speedValue))
-        return Math.round((1.2959183673469388 + 1.520408163265306 / boundedSpeed) * 1000)
-    }
 
     function refreshTargetOptions() {
         const names = appController ? appController.deviceGroupNames : []
@@ -283,20 +276,20 @@ Item {
         return lum > 0.6 ? "#10151A" : "#FFFFFF"
     }
 
-    function restartPreviewAnimations() {
-        if (!controls.animationsEnabled) {
-            return
-        }
-        if (controls.effectType === 1 && globalRainbowClip.visible) {
-            globalRainbowScrollAnim.stop()
-            globalRainbowScrollAnim.start()
-        } else if (controls.effectType === 2) {
-            globalBreathingAnim.stop()
-            globalBreathingAnim.start()
-        } else if (controls.effectType === 3) {
-            globalColorCycleAnim.stop()
-            globalColorCycleAnim.start()
-        }
+    // Live stream phase from the effects engine: the preview bar reads the
+    // same clock and speed curve that drive the streamed zone frames, so the
+    // preview and the device-tree swatches move in lockstep.
+    property real streamPhase: 0
+
+    Timer {
+        interval: 33
+        repeat: true
+        running: controls.visible
+                 && controls.animationsEnabled
+                 && controls.effectType !== 0
+                 && controls.appController !== null
+                 && controls.appController !== undefined
+        onTriggered: controls.streamPhase = controls.appController.effectStreamPhase(controls.effectSpeed)
     }
 
     OperationResultDialog {
@@ -602,8 +595,13 @@ Item {
             clip: true
             opacity: controls.selectedEffectSupported ? 1.0 : 0.5
 
-            property real breath: 1
-            property real cycleHue: 0
+            // Matches EffectsEngine::computeFrame: breathing scales between a
+            // 0.12 floor and full brightness on a sine of the stream phase,
+            // and the color cycle hue is the phase itself.
+            property real breath: controls.animationsEnabled && controls.effectType === 2
+                                  ? 0.12 + 0.88 * ((Math.sin(2 * Math.PI * controls.streamPhase) + 1) / 2)
+                                  : 1
+            property real cycleHue: controls.animationsEnabled ? controls.streamPhase : 0
             readonly property color staticColor: Qt.rgba(
                 controls.selectedColor.r * controls.brightnessFactor,
                 controls.selectedColor.g * controls.brightnessFactor,
@@ -631,7 +629,13 @@ Item {
                     id: globalRainbowRow
 
                     height: parent.height
-                    x: 0
+                    // The engine paints LED hue = phase + position, so a fixed
+                    // screen position advances through the wheel as the phase
+                    // grows: scroll the doubled gradient left by one bar width
+                    // per period to match.
+                    x: controls.animationsEnabled
+                       ? -Math.max(1, globalPreviewBar.width) * controls.streamPhase
+                       : 0
 
                     Repeater {
                         model: 2
@@ -652,55 +656,7 @@ Item {
                             }
                         }
                     }
-
-                    NumberAnimation {
-                        id: globalRainbowScrollAnim
-
-                        target: globalRainbowRow
-                        property: "x"
-                        running: controls.effectType === 1 && controls.animationsEnabled && globalRainbowClip.visible
-                        from: 0
-                        to: -Math.max(1, globalPreviewBar.width)
-                        loops: Animation.Infinite
-                        duration: controls.streamPeriodMs
-                    }
                 }
-            }
-
-            SequentialAnimation {
-                id: globalBreathingAnim
-
-                running: controls.effectType === 2 && controls.animationsEnabled
-                loops: Animation.Infinite
-
-                NumberAnimation {
-                    target: globalPreviewBar
-                    property: "breath"
-                    from: 0.12
-                    to: 1.0
-                    duration: controls.breathingHalfPeriodMs
-                    easing.type: Easing.InOutSine
-                }
-                NumberAnimation {
-                    target: globalPreviewBar
-                    property: "breath"
-                    from: 1.0
-                    to: 0.12
-                    duration: controls.breathingHalfPeriodMs
-                    easing.type: Easing.InOutSine
-                }
-            }
-
-            NumberAnimation {
-                id: globalColorCycleAnim
-
-                target: globalPreviewBar
-                property: "cycleHue"
-                running: controls.effectType === 3 && controls.animationsEnabled
-                loops: Animation.Infinite
-                from: 0
-                to: 1
-                duration: controls.streamPeriodMs
             }
 
             RowLayout {
@@ -910,8 +866,6 @@ Item {
         }
     }
 
-    onEffectTypeChanged: Qt.callLater(restartPreviewAnimations)
-    onEffectSpeedChanged: Qt.callLater(restartPreviewAnimations)
     onSelectedDeviceIndexChanged: Qt.callLater(loadZoneEffectsToggle)
     onSelectedZoneIndexChanged: Qt.callLater(loadZoneEffectsToggle)
     onAppControllerChanged: Qt.callLater(loadZoneEffectsToggle)
