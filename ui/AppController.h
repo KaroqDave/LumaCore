@@ -148,6 +148,9 @@ public:
     Q_INVOKABLE QVariantMap profileCompatibility(const QString& profileName);
     Q_INVOKABLE bool profileExists(const QString& profileName) const;
     Q_INVOKABLE QStringList profileNames() const;
+    // Fractional [0,1) streamed-effect phase for the given speed, from the
+    // effects engine clock, so QML previews stay in sync with zone streaming.
+    Q_INVOKABLE double effectStreamPhase(double speed) const;
     Q_INVOKABLE bool retryDaemonConnection();
     Q_INVOKABLE bool rescanDaemonDevices();
     [[nodiscard]] bool applyProfileOnLaunch(const QString& profileName);
