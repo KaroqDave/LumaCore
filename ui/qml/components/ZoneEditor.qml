@@ -93,7 +93,7 @@ Item {
                 font.pixelSize: 10
             }
 
-            SpinBox {
+            AppSpinBox {
                 id: ledSpin
 
                 Layout.fillWidth: !editor.wideLayout
