@@ -201,12 +201,15 @@ quint64 DaemonRgbDevice::applyZoneEffectAsync(
             // synchronization guard can refuse the write on state drift.
             {QStringLiteral("dryRunEnabled"), dryRunExpected},
         },
-        [self, zoneIndex, effect, dryRunExpected, handler = std::move(handler)](DaemonCallResult result) mutable {
+        [self, zoneIndex, effect, handler = std::move(handler)](DaemonCallResult result) mutable {
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);
             if (self != nullptr) {
                 self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
-                if (success && !dryRunExpected) {
+                if (success) {
+                    // Dry-run successes update the local proxy state too, so
+                    // the interface previews the accepted intent; the daemon
+                    // side leaves hardware untouched either way.
                     self->applyLocalZoneEffect(zoneIndex, effect);
                 } else if (error.isEmpty()) {
                     error = self->m_lastHardwareWriteStatus;
@@ -266,12 +269,13 @@ quint64 DaemonRgbDevice::applyAllOffAsync(bool dryRunExpected, OperationHandler 
             {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
             {QStringLiteral("dryRunEnabled"), dryRunExpected},
         },
-        [self, dryRunExpected, handler = std::move(handler)](DaemonCallResult result) mutable {
+        [self, handler = std::move(handler)](DaemonCallResult result) mutable {
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);
             if (self != nullptr) {
                 self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
-                if (success && !dryRunExpected) {
+                if (success) {
+                    // See applyZoneEffectAsync: dry-run previews locally.
                     self->applyLocalAllOff();
                 } else if (error.isEmpty()) {
                     error = self->m_lastHardwareWriteStatus;
