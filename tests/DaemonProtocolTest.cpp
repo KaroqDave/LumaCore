@@ -916,7 +916,6 @@ int main(int argc, char* argv[])
         return 1;
     }
     const RgbEffect dryRunPreviewEffect(RgbEffectType::Static, RgbColor(31, 63, 95), 1.0, 45);
-    const RgbEffect dryRunOriginalEffect = dryRunProxyDevice.zoneEffect(0);
     bool dryRunPreviewFinished = false;
     bool dryRunPreviewSucceeded = false;
     const quint64 dryRunPreviewOperation = dryRunProxyDevice.applyZoneEffectAsync(
@@ -932,16 +931,17 @@ int main(int argc, char* argv[])
         || !require(waitUntil([&] { return dryRunPreviewFinished; }), "dry-run proxy apply should complete")
         || !require(dryRunPreviewSucceeded, "dry-run proxy apply should report success when expectations match")
         || !require(
-            dryRunProxyDevice.zoneEffect(0) == dryRunOriginalEffect,
-            "dry-run proxy apply should leave the local UI model untouched"
+            dryRunProxyDevice.zoneEffect(0) == dryRunPreviewEffect,
+            "dry-run proxy apply should preview the accepted effect in the local UI model"
         )) {
         return 1;
     }
+    const RgbEffect dryRunMismatchEffect(RgbEffectType::Static, RgbColor(99, 66, 33), 1.0, 80);
     bool dryRunMismatchFinished = false;
     bool dryRunMismatchSucceeded = true;
     const quint64 dryRunMismatchOperation = dryRunProxyDevice.applyZoneEffectAsync(
         0,
-        dryRunPreviewEffect,
+        dryRunMismatchEffect,
         false,
         [&](bool success, const QString&) {
             dryRunMismatchFinished = true;
@@ -955,7 +955,7 @@ int main(int argc, char* argv[])
             "the daemon should refuse writes whose dry-run expectation differs from its own state"
         )
         || !require(
-            dryRunProxyDevice.zoneEffect(0) == dryRunOriginalEffect,
+            dryRunProxyDevice.zoneEffect(0) == dryRunPreviewEffect,
             "refused proxy writes should leave the local UI model untouched"
         )) {
         return 1;
