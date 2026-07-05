@@ -15,6 +15,7 @@
 #include "core/DeviceManager.h"
 #include "core/PortablePaths.h"
 #include "daemon/DaemonOptions.h"
+#include "daemon/ScheduleService.h"
 #include "ipc/DaemonServer.h"
 
 #include <QCoreApplication>
@@ -114,6 +115,8 @@ int runDaemon(const lumacore::DaemonOptions& options)
     if (!initializeRequestedBackend(deviceManager, options.backendId)) {
         return 1;
     }
+
+    lumacore::ScheduleService scheduleService(&deviceManager);
 
     lumacore::DaemonServer server(&deviceManager);
     server.setExitWhenIdle(options.exitOnDisconnect);

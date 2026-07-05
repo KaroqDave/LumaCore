@@ -2,6 +2,8 @@
 
 #include "core/ScheduleTime.h"
 
+#include <QTimeZone>
+
 namespace lumacore {
 
 namespace {
@@ -25,6 +27,19 @@ QTime parseScheduleTime(const QString& value)
 QString normalizeScheduleTime(const QString& value)
 {
     return parseScheduleTime(value).toString(QStringLiteral("HH:mm"));
+}
+
+qint64 millisecondsUntilNextScheduleRun(const QDateTime& now, const QTime& scheduledTime)
+{
+    if (!now.isValid() || !scheduledTime.isValid()) {
+        return 0;
+    }
+
+    QDateTime nextRun(now.date(), scheduledTime, now.timeZone());
+    if (nextRun <= now) {
+        nextRun = nextRun.addDays(1);
+    }
+    return now.msecsTo(nextRun);
 }
 
 } // namespace lumacore
