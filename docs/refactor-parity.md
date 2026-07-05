@@ -63,6 +63,10 @@ Use this checklist for behavior-preserving modernization passes.
 ## Writes and effects
 
 - Dry-run reports success without applying hardware writes.
+- Successful dry-run applies update the GUI-side proxy zone state and emit the zone-change
+  signals so the interface previews the accepted intent; frame streaming and
+  stop-streaming side effects remain real-write-only. Refused writes leave the local model
+  untouched.
 - Confirmation-gated writes remain blocked until confirmed and are cleared on backend reinitialization.
 - Permission failures preserve their reason.
 - Static, animated, local-frame, and all-off paths preserve logs and signals.
