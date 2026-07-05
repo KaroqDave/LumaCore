@@ -2,11 +2,15 @@
 
 #include "backends/daemon/DaemonRgbDevice.h"
 #include "backends/daemon/DaemonBackend.h"
+#include "core/ProfileStore.h"
+#include "core/ScheduleService.h"
 #include "ipc/DaemonClient.h"
 #include "ipc/DaemonProtocol.h"
 #include "ipc/DaemonServer.h"
 
 #include <QCoreApplication>
+#include <QDate>
+#include <QDateTime>
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -14,7 +18,11 @@
 #include <QJsonObject>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QThread>
+#include <QTime>
+#include <QTimeZone>
 #include <QTimer>
 
 #include <algorithm>
@@ -117,6 +125,49 @@ ClientExchange runClientExchange(
     exchange.request = std::move(receivedRequest);
     return exchange;
 }
+
+class ScheduleFireDevice final : public lumacore::RgbDevice
+{
+public:
+    ScheduleFireDevice()
+        : RgbDevice(
+              QStringLiteral("schedule-fire-device"),
+              QStringLiteral("Schedule Fire Device"),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Header"),
+            lumacore::RgbZoneType::AddressableHeader,
+            1
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        if (zoneIndex < 0 || zoneIndex >= mutableZones().size()) {
+            return false;
+        }
+        mutableZones()[zoneIndex].setColor(color);
+        return true;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneColorWrite
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capabilities().testFlag(capability)) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+        return {lumacore::PermissionStatus::Denied, QStringLiteral("Unsupported schedule fire capability.")};
+    }
+};
 
 class SnapshotDevice final : public lumacore::RgbDevice
 {
@@ -378,6 +429,9 @@ int main(int argc, char* argv[])
              DaemonMethod::AllOff,
              DaemonMethod::SetDryRun,
              DaemonMethod::ActivityLogSnapshot,
+             DaemonMethod::GetSchedule,
+             DaemonMethod::SetSchedule,
+             DaemonMethod::PutProfile,
          }) {
         if (!require(
                 daemonMethodFromName(daemonMethodName(method)) == method,
@@ -1650,6 +1704,252 @@ int main(int argc, char* argv[])
             "daemon proxy should preserve discovery write-backend marker"
         )) {
         return 1;
+    }
+
+    // Daemon schedule protocol coverage: capability advertising, config echo,
+    // profile push, validation errors, and an injected-clock fire over the wire.
+    {
+        QTemporaryDir scheduleSettingsDirectory;
+        QTemporaryDir scheduleProfilesDirectory;
+        QTemporaryDir fixtureProfilesDirectory;
+        if (!require(
+                scheduleSettingsDirectory.isValid()
+                    && scheduleProfilesDirectory.isValid()
+                    && fixtureProfilesDirectory.isValid(),
+                "temporary schedule directories should be available"
+            )) {
+            return 1;
+        }
+        QCoreApplication::setOrganizationName(QStringLiteral("LumaCoreTests"));
+        QCoreApplication::setApplicationName(QStringLiteral("DaemonProtocolTest"));
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, scheduleSettingsDirectory.path());
+
+        // Author the pushed profile in a separate store so putProfile is the
+        // only way it can reach the schedule daemon's own profile directory.
+        DeviceManager fixtureManager(nullptr, fixtureProfilesDirectory.filePath(QStringLiteral("profiles")));
+        fixtureManager.setDryRunEnabled(false);
+        std::vector<std::unique_ptr<RgbDevice>> fixtureDevices;
+        fixtureDevices.push_back(std::make_unique<ScheduleFireDevice>());
+        fixtureManager.replaceDevices(std::move(fixtureDevices));
+        const RgbColor scheduledColor(0x11, 0x22, 0x33);
+        QJsonObject profileJson;
+        if (!require(fixtureManager.setZoneStaticColor(0, 0, scheduledColor), "schedule fixture color should apply")
+            || !require(fixtureManager.saveProfile(QStringLiteral("Evening")), "schedule fixture profile should save")
+            || !require(
+                ProfileStore(fixtureManager.profilesDirectoryPath())
+                    .load(QStringLiteral("Evening"), &profileJson, nullptr),
+                "schedule fixture profile should load"
+            )) {
+            return 1;
+        }
+
+        DeviceManager scheduleManager(nullptr, scheduleProfilesDirectory.filePath(QStringLiteral("profiles")));
+        scheduleManager.setDryRunEnabled(false);
+        std::vector<std::unique_ptr<RgbDevice>> scheduleDevices;
+        scheduleDevices.push_back(std::make_unique<ScheduleFireDevice>());
+        scheduleManager.replaceDevices(std::move(scheduleDevices));
+
+        // A server without an attached schedule service must not advertise
+        // support and must answer schedule calls with a clear error.
+        DaemonServer unsupportedServer(&scheduleManager);
+        const QString unsupportedServerName = testSocketName(QStringLiteral("schedule-unsupported"));
+        QString unsupportedListenError;
+        if (!require(
+                unsupportedServer.listen(unsupportedServerName, &unsupportedListenError),
+                "schedule-unsupported server should listen"
+            )) {
+            return 1;
+        }
+        DaemonClient unsupportedClient(unsupportedServerName);
+        const DaemonCallResult unsupportedStatus =
+            unsupportedClient.call(daemonMethodName(DaemonMethod::Status), {}, 3000);
+        const DaemonCallResult unsupportedGet =
+            unsupportedClient.call(daemonMethodName(DaemonMethod::GetSchedule), {}, 3000);
+        if (!require(
+                unsupportedStatus.ok
+                    && !unsupportedStatus.result.value(QStringLiteral("scheduleSupported")).toBool(true),
+                "servers without a schedule service should advertise scheduleSupported=false"
+            )
+            || !require(
+                unsupportedGet.ok
+                    && !unsupportedGet.result.value(QStringLiteral("success")).toBool(true)
+                    && unsupportedGet.result.value(QStringLiteral("error")).toString()
+                        == QStringLiteral("Scheduling is not available."),
+                "getSchedule without a schedule service should report a clear error"
+            )) {
+            return 1;
+        }
+        unsupportedClient.disconnectFromDaemon();
+        unsupportedServer.close();
+
+        ScheduleService scheduleService(&scheduleManager);
+        DaemonServer scheduleServer(&scheduleManager);
+        scheduleServer.setScheduleService(&scheduleService);
+        const QString scheduleServerName = testSocketName(QStringLiteral("schedule"));
+        QString scheduleListenError;
+        if (!require(scheduleServer.listen(scheduleServerName, &scheduleListenError), "schedule server should listen")) {
+            return 1;
+        }
+        DaemonClient scheduleClient(scheduleServerName);
+
+        const DaemonCallResult scheduleStatus =
+            scheduleClient.call(daemonMethodName(DaemonMethod::Status), {}, 3000);
+        if (!require(
+                scheduleStatus.ok
+                    && scheduleStatus.result.value(QStringLiteral("scheduleSupported")).toBool(false),
+                "servers with a schedule service should advertise scheduleSupported=true"
+            )) {
+            return 1;
+        }
+
+        const DaemonCallResult invalidPut = scheduleClient.call(
+            daemonMethodName(DaemonMethod::PutProfile),
+            {{QStringLiteral("profileName"), QStringLiteral("Evening")}},
+            3000
+        );
+        const DaemonCallResult unsupportedFormatPut = scheduleClient.call(
+            daemonMethodName(DaemonMethod::PutProfile),
+            {
+                {QStringLiteral("profileName"), QStringLiteral("Evening")},
+                {QStringLiteral("profile"), QJsonObject {{QStringLiteral("formatVersion"), 2}}},
+            },
+            3000
+        );
+        const DaemonCallResult validPut = scheduleClient.call(
+            daemonMethodName(DaemonMethod::PutProfile),
+            {
+                {QStringLiteral("profileName"), QStringLiteral("  Evening  ")},
+                {QStringLiteral("profile"), profileJson},
+            },
+            3000
+        );
+        if (!require(
+                invalidPut.ok
+                    && !invalidPut.result.value(QStringLiteral("success")).toBool(true)
+                    && invalidPut.result.value(QStringLiteral("error")).toString()
+                        == QStringLiteral("Profile payload is missing or invalid."),
+                "putProfile without a profile object should be rejected"
+            )
+            || !require(
+                unsupportedFormatPut.ok
+                    && !unsupportedFormatPut.result.value(QStringLiteral("success")).toBool(true)
+                    && unsupportedFormatPut.result.value(QStringLiteral("error")).toString()
+                        == QStringLiteral("Unsupported profile format version."),
+                "putProfile should reject unknown profile format versions"
+            )
+            || !require(
+                validPut.ok
+                    && validPut.result.value(QStringLiteral("success")).toBool(false)
+                    && validPut.result.value(QStringLiteral("profileName")).toString()
+                        == QStringLiteral("Evening"),
+                "putProfile should store the pushed profile under its normalized name"
+            )) {
+            return 1;
+        }
+
+        const DaemonCallResult emptyProfileSet = scheduleClient.call(
+            daemonMethodName(DaemonMethod::SetSchedule),
+            {
+                {QStringLiteral("enabled"), true},
+                {QStringLiteral("profileName"), QStringLiteral("   ")},
+                {QStringLiteral("time"), QStringLiteral("00:30")},
+            },
+            3000
+        );
+        const DaemonCallResult invalidTimeSet = scheduleClient.call(
+            daemonMethodName(DaemonMethod::SetSchedule),
+            {
+                {QStringLiteral("enabled"), true},
+                {QStringLiteral("profileName"), QStringLiteral("  Evening  ")},
+                {QStringLiteral("time"), QStringLiteral("25:99")},
+            },
+            3000
+        );
+        if (!require(
+                emptyProfileSet.ok
+                    && !emptyProfileSet.result.value(QStringLiteral("success")).toBool(true)
+                    && emptyProfileSet.result.value(QStringLiteral("error")).toString()
+                        == QStringLiteral("Schedule requires a profile name."),
+                "setSchedule should reject enabling without a profile name"
+            )
+            || !require(
+                invalidTimeSet.ok
+                    && invalidTimeSet.result.value(QStringLiteral("success")).toBool(false)
+                    && invalidTimeSet.result.value(QStringLiteral("enabled")).toBool(false)
+                    && invalidTimeSet.result.value(QStringLiteral("profileName")).toString()
+                        == QStringLiteral("Evening")
+                    && invalidTimeSet.result.value(QStringLiteral("time")).toString()
+                        == QStringLiteral("18:00")
+                    && invalidTimeSet.result.value(QStringLiteral("profileAvailable")).toBool(false),
+                "setSchedule should echo the normalized effective schedule"
+            )) {
+            return 1;
+        }
+
+        const DaemonCallResult validSet = scheduleClient.call(
+            daemonMethodName(DaemonMethod::SetSchedule),
+            {
+                {QStringLiteral("enabled"), true},
+                {QStringLiteral("profileName"), QStringLiteral("Evening")},
+                {QStringLiteral("time"), QStringLiteral("00:30")},
+            },
+            3000
+        );
+        const DaemonCallResult getAfterSet =
+            scheduleClient.call(daemonMethodName(DaemonMethod::GetSchedule), {}, 3000);
+        if (!require(
+                validSet.ok
+                    && validSet.result.value(QStringLiteral("success")).toBool(false)
+                    && validSet.result.value(QStringLiteral("time")).toString() == QStringLiteral("00:30"),
+                "setSchedule should accept a valid schedule"
+            )
+            || !require(
+                getAfterSet.ok
+                    && getAfterSet.result.value(QStringLiteral("enabled")).toBool(false)
+                    && getAfterSet.result.value(QStringLiteral("profileName")).toString()
+                        == QStringLiteral("Evening")
+                    && getAfterSet.result.value(QStringLiteral("time")).toString() == QStringLiteral("00:30")
+                    && getAfterSet.result.value(QStringLiteral("profileAvailable")).toBool(false),
+                "getSchedule should echo the stored schedule with profile availability"
+            )) {
+            return 1;
+        }
+
+        // Injected-clock fire: the wire-configured schedule applies the pushed
+        // profile through the daemon-side DeviceManager.
+        scheduleService.setClock(
+            []() { return QDateTime(QDate(2026, 7, 1), QTime(1, 0), QTimeZone::utc()); }
+        );
+        scheduleService.evaluateNow();
+        scheduleService.setClock(
+            []() { return QDateTime(QDate(2026, 7, 2), QTime(0, 31), QTimeZone::utc()); }
+        );
+        scheduleService.evaluateNow();
+        const RgbDevice* scheduleDevice = scheduleManager.deviceAt(0);
+        if (!require(
+                scheduleDevice != nullptr
+                    && scheduleDevice->zones().at(0).currentColor() == scheduledColor,
+                "wire-configured schedules should apply the pushed profile on fire"
+            )) {
+            return 1;
+        }
+        const DaemonCallResult logSnapshot =
+            scheduleClient.call(daemonMethodName(DaemonMethod::ActivityLogSnapshot), {}, 3000);
+        bool sawFireLine = false;
+        const QJsonArray logLines = logSnapshot.result.value(QStringLiteral("lines")).toArray();
+        for (const QJsonValue& line : logLines) {
+            if (line.toString().contains(QStringLiteral("Scheduled profile 'Evening' fired (daemon schedule)."))) {
+                sawFireLine = true;
+                break;
+            }
+        }
+        if (!require(logSnapshot.ok && sawFireLine, "schedule fires should surface in the activity log snapshot")) {
+            return 1;
+        }
+
+        scheduleClient.disconnectFromDaemon();
+        scheduleServer.close();
     }
 
     return 0;

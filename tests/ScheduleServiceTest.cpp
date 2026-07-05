@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "core/DeviceManager.h"
-#include "daemon/ScheduleService.h"
+#include "core/ScheduleService.h"
 
 #include <QCoreApplication>
 #include <QDate>

@@ -278,6 +278,76 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Schedule support: the real daemon advertises scheduleSupported, accepts a
+    // pushed profile, and echoes the normalized schedule back with availability.
+    if (!require(
+            status.result.value(QStringLiteral("scheduleSupported")).toBool(false),
+            "real daemon should advertise schedule support in its status payload"
+        )) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+        return 1;
+    }
+    const QJsonObject scheduleProfile {
+        {QStringLiteral("formatVersion"), 1},
+        {QStringLiteral("name"), QStringLiteral("E2E Schedule")},
+        {QStringLiteral("devices"), QJsonArray {}},
+    };
+    const DaemonCallResult putProfile = client->call(
+        daemonMethodName(DaemonMethod::PutProfile),
+        {
+            {QStringLiteral("profileName"), QStringLiteral("E2E Schedule")},
+            {QStringLiteral("profile"), scheduleProfile},
+        },
+        3000
+    );
+    const DaemonCallResult setSchedule = client->call(
+        daemonMethodName(DaemonMethod::SetSchedule),
+        {
+            {QStringLiteral("enabled"), true},
+            {QStringLiteral("profileName"), QStringLiteral("E2E Schedule")},
+            {QStringLiteral("time"), QStringLiteral("07:30")},
+        },
+        3000
+    );
+    const DaemonCallResult getSchedule = client->call(daemonMethodName(DaemonMethod::GetSchedule), {}, 3000);
+    const DaemonCallResult disableSchedule = client->call(
+        daemonMethodName(DaemonMethod::SetSchedule),
+        {
+            {QStringLiteral("enabled"), false},
+            {QStringLiteral("profileName"), QString()},
+            {QStringLiteral("time"), QStringLiteral("18:00")},
+        },
+        3000
+    );
+    if (!require(
+            putProfile.ok && putProfile.result.value(QStringLiteral("success")).toBool(false),
+            "real daemon should accept a pushed schedule profile"
+        )
+        || !require(
+            setSchedule.ok
+                && setSchedule.result.value(QStringLiteral("success")).toBool(false)
+                && setSchedule.result.value(QStringLiteral("enabled")).toBool(false)
+                && setSchedule.result.value(QStringLiteral("time")).toString() == QStringLiteral("07:30"),
+            "real daemon should accept and echo a valid schedule"
+        )
+        || !require(
+            getSchedule.ok
+                && getSchedule.result.value(QStringLiteral("enabled")).toBool(false)
+                && getSchedule.result.value(QStringLiteral("profileName")).toString()
+                    == QStringLiteral("E2E Schedule")
+                && getSchedule.result.value(QStringLiteral("profileAvailable")).toBool(false),
+            "real daemon should report the stored schedule with the pushed profile available"
+        )
+        || !require(
+            disableSchedule.ok && disableSchedule.result.value(QStringLiteral("success")).toBool(false),
+            "schedule cleanup should disable the end-to-end schedule"
+        )) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+        return 1;
+    }
+
     // The daemon logs its startup banner, so a snapshot should never be empty.
     const DaemonCallResult activity = client->call(daemonMethodName(DaemonMethod::ActivityLogSnapshot), {}, 3000);
     if (!require(activity.ok, "activityLogSnapshot should succeed")

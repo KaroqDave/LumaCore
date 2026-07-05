@@ -18,6 +18,8 @@ class QLockFile;
 
 namespace lumacore {
 
+class ScheduleService;
+
 class DaemonServer final : public QObject
 {
     Q_OBJECT
@@ -30,6 +32,7 @@ public:
     void close();
     [[nodiscard]] QString socketPath() const;
     void setExitWhenIdle(bool enabled);
+    void setScheduleService(ScheduleService* scheduleService);
 
 signals:
     void idleExitRequested();
@@ -51,8 +54,13 @@ private:
     [[nodiscard]] QJsonObject paintZoneFrame(const QJsonObject& params);
     [[nodiscard]] QJsonObject setDryRun(const QJsonObject& params);
     [[nodiscard]] QJsonObject activityLogSnapshot() const;
+    [[nodiscard]] QJsonObject schedulePayload() const;
+    [[nodiscard]] QJsonObject getSchedule() const;
+    [[nodiscard]] QJsonObject setSchedule(const QJsonObject& params);
+    [[nodiscard]] QJsonObject putProfile(const QJsonObject& params);
 
     DeviceManager* m_deviceManager {nullptr};
+    ScheduleService* m_scheduleService {nullptr};
     QLocalServer m_server;
     QString m_socketPath;
     QHash<QLocalSocket*, QByteArray> m_buffers;

@@ -27,7 +27,7 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 
 ## Methods
 
-- `hello` / `status` returns daemon version, protocol version, socket path, active backend descriptor, device count, and dry-run state. The daemon answers this handshake regardless of the request's protocol version so the client can detect a version mismatch and surface it instead of failing opaquely; all other methods still require a matching `version`.
+- `hello` / `status` returns daemon version, protocol version, socket path, active backend descriptor, device count, dry-run state, and the additive `scheduleSupported` flag that advertises the daemon-side schedule methods. The daemon answers this handshake regardless of the request's protocol version so the client can detect a version mismatch and surface it instead of failing opaquely; all other methods still require a matching `version`.
 - `listDevices` returns the status payload plus device and zone data.
 - `previewEffect` returns backend-specific dry-run preview text for one zone/effect.
 - `applyEffect` applies a static color or effect through `DeviceManager`, `WriteGate`, and the active backend.
@@ -37,6 +37,11 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 - `paintZoneFrame` streams one host-computed LED frame through `DeviceManager::paintZoneFrame` and the active backend. Write requests require the same explicit `dryRunEnabled` guard as `applyEffect` and `allOff`. Animated GUI effects set `clientStreamsFrames` on `applyEffect` so the daemon primes hardware while the GUI streams frames over `paintZoneFrame`.
 - `setDryRun` changes daemon dry-run state and echoes the daemon's effective dry-run state. The GUI tracks both its local setting and the daemon-reported value so diagnostics can expose synchronization problems instead of inferring daemon state from the GUI. Write requests (`applyEffect`, `allOff`, `paintZoneFrame`) always carry the GUI's own dry-run expectation, never the daemon-reported value, so the daemon's synchronization guard can refuse writes when the two states drift apart.
 - `activityLogSnapshot` returns formatted activity log lines for the GUI.
+- `getSchedule` returns the daemon's persisted profile schedule as `enabled`, `profileName`, `time` (`HH:mm`), and `profileAvailable` (whether the daemon's own profile store contains the scheduled profile). Additive protocol-version-1 method.
+- `setSchedule` stores the daemon-side schedule from `enabled`, `profileName`, and `time`, then echoes the normalized effective state in the `getSchedule` shape. Profile names are trimmed and invalid times normalize to `18:00`; enabling without a profile name is rejected with `Schedule requires a profile name.` and leaves the stored schedule unchanged. This is configuration, not a hardware write, so it carries no dry-run guard. Additive protocol-version-1 method.
+- `putProfile` saves a format-version-1 profile JSON object into the daemon's own profile store under the normalized `profileName`, so the GUI can mirror the scheduled profile into a store the daemon can read (the GUI and a root daemon use different data roots). Missing or non-object payloads and unknown `formatVersion` values are rejected; identical re-pushes are accepted without rewriting. Additive protocol-version-1 method.
+
+The GUI mirrors its schedule to the daemon when support is advertised: it pushes the scheduled profile via `putProfile` followed by `setSchedule`, and re-pushes when the schedule settings or the scheduled profile's content change. Scheduled applies run inside the daemon through the same permission, confirmation, and dry-run gates as interactive writes; unconfirmed hardware zones are skipped with a logged reason.
 
 Hardware writes are not exposed as raw packet methods. Backends must build approved packets internally and pass the existing permission/write gates.
 

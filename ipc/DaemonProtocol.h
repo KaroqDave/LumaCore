@@ -6,7 +6,6 @@
 #include "core/RgbBackend.h"
 #include "core/RgbDevice.h"
 #include "core/RgbEffect.h"
-#include "core/RgbZone.h"
 
 #include <QByteArray>
 #include <QJsonArray>
@@ -33,6 +32,9 @@ enum class DaemonMethod {
     PaintZoneFrame,
     SetDryRun,
     ActivityLogSnapshot,
+    GetSchedule,
+    SetSchedule,
+    PutProfile,
 };
 
 [[nodiscard]] QString daemonMethodName(DaemonMethod method);
