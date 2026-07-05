@@ -25,6 +25,23 @@ Use this checklist for behavior-preserving modernization passes.
 - Shared profile planning remains internal. New apply or preview paths should reuse the
   existing planner instead of rebuilding profile JSON matching or report shaping.
 
+## Startup and profile apply paths
+
+- Startup discovery, launch-profile applies, scheduled applies, and profile loads run on the
+  asynchronous correlated-request path; `DaemonClient::call` is a test convenience and the
+  `no_sync_daemon_call` guard keeps production sources off it.
+- `loadProfile`, `applyProfileOnLaunch`, and `applyScheduledProfile` keep their signatures,
+  bool returns, and status messages. With local devices they complete synchronously and
+  behave as before; with daemon devices the bool means the apply started and the status
+  message lands on completion.
+- Launch and scheduled applies against a daemon-backed session without a device snapshot
+  park in one-shot pending slots that drain on the first successful snapshot; they fire at
+  most once.
+- `applyProfileWithReport` remains synchronous with an unchanged report shape; against live
+  daemon devices its zones report failures with the retired-sync-write status instead of
+  performing blocking writes. `loadProfile` now shares the single-apply-in-progress guard.
+- Profile apply reports keep the same keys, counts, summaries, details, and preview shapes.
+
 ## Daemon protocol
 
 - Protocol version remains `1`.

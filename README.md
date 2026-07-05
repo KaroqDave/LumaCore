@@ -343,7 +343,6 @@ rather than a wire field (see `docs/hardware/asus-aura-hid.md`).
 ## Current Gaps
 
 - Automated coverage is still focused; a full-stack daemon end-to-end test, a headless QML load smoke test, and global/group partial-result reporting tests now exercise the mock-backed socket flow, the interface's initial render, and heterogeneous-device operation reporting, but interaction-level QML/UI coverage remains beyond the current CTest, QML lint, warning, sanitizer, and package-staging checks.
-- Startup and scheduled profile application still use the synchronous compatibility path; direct interactive device operations and GUI profile loads are asynchronous.
 - Profile scheduling runs in the daemon when it advertises schedule support, so schedules fire while the GUI is closed on a persistent (systemd) daemon; against an older daemon the GUI falls back to session-only scheduling, and an older GUI paired with a newer daemon that holds a previously pushed schedule fires it daemon-side once per day.
 - ASUS support is intentionally limited to the allowlisted controller until more owned-hardware validation follows the hardware contribution workflow.
 - Profile validation is minimal.
