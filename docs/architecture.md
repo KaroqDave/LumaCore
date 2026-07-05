@@ -17,8 +17,13 @@ and a synchronous compatibility wrapper used by startup discovery and bulk profi
 After reconnect, the GUI requests a fresh device snapshot and replaces the proxy-device set atomically.
 When the desktop exposes a system tray, `TrayController` owns the native tray icon and mediates
 Show/Hide, explicit Quit, and the opt-in close-to-tray window lifecycle.
-`ProfileScheduleRunner` is a GUI-session timer that applies one persisted profile schedule
-through the normal `AppController` profile path; it does not move scheduling into the daemon.
+Profile scheduling is daemon-owned when the connected daemon advertises `scheduleSupported`:
+`DaemonScheduleBridge` mirrors the GUI schedule settings and the scheduled profile's content to
+the daemon (`putProfile` + `setSchedule`), where `core/ScheduleService` fires it through the
+daemon's own `DeviceManager` — so schedules run while the GUI is closed on a persistent daemon.
+`ProfileScheduleRunner` remains the GUI-session fallback and fires exactly as before when the
+daemon does not support scheduling; it stands down while the daemon owns the schedule, and
+ownership stays sticky across disconnects so both sides never fire the same day.
 Diagnostics export is assembled in `AppController` as a sanitized JSON report containing
 runtime state, backend/device summaries, profile names, and recent activity without profile contents.
 Profile preview, synchronous apply, and asynchronous apply paths share the internal profile
@@ -26,7 +31,7 @@ planning helpers so compatibility reports and apply summaries are shaped in one 
 
 ## Module responsibilities
 
-- `core/` owns backend-neutral RGB models, backend registration, write policy, effects, schedule-time normalization, shared profile planning, and the stable `DeviceManager` API.
+- `core/` owns backend-neutral RGB models, backend registration, write policy, effects, schedule-time normalization, the daemon-side `ScheduleService`, shared profile planning, and the stable `DeviceManager` API.
 - `core/ProfileStore` owns profile naming, paths, JSON file I/O, atomic saves, listing, rename, and deletion.
 - `core/ProfilePlan` owns internal profile JSON decoding, device/zone matching, effect normalization, preview item construction, and apply report shaping used by both `DeviceManager` and `AppController`.
 - `ipc/DaemonProtocol` owns protocol version 1 method names, payload conversion, and snapshot JSON conversion.
@@ -54,7 +59,6 @@ Behavior-preserving refactors must keep these boundaries stable unless a dedicat
 The following should not be bundled into structural refactors:
 
 - replacing the remaining synchronous startup/profile compatibility paths;
-- moving profile scheduling into a background daemon or operating-system timer;
 - daemon protocol version changes or field removal;
 - profile location or schema changes;
 - replacing the QML controller surface;
