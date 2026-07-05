@@ -23,20 +23,11 @@ BackendDescriptor DaemonBackend::descriptor() const
 
 std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::discoverDevices() const
 {
-    if (m_client == nullptr) {
-        return {};
-    }
-
-    const DaemonCallResult response = m_client->call(daemonMethodName(DaemonMethod::ListDevices));
-    if (!response.ok) {
-        m_lastDiscoverError = response.error.isEmpty()
-            ? QStringLiteral("Could not list devices from LumaCore daemon.")
-            : response.error;
-        return {};
-    }
-
+    // Devices arrive exclusively through asynchronous snapshots
+    // (devicesFromPayload + DeviceManager::replaceDevices); startup discovery
+    // must not block on the daemon connection.
     m_lastDiscoverError.clear();
-    return devicesFromPayload(response.result);
+    return {};
 }
 
 std::vector<std::unique_ptr<RgbDevice>> DaemonBackend::devicesFromPayload(const QJsonObject& payload) const
@@ -80,13 +71,9 @@ PermissionResult DaemonBackend::probe() const
         return {PermissionStatus::Denied, QStringLiteral("Daemon client is not available.")};
     }
 
-    const DaemonCallResult response = m_client->call(daemonMethodName(DaemonMethod::Status));
-    if (!response.ok) {
-        return {PermissionStatus::Denied, response.error};
-    }
-
-    updateDescriptor(response.result);
-
+    // The transport is available whenever a client exists; the connection is
+    // established asynchronously and its state is surfaced through the
+    // client's own signals rather than a blocking status call here.
     return {PermissionStatus::Granted, {}};
 }
 

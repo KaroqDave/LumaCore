@@ -926,6 +926,26 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Without a daemon client, arming the launch apply applies immediately
+    // through the same path as applyProfileOnLaunch.
+    if (!require(
+            controller.applyEffect(0, 0, static_cast<int>(lumacore::RgbEffectType::Static), changedColor, 1.0, 100),
+            "pre-arm color should apply"
+        )) {
+        return 1;
+    }
+    controller.armLaunchProfileApply(QStringLiteral("Evening"));
+    if (!require(
+            controller.zoneEffectColor(0, 0) == savedColor,
+            "arming with local devices should apply the launch profile immediately"
+        )
+        || !require(
+            controller.statusMessage() == QStringLiteral("Applied active profile 'Evening' on launch."),
+            "immediate armed applies should set the launch status message"
+        )) {
+        return 1;
+    }
+
     const QString exportPath = profileDirectory.filePath(QStringLiteral("Evening-export.json"));
     if (!require(
             controller.exportProfile(QStringLiteral("Evening"), QUrl::fromLocalFile(exportPath)),
@@ -1253,6 +1273,23 @@ int main(int argc, char* argv[])
             || !require(
                 !pendingController.profileApplyInProgress(),
                 "parked scheduled applies should not start a profile apply"
+            )) {
+            return 1;
+        }
+
+        // Arming the launch apply parks it the same way while no snapshot has
+        // arrived, without starting an apply or reporting an error.
+        pendingController.armLaunchProfileApply(QStringLiteral("Evening"));
+        if (!require(
+                !pendingController.profileApplyInProgress(),
+                "armed launch applies should wait for the first daemon snapshot"
+            )) {
+            return 1;
+        }
+        pendingController.armLaunchProfileApply(QStringLiteral("   "));
+        if (!require(
+                pendingController.statusMessage() == QStringLiteral("No active profile is selected for launch."),
+                "arming with an empty profile should keep the launch status message"
             )) {
             return 1;
         }

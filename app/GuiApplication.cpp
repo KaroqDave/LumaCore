@@ -100,24 +100,21 @@ void GuiApplication::configureQtApplication(QApplication& application)
 
 int GuiApplication::run()
 {
+    m_backendContext.deviceManager.initializeBackends(QStringLiteral("daemon"));
+    m_deviceTreeModel.setWriteConfirmationSource(&m_appController);
+
     // Start the bundled daemon already in the user's persisted dry-run state so a
     // GUI-launched daemon never has a startup window in which its platform-default
     // dry-run state disagrees with the GUI before the post-connect sync completes.
-    const bool daemonAvailable = m_daemonLauncher->ensureAvailable(
+    // Connection acquisition and the first device snapshot are asynchronous, so
+    // the window appears immediately instead of blocking on daemon startup.
+    m_daemonLauncher->ensureAvailableAsync(
         m_autoStartDaemon,
         {},
-        3000,
         m_settingsController.dryRunEnabled()
     );
-    m_backendContext.deviceManager.initializeBackends(QStringLiteral("daemon"));
-    m_deviceTreeModel.setWriteConfirmationSource(&m_appController);
-    if (!daemonAvailable && !m_daemonLauncher->lastError().isEmpty()) {
-        m_backendContext.daemonClient->reportConnectionError(m_daemonLauncher->lastError());
-    }
     if (m_settingsController.applyOnLaunch()) {
-        const bool profileApplied =
-            m_appController.applyProfileOnLaunch(m_settingsController.activeProfile());
-        Q_UNUSED(profileApplied)
+        m_appController.armLaunchProfileApply(m_settingsController.activeProfile());
     }
     m_appController.enableDaemonRecovery();
 

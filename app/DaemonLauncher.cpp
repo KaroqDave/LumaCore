@@ -123,6 +123,87 @@ bool DaemonLauncher::ensureAvailable(
     return false;
 }
 
+void DaemonLauncher::ensureAvailableAsync(
+    bool autoStart,
+    const QString& daemonExecutable,
+    std::optional<bool> initialDryRun
+)
+{
+    m_lastError.clear();
+    m_startedDaemon = false;
+    m_startedDaemonSawConnection = false;
+
+    if (m_client == nullptr) {
+        m_lastError = QStringLiteral("Daemon client is not available.");
+        return;
+    }
+    if (m_client->isConnected() || !autoStart) {
+        return;
+    }
+
+    const QString executable = resolvedDaemonExecutable(daemonExecutable);
+    if (!QFileInfo::exists(executable)) {
+        m_lastError = QStringLiteral(
+            "Could not start the LumaCore daemon because '%1' was not found. "
+            "Re-extract the complete Windows package or start the daemon manually."
+        ).arg(QDir::toNativeSeparators(executable));
+        m_client->reportConnectionError(m_lastError);
+        return;
+    }
+
+    QStringList arguments {
+        QStringLiteral("--backend"),
+        QStringLiteral("auto"),
+        QStringLiteral("--socket"),
+        m_client->socketPath(),
+        QStringLiteral("--exit-on-disconnect"),
+    };
+    if (initialDryRun.has_value()) {
+        arguments << QStringLiteral("--dry-run")
+                  << (*initialDryRun ? QStringLiteral("true") : QStringLiteral("false"));
+    }
+    m_process.setProgram(executable);
+    m_process.setArguments(arguments);
+    m_process.start();
+    if (!m_process.waitForStarted(1000)) {
+        m_lastError = QStringLiteral("Could not start the bundled LumaCore daemon: %1")
+                          .arg(m_process.errorString());
+        m_client->reportConnectionError(m_lastError);
+        return;
+    }
+    m_startedDaemon = true;
+
+    // Surface a startup crash distinctly from a plain connection timeout: if
+    // the launched process exits before the client ever connected, report its
+    // exit code. Both connections use the client as context so they detach
+    // with it.
+    QObject::connect(
+        m_client.get(),
+        &DaemonClient::connectionStateChanged,
+        m_client.get(),
+        [this] {
+            if (m_client->isConnected()) {
+                m_startedDaemonSawConnection = true;
+            }
+        }
+    );
+    QObject::connect(
+        &m_process,
+        &QProcess::finished,
+        m_client.get(),
+        [this](int exitCode, QProcess::ExitStatus) {
+            if (m_startedDaemonSawConnection) {
+                return;
+            }
+            m_startedDaemon = false;
+            m_lastError = QStringLiteral(
+                "The bundled LumaCore daemon exited before it accepted a connection (exit code %1)."
+            ).arg(exitCode);
+            m_client->reportConnectionError(m_lastError);
+        }
+    );
+}
+
 bool DaemonLauncher::startedDaemon() const
 {
     return m_startedDaemon;
