@@ -109,6 +109,14 @@ lumacore_add_test_executable(lumacore_option_parsing_test option_parsing
 target_include_directories(lumacore_option_parsing_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_option_parsing_test PRIVATE lumacore_ipc Qt6::Core)
 
+lumacore_add_test_executable(lumacore_schedule_service_test schedule_service
+    ScheduleServiceTest.cpp
+    ${PROJECT_SOURCE_DIR}/daemon/ScheduleService.cpp
+    ${PROJECT_SOURCE_DIR}/daemon/ScheduleService.h
+)
+target_include_directories(lumacore_schedule_service_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(lumacore_schedule_service_test PRIVATE lumacore_core Qt6::Core)
+
 lumacore_add_test_executable(lumacore_settings_controller_test settings_controller
     SettingsControllerTest.cpp
 )

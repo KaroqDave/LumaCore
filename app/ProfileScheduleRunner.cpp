@@ -7,7 +7,6 @@
 #include "ui/SettingsController.h"
 
 #include <QTimer>
-#include <QTimeZone>
 
 #include <algorithm>
 
@@ -66,15 +65,7 @@ qint64 ProfileScheduleRunner::millisecondsUntilNextRun(
     const QTime& scheduledTime
 )
 {
-    if (!now.isValid() || !scheduledTime.isValid()) {
-        return 0;
-    }
-
-    QDateTime nextRun(now.date(), scheduledTime, now.timeZone());
-    if (nextRun <= now) {
-        nextRun = nextRun.addDays(1);
-    }
-    return now.msecsTo(nextRun);
+    return millisecondsUntilNextScheduleRun(now, scheduledTime);
 }
 
 void ProfileScheduleRunner::evaluateNow()
