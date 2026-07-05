@@ -6,19 +6,23 @@
 #include "core/DeviceManager.h"
 #include "core/ProfileStore.h"
 #include "ipc/DaemonProtocol.h"
+#include "ipc/DaemonServer.h"
 #include "ui/AppController.h"
 
 #include <QCoreApplication>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QUrl>
 
+#include <functional>
 #include <utility>
 #include <vector>
 #include <cstdio>
@@ -76,6 +80,49 @@ public:
             lumacore::PermissionStatus::Denied,
             QStringLiteral("Test device does not support %1.").arg(lumacore::backendCapabilityToString(capability)),
         };
+    }
+};
+
+class AnimPreviewDevice final : public lumacore::RgbDevice
+{
+public:
+    AnimPreviewDevice()
+        : RgbDevice(
+              QStringLiteral("anim-preview-device"),
+              QStringLiteral("Anim Preview Device"),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Header"),
+            lumacore::RgbZoneType::AddressableHeader,
+            8
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        if (zoneIndex < 0 || zoneIndex >= mutableZones().size()) {
+            return false;
+        }
+        mutableZones()[zoneIndex].setColor(color);
+        return true;
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneColorWrite
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(lumacore::BackendCapability capability) const override
+    {
+        if (capabilities().testFlag(capability)) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+        return {lumacore::PermissionStatus::Denied, QStringLiteral("Unsupported anim preview capability.")};
     }
 };
 
@@ -1293,6 +1340,82 @@ int main(int argc, char* argv[])
             )) {
             return 1;
         }
+    }
+
+    // Dry-run applies must keep animated effects visible: the effects engine
+    // streams frames into the local zone model without daemon writes, so the
+    // zone preview color keeps changing while dry-run is enabled.
+    {
+        lumacore::DeviceManager animServerManager;
+        animServerManager.setDryRunEnabled(true);
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> animServerDevices;
+        animServerDevices.push_back(std::make_unique<AnimPreviewDevice>());
+        animServerManager.replaceDevices(std::move(animServerDevices));
+        lumacore::DaemonServer animServer(&animServerManager);
+        const QString animServerName =
+            QStringLiteral("lumacore-app-controller-anim-%1").arg(QCoreApplication::applicationPid());
+        QString animListenError;
+        if (!require(animServer.listen(animServerName, &animListenError), "anim preview server should listen")) {
+            return 1;
+        }
+
+        QTemporaryDir animProfilesDirectory;
+        auto animClient = std::make_shared<lumacore::DaemonClient>(animServerName);
+        lumacore::DeviceManager animManager(nullptr, animProfilesDirectory.filePath(QStringLiteral("profiles")));
+        animManager.setDryRunEnabled(true);
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> animProxies;
+        animProxies.push_back(std::make_unique<lumacore::DaemonRgbDevice>(
+            lumacore::deviceToJson(*animServerManager.deviceAt(0), 0, false),
+            animClient
+        ));
+        animManager.replaceDevices(std::move(animProxies));
+        lumacore::AppController animController(&animManager, animClient);
+
+        const auto waitUntilAnim = [](const std::function<bool()>& condition, int timeoutMs) {
+            QElapsedTimer waitTimer;
+            waitTimer.start();
+            while (!condition() && waitTimer.elapsed() < timeoutMs) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+                QThread::msleep(1);
+            }
+            return condition();
+        };
+
+        if (!require(
+                animController.applyEffect(
+                    0,
+                    0,
+                    static_cast<int>(lumacore::RgbEffectType::Rainbow),
+                    QColor(QStringLiteral("#ff0000")),
+                    1.0,
+                    100
+                ),
+                "dry-run rainbow apply should start"
+            )
+            || !require(
+                waitUntilAnim(
+                    [&animController] {
+                        return animController.zoneEffectType(0, 0)
+                            == static_cast<int>(lumacore::RgbEffectType::Rainbow);
+                    },
+                    3000
+                ),
+                "dry-run rainbow apply should complete against the in-process daemon"
+            )) {
+            return 1;
+        }
+
+        const lumacore::RgbColor firstSample = animManager.deviceAt(0)->zones().at(0).currentColor();
+        const bool animated = waitUntilAnim(
+            [&animManager, firstSample] {
+                return !(animManager.deviceAt(0)->zones().at(0).currentColor() == firstSample);
+            },
+            3000
+        );
+        if (!require(animated, "dry-run animated effects should keep updating the local zone preview")) {
+            return 1;
+        }
+        animClient->disconnectFromDaemon();
     }
 
     return 0;

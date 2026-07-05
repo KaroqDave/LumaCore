@@ -313,7 +313,12 @@ Item {
                 readonly property string zoneEffectColorHex: model.zoneEffectColorHex || zoneColorHex
                 readonly property string zoneEffectName: model.zoneEffectName || ""
                 readonly property string zoneEffectLabel: zoneEffectName.length > 0 ? qsTr("%1 active").arg(zoneEffectName) : ""
-                readonly property color zoneSwatchColor: zoneEffectColorHex || Theme.accent
+                // Animated zones bind the live frame color (streamed through
+                // ZoneColorHexRole at frame rate) so the swatch shows the
+                // running effect; static zones show the configured color.
+                readonly property color zoneSwatchColor: (zoneEffectAnimated && zoneColorHex.length > 0
+                                                          ? zoneColorHex
+                                                          : zoneEffectColorHex) || Theme.accent
 
                 implicitWidth: tree.width
                 implicitHeight: deviceNode ? 40 : 33
@@ -493,9 +498,10 @@ Item {
 
                         Rectangle {
                             anchors.fill: parent
+                            // Overlays the rainbow gradient too: while frames
+                            // stream, the live color cycles here; the gradient
+                            // stays as the idle backdrop underneath.
                             visible: treeDelegate.zoneEffectAnimated
-                                     && treeDelegate.zoneEffectType !== 1
-                                     && treeDelegate.zoneEffectType !== 3
                             radius: 7
                             color: treeDelegate.zoneSwatchColor
                             opacity: 0.82
