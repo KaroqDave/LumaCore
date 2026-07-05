@@ -4,8 +4,6 @@ qt_add_executable(lumacore-daemon
     MANUAL_FINALIZATION
     DaemonOptions.cpp
     DaemonOptions.h
-    ScheduleService.cpp
-    ScheduleService.h
     ${PROJECT_SOURCE_DIR}/backends/auto/AutoBackend.cpp
     ${PROJECT_SOURCE_DIR}/backends/auto/AutoBackend.h
     main.cpp

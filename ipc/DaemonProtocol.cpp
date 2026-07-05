@@ -40,6 +40,12 @@ QString daemonMethodName(DaemonMethod method)
         return QStringLiteral("setDryRun");
     case DaemonMethod::ActivityLogSnapshot:
         return QStringLiteral("activityLogSnapshot");
+    case DaemonMethod::GetSchedule:
+        return QStringLiteral("getSchedule");
+    case DaemonMethod::SetSchedule:
+        return QStringLiteral("setSchedule");
+    case DaemonMethod::PutProfile:
+        return QStringLiteral("putProfile");
     case DaemonMethod::Unknown:
         break;
     }
@@ -62,6 +68,9 @@ DaemonMethod daemonMethodFromName(const QString& name)
              DaemonMethod::PaintZoneFrame,
              DaemonMethod::SetDryRun,
              DaemonMethod::ActivityLogSnapshot,
+             DaemonMethod::GetSchedule,
+             DaemonMethod::SetSchedule,
+             DaemonMethod::PutProfile,
          }) {
         if (name == daemonMethodName(method)) {
             return method;

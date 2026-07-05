@@ -3,6 +3,8 @@
 #include "ipc/DaemonServer.h"
 
 #include "app/Version.h"
+#include "core/ProfileStore.h"
+#include "core/ScheduleService.h"
 #include "ipc/DaemonFrameCodec.h"
 #include "ipc/DaemonProtocol.h"
 
@@ -170,6 +172,11 @@ void DaemonServer::setExitWhenIdle(bool enabled)
     m_exitWhenIdle = enabled;
 }
 
+void DaemonServer::setScheduleService(ScheduleService* scheduleService)
+{
+    m_scheduleService = scheduleService;
+}
+
 void DaemonServer::handleNewConnection()
 {
     while (QLocalSocket* socket = m_server.nextPendingConnection()) {
@@ -318,6 +325,12 @@ QJsonObject DaemonServer::handleRequest(const QJsonObject& request)
         return makeDaemonResult(requestId, setDryRun(params));
     case DaemonMethod::ActivityLogSnapshot:
         return makeDaemonResult(requestId, activityLogSnapshot());
+    case DaemonMethod::GetSchedule:
+        return makeDaemonResult(requestId, getSchedule());
+    case DaemonMethod::SetSchedule:
+        return makeDaemonResult(requestId, setSchedule(params));
+    case DaemonMethod::PutProfile:
+        return makeDaemonResult(requestId, putProfile(params));
     case DaemonMethod::Unknown:
     case DaemonMethod::Hello:
     case DaemonMethod::Status:
@@ -337,6 +350,7 @@ QJsonObject DaemonServer::statusPayload() const
         {QStringLiteral("backend"), backendDescriptorToJson(descriptor)},
         {QStringLiteral("deviceCount"), m_deviceManager == nullptr ? 0 : m_deviceManager->deviceCount()},
         {QStringLiteral("dryRunEnabled"), m_deviceManager != nullptr && m_deviceManager->dryRunEnabled()},
+        {QStringLiteral("scheduleSupported"), m_scheduleService != nullptr},
     };
 }
 
@@ -539,6 +553,90 @@ QJsonObject DaemonServer::activityLogSnapshot() const
     return {
         {QStringLiteral("lines"), QJsonArray::fromStringList(m_deviceManager == nullptr ? QStringList {} : m_deviceManager->activityLog().formattedLines())},
     };
+}
+
+QJsonObject DaemonServer::schedulePayload() const
+{
+    const ScheduleService::Config config = m_scheduleService->config();
+    bool profileAvailable = false;
+    if (m_deviceManager != nullptr && !config.profileName.isEmpty()) {
+        const ProfileStore profileStore(m_deviceManager->profilesDirectoryPath());
+        profileAvailable = profileStore.names().contains(ProfileStore::normalizeName(config.profileName));
+    }
+    return {
+        {QStringLiteral("success"), true},
+        {QStringLiteral("enabled"), config.enabled},
+        {QStringLiteral("profileName"), config.profileName},
+        {QStringLiteral("time"), config.time},
+        {QStringLiteral("profileAvailable"), profileAvailable},
+    };
+}
+
+QJsonObject DaemonServer::getSchedule() const
+{
+    if (m_scheduleService == nullptr) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), QStringLiteral("Scheduling is not available.")}};
+    }
+
+    return schedulePayload();
+}
+
+QJsonObject DaemonServer::setSchedule(const QJsonObject& params)
+{
+    if (m_scheduleService == nullptr) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), QStringLiteral("Scheduling is not available.")}};
+    }
+
+    ScheduleService::Config config;
+    config.enabled = params.value(QStringLiteral("enabled")).toBool(false);
+    config.profileName = params.value(QStringLiteral("profileName")).toString();
+    config.time = params.value(QStringLiteral("time")).toString();
+    if (config.enabled && config.profileName.trimmed().isEmpty()) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), QStringLiteral("Schedule requires a profile name.")}};
+    }
+
+    m_scheduleService->setConfig(config);
+    return schedulePayload();
+}
+
+QJsonObject DaemonServer::putProfile(const QJsonObject& params)
+{
+    if (m_deviceManager == nullptr) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), QStringLiteral("Device manager is not available.")}};
+    }
+
+    const QString profileName = params.value(QStringLiteral("profileName")).toString().trimmed();
+    const QJsonValue profileValue = params.value(QStringLiteral("profile"));
+    if (profileName.isEmpty() || !profileValue.isObject()) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), QStringLiteral("Profile payload is missing or invalid.")}};
+    }
+
+    const QJsonObject profile = profileValue.toObject();
+    // Legacy color-only profiles omit formatVersion; only a present-but-unknown
+    // version is rejected so future formats cannot be silently misapplied.
+    const QJsonValue formatVersion = profile.value(QStringLiteral("formatVersion"));
+    if (!formatVersion.isUndefined() && formatVersion.toInt(-1) != 1) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), QStringLiteral("Unsupported profile format version.")}};
+    }
+
+    const QString normalizedName = ProfileStore::normalizeName(profileName);
+    const ProfileStore profileStore(m_deviceManager->profilesDirectoryPath());
+
+    QJsonObject existingProfile;
+    if (profileStore.load(normalizedName, &existingProfile, nullptr) && existingProfile == profile) {
+        return {{QStringLiteral("success"), true}, {QStringLiteral("profileName"), normalizedName}};
+    }
+
+    QString saveError;
+    if (!profileStore.save(normalizedName, profile, &saveError)) {
+        return {{QStringLiteral("success"), false}, {QStringLiteral("error"), saveError}};
+    }
+
+    m_deviceManager->activityLog().info(
+        LogCategory::Profile,
+        QStringLiteral("Stored profile '%1' for daemon scheduling.").arg(normalizedName)
+    );
+    return {{QStringLiteral("success"), true}, {QStringLiteral("profileName"), normalizedName}};
 }
 
 } // namespace lumacore

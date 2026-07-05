@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "daemon/ScheduleService.h"
+#include "core/ScheduleService.h"
 
 #include "core/DeviceManager.h"
 #include "core/ScheduleTime.h"

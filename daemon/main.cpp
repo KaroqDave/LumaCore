@@ -14,8 +14,8 @@
 #include "backends/mock/MockBackend.h"
 #include "core/DeviceManager.h"
 #include "core/PortablePaths.h"
+#include "core/ScheduleService.h"
 #include "daemon/DaemonOptions.h"
-#include "daemon/ScheduleService.h"
 #include "ipc/DaemonServer.h"
 
 #include <QCoreApplication>
@@ -119,6 +119,7 @@ int runDaemon(const lumacore::DaemonOptions& options)
     lumacore::ScheduleService scheduleService(&deviceManager);
 
     lumacore::DaemonServer server(&deviceManager);
+    server.setScheduleService(&scheduleService);
     server.setExitWhenIdle(options.exitOnDisconnect);
     QObject::connect(
         &server,

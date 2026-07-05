@@ -34,6 +34,8 @@ qt_add_library(lumacore_core STATIC
     RgbLed.h
     RgbZone.cpp
     RgbZone.h
+    ScheduleService.cpp
+    ScheduleService.h
     ScheduleTime.cpp
     ScheduleTime.h
     WriteGate.cpp
