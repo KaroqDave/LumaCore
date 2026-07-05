@@ -257,5 +257,19 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Destroying a still-connected client must be safe: production can tear
+    // the GUI down without disconnecting first (external daemons), and the
+    // socket teardown must not re-enter already-destroyed client members.
+    {
+        DaemonClient scopedClient(plainServerName);
+        if (!require(
+                scopedClient.connectToDaemon(1000),
+                "scoped client should connect for the destruction check"
+            )) {
+            return 1;
+        }
+    }
+
+    client.disconnectFromDaemon();
     return 0;
 }
