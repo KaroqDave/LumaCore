@@ -18,11 +18,11 @@ Linux uses a system-style daemon and optional systemd unit. Windows 10/11 x64 us
 
 ![LumaCore Devices view](assets/screenshots/lumacore-devices.png)
 
-![LumaCore collapsed sidebar devices view](assets/screenshots/lumacore-devices-collapsed.png)
+![LumaCore collapsed sidebar with a live effect preview](assets/screenshots/lumacore-devices-collapsed.png)
 
-![LumaCore active backend dialog](assets/screenshots/lumacore-backend-dialog.png)
+![LumaCore collapsed sidebar devices view](assets/screenshots/lumacore-devices-collapsed2.png)
 
-Additional light-theme and confirmation screenshots are kept in `assets/screenshots/`.
+![LumaCore profile apply preview](assets/screenshots/lumacore-apply-config.png)
 
 ## Current Capabilities
 
