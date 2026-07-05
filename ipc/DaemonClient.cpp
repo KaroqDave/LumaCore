@@ -360,12 +360,28 @@ void DaemonClient::setDaemonDryRunEnabled(bool enabled)
 
 void DaemonClient::clearDaemonDryRunState()
 {
+    setDaemonScheduleSupported(false);
     if (!m_daemonDryRunKnown && !m_daemonDryRunEnabled) {
         return;
     }
 
     m_daemonDryRunKnown = false;
     m_daemonDryRunEnabled = false;
+    emit daemonInfoChanged();
+}
+
+bool DaemonClient::daemonScheduleSupported() const
+{
+    return m_daemonScheduleSupported;
+}
+
+void DaemonClient::setDaemonScheduleSupported(bool supported)
+{
+    if (m_daemonScheduleSupported == supported) {
+        return;
+    }
+
+    m_daemonScheduleSupported = supported;
     emit daemonInfoChanged();
 }
 
@@ -379,6 +395,9 @@ void DaemonClient::updateDaemonInfo(const DaemonCallResult& result)
     }
     if (result.ok && result.result.contains(QStringLiteral("dryRunEnabled"))) {
         setDaemonDryRunEnabled(result.result.value(QStringLiteral("dryRunEnabled")).toBool(false));
+    }
+    if (result.ok && result.result.contains(QStringLiteral("scheduleSupported"))) {
+        setDaemonScheduleSupported(result.result.value(QStringLiteral("scheduleSupported")).toBool(false));
     }
 }
 

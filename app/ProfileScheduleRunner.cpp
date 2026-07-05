@@ -68,9 +68,28 @@ qint64 ProfileScheduleRunner::millisecondsUntilNextRun(
     return millisecondsUntilNextScheduleRun(now, scheduledTime);
 }
 
+bool ProfileScheduleRunner::suspended() const
+{
+    return m_suspended;
+}
+
+void ProfileScheduleRunner::setSuspended(bool suspended)
+{
+    if (m_suspended == suspended) {
+        return;
+    }
+
+    m_suspended = suspended;
+    if (m_suspended) {
+        m_timer.stop();
+    } else {
+        resetAndSchedule();
+    }
+}
+
 void ProfileScheduleRunner::evaluateNow()
 {
-    if (m_settingsController == nullptr || m_appController == nullptr) {
+    if (m_suspended || m_settingsController == nullptr || m_appController == nullptr) {
         return;
     }
 

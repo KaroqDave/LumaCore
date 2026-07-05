@@ -723,9 +723,15 @@ Item {
 
                     Label {
                         Layout.fillWidth: true
-                        text: page.settingsController && page.settingsController.scheduledProfile.length > 0
-                              ? qsTr("Runs once per day while LumaCore is open; missed earlier runs are skipped on startup.")
-                              : qsTr("A scheduled profile is required before this can be enabled.")
+                        text: {
+                            if (!page.settingsController || page.settingsController.scheduledProfile.length === 0) {
+                                return qsTr("A scheduled profile is required before this can be enabled.")
+                            }
+                            if (page.appController && page.appController.daemonScheduleSupported) {
+                                return qsTr("Runs once per day in the background service; missed earlier runs are skipped.")
+                            }
+                            return qsTr("Runs once per day while LumaCore is open; missed earlier runs are skipped on startup.")
+                        }
                         color: Theme.secondaryText
                         font.pixelSize: 10
                         wrapMode: Text.WordWrap

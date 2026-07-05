@@ -40,6 +40,7 @@ class AppController final : public QObject
     Q_PROPERTY(bool daemonRecoveryBusy READ daemonRecoveryBusy NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonDryRunKnown READ daemonDryRunKnown NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonDryRunEnabled READ daemonDryRunEnabled NOTIFY daemonInfoChanged)
+    Q_PROPERTY(bool daemonScheduleSupported READ daemonScheduleSupported NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonDryRunMismatch READ daemonDryRunMismatch NOTIFY daemonDryRunSyncChanged)
     Q_PROPERTY(bool dryRunEnabled READ dryRunEnabled WRITE setDryRunEnabled NOTIFY dryRunEnabledChanged)
     Q_PROPERTY(int pendingDaemonOperations READ pendingDaemonOperations NOTIFY pendingDaemonOperationsChanged)
@@ -75,6 +76,7 @@ public:
     [[nodiscard]] bool daemonRecoveryBusy() const;
     [[nodiscard]] bool daemonDryRunKnown() const;
     [[nodiscard]] bool daemonDryRunEnabled() const;
+    [[nodiscard]] bool daemonScheduleSupported() const;
     [[nodiscard]] bool daemonDryRunMismatch() const;
     [[nodiscard]] bool dryRunEnabled() const;
     [[nodiscard]] int pendingDaemonOperations() const;

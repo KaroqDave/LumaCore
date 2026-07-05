@@ -8,6 +8,8 @@ target_sources(lumacore
     PRIVATE
         DaemonLauncher.cpp
         DaemonLauncher.h
+        DaemonScheduleBridge.cpp
+        DaemonScheduleBridge.h
         GuiApplication.cpp
         GuiApplication.h
         GuiOptions.cpp

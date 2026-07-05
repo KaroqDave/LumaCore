@@ -175,5 +175,28 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Suspension (daemon-owned scheduling) stops the local runner, and
+    // resuming re-arms without retro-firing the already-passed boundary.
+    runner.setSuspended(true);
+    if (!require(runner.suspended(), "runner should report suspension")) {
+        return 1;
+    }
+    runner.evaluateNow();
+    processEventsFor(100);
+    if (!require(
+            controller.zoneEffectColor(0, 0) == currentColor,
+            "suspended runners should not apply scheduled profiles"
+        )) {
+        return 1;
+    }
+    runner.setSuspended(false);
+    processEventsFor(100);
+    if (!require(
+            controller.zoneEffectColor(0, 0) == currentColor,
+            "resuming a suspended runner should not retro-fire a passed boundary"
+        )) {
+        return 1;
+    }
+
     return 0;
 }

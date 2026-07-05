@@ -3,6 +3,7 @@
 #include "app/GuiApplication.h"
 
 #include "app/DaemonLauncher.h"
+#include "app/DaemonScheduleBridge.h"
 #include "app/ProfileScheduleRunner.h"
 #include "app/TrayController.h"
 #include "app/Version.h"
@@ -138,6 +139,24 @@ int GuiApplication::run()
         &m_settingsController,
         &m_appController
     );
+    m_daemonScheduleBridge = std::make_unique<DaemonScheduleBridge>(
+        &m_settingsController,
+        m_backendContext.daemonClient.get(),
+        m_backendContext.deviceManager.profilesDirectoryPath()
+    );
+    QObject::connect(
+        &m_appController,
+        &AppController::profilesChanged,
+        m_daemonScheduleBridge.get(),
+        &DaemonScheduleBridge::notifyProfilesChanged
+    );
+    QObject::connect(
+        m_daemonScheduleBridge.get(),
+        &DaemonScheduleBridge::daemonOwnsScheduleChanged,
+        m_profileScheduleRunner.get(),
+        &ProfileScheduleRunner::setSuspended
+    );
+    m_profileScheduleRunner->setSuspended(m_daemonScheduleBridge->daemonOwnsSchedule());
 
     return QApplication::exec();
 }
