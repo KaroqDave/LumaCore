@@ -215,6 +215,7 @@ qt_add_qml_module(lumacore
         ui/qml/components/AllOffConfirmationDialog.qml
         ui/qml/components/AppButton.qml
         ui/qml/components/AppSlider.qml
+        ui/qml/components/AppSpinBox.qml
         ui/qml/components/AppSwitch.qml
         ui/qml/components/BackendInfoDialog.qml
         ui/qml/components/BackendStatusChip.qml

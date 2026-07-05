@@ -674,8 +674,8 @@ Item {
                 RowLayout {
                     spacing: 6
 
-                    SpinBox {
-                        Layout.preferredWidth: 72
+                    AppSpinBox {
+                        Layout.preferredWidth: 96
                         enabled: page.settingsController
                                  && page.settingsController.scheduledProfile.length > 0
                         from: 0
@@ -692,8 +692,8 @@ Item {
                         font.bold: true
                     }
 
-                    SpinBox {
-                        Layout.preferredWidth: 72
+                    AppSpinBox {
+                        Layout.preferredWidth: 96
                         enabled: page.settingsController
                                  && page.settingsController.scheduledProfile.length > 0
                         from: 0
