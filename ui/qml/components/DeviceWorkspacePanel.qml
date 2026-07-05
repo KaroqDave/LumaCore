@@ -60,7 +60,7 @@ Item {
     readonly property int wideLayoutAvailableWidth: Math.max(0, width - wideLayoutReservedWidth)
     readonly property bool wideLayout: width >= 760
     readonly property int primaryColumnWidth: wideLayout ? Math.max(180, Math.floor(wideLayoutAvailableWidth * 0.25)) : width
-    readonly property int activityColumnWidth: wideLayout ? Math.min(300, Math.max(230, Math.floor(wideLayoutAvailableWidth * 0.31))) : width
+    readonly property int activityColumnWidth: wideLayout ? Math.min(380, Math.max(260, Math.floor(wideLayoutAvailableWidth * 0.36))) : width
     readonly property int presetColumnWidth: wideLayout ? Math.max(220, wideLayoutAvailableWidth - primaryColumnWidth - activityColumnWidth) : width
     readonly property bool groupTargetSelected: selectedTargetName.length > 0
 
@@ -473,8 +473,8 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.minimumHeight: 92
-                Layout.preferredHeight: panel.wideLayout ? 118 : 132
+                Layout.minimumHeight: 120
+                Layout.preferredHeight: panel.wideLayout ? 156 : 168
                 radius: Theme.radiusSmall
                 color: Theme.sunken
                 border.color: Theme.border
@@ -505,6 +505,8 @@ Item {
                                 color: Theme.secondaryText
                                 font.family: "monospace"
                                 font.pixelSize: 10
+                                wrapMode: Text.WrapAnywhere
+                                maximumLineCount: 2
                                 elide: Text.ElideRight
                                 ToolTip.visible: activityMouse.containsMouse && truncated
                                 ToolTip.text: text
