@@ -281,11 +281,13 @@ Item {
     // preview and the device-tree swatches move in lockstep.
     property real streamPhase: 0
 
+    // Effect previews are content, not interface chrome: like the live
+    // device-tree swatches they keep animating regardless of the UI
+    // animations setting, which only governs sidebar/hover/fade motion.
     Timer {
         interval: 33
         repeat: true
         running: controls.visible
-                 && controls.animationsEnabled
                  && controls.effectType !== 0
                  && controls.appController !== null
                  && controls.appController !== undefined
@@ -598,10 +600,10 @@ Item {
             // Matches EffectsEngine::computeFrame: breathing scales between a
             // 0.12 floor and full brightness on a sine of the stream phase,
             // and the color cycle hue is the phase itself.
-            property real breath: controls.animationsEnabled && controls.effectType === 2
+            property real breath: controls.effectType === 2
                                   ? 0.12 + 0.88 * ((Math.sin(2 * Math.PI * controls.streamPhase) + 1) / 2)
                                   : 1
-            property real cycleHue: controls.animationsEnabled ? controls.streamPhase : 0
+            property real cycleHue: controls.streamPhase
             readonly property color staticColor: Qt.rgba(
                 controls.selectedColor.r * controls.brightnessFactor,
                 controls.selectedColor.g * controls.brightnessFactor,
@@ -633,9 +635,7 @@ Item {
                     // screen position advances through the wheel as the phase
                     // grows: scroll the doubled gradient left by one bar width
                     // per period to match.
-                    x: controls.animationsEnabled
-                       ? -Math.max(1, globalPreviewBar.width) * controls.streamPhase
-                       : 0
+                    x: -Math.max(1, globalPreviewBar.width) * controls.streamPhase
 
                     Repeater {
                         model: 2
