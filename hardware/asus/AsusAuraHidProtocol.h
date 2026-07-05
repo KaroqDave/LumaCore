@@ -10,7 +10,7 @@
 #include <QStringList>
 #include <QVector>
 
-namespace lumacore::hardware::linux {
+namespace lumacore::hardware::asus {
 
 inline constexpr quint16 kAsusAuraVendorId = 0x0B05;
 inline constexpr quint16 kAsusAuraLedControllerProductId = 0x19AF;
@@ -109,4 +109,4 @@ struct AsusAuraConfigTable {
 );
 [[nodiscard]] AsusAuraHidProtocolResult buildAsusAuraAllOffWrite(const AsusAuraConfigTable& config);
 
-} // namespace lumacore::hardware::linux
+} // namespace lumacore::hardware::asus

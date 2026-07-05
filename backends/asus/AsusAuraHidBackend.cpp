@@ -4,7 +4,7 @@
 
 #include "backends/asus/AsusAuraHidDevice.h"
 #include "backends/asus/AsusAuraHidPlatform.h"
-#include "hardware/linux/AsusAuraHidProtocol.h"
+#include "hardware/asus/AsusAuraHidProtocol.h"
 
 #include <QHash>
 #include <QVector>
@@ -16,7 +16,7 @@ namespace {
 struct AuraCandidate {
     asus_aura_platform::ProbeDevice device;
     bool configVerified {false};
-    hardware::linux::AsusAuraConfigTable config;
+    hardware::asus::AsusAuraConfigTable config;
     QString configSummary;
 };
 
@@ -32,14 +32,14 @@ bool textMatchesAsusAura(const QString& vendor, const QString& product)
 bool isResearchedAuraUsbDevice(const asus_aura_platform::ProbeDevice& device)
 {
     return device.source == QStringLiteral("hidapi")
-        && hardware::linux::isAsusAuraUsbVendor(device.vendorId)
-        && hardware::linux::isAsusAuraResearchedUsbProduct(device.productId);
+        && hardware::asus::isAsusAuraUsbVendor(device.vendorId)
+        && hardware::asus::isAsusAuraResearchedUsbProduct(device.productId);
 }
 
 bool isValidatedAuraLedController(const asus_aura_platform::ProbeDevice& device)
 {
     return isResearchedAuraUsbDevice(device)
-        && hardware::linux::isAsusAuraWriteValidatedProduct(device.productId);
+        && hardware::asus::isAsusAuraWriteValidatedProduct(device.productId);
 }
 
 bool isAllowedAuraDevice(const asus_aura_platform::ProbeDevice& device)
@@ -108,8 +108,8 @@ AuraCandidate probeAuraCandidate(const asus_aura_platform::ProbeDevice& device)
     const asus_aura_platform::HidDeviceWriter writer;
     const asus_aura_platform::HidRequestResult response = writer.writeReportReadResponse(
         device.path,
-        hardware::linux::buildAsusAuraConfigTableRequest(),
-        hardware::linux::kAsusAuraResearchReportLength + 1,
+        hardware::asus::buildAsusAuraConfigTableRequest(),
+        hardware::asus::kAsusAuraResearchReportLength + 1,
         750
     );
     if (!response.success) {
@@ -119,8 +119,8 @@ AuraCandidate probeAuraCandidate(const asus_aura_platform::ProbeDevice& device)
         return candidate;
     }
 
-    const hardware::linux::AsusAuraConfigTable config = hardware::linux::parseAsusAuraConfigTableResponse(response.response);
-    candidate.configVerified = hardware::linux::isAsusAuraConfigTableWriteReady(config);
+    const hardware::asus::AsusAuraConfigTable config = hardware::asus::parseAsusAuraConfigTableResponse(response.response);
+    candidate.configVerified = hardware::asus::isAsusAuraConfigTableWriteReady(config);
     candidate.config = config;
     candidate.configSummary = candidate.configVerified
         ? QStringLiteral("ASUS Aura HID validated %1. %2").arg(interfaceSummary(device), config.summary)
@@ -150,8 +150,8 @@ BackendDescriptor AsusAuraHidBackend::descriptor() const
             "Standard ASUS Aura USB HID support for validated target %1. Researched related IDs are %2 but are not write-enabled until verified. Static color and native hardware effects are confirmation-gated."
         )
             .arg(
-                hardware::linux::asusAuraDeviceKey(),
-                hardware::linux::asusAuraResearchedDeviceKeys().join(QStringLiteral(", "))
+                hardware::asus::asusAuraDeviceKey(),
+                hardware::asus::asusAuraResearchedDeviceKeys().join(QStringLiteral(", "))
             ),
         BackendCapability::DiscoveryRead | BackendCapability::ZoneColorWrite | BackendCapability::ZoneEffectWrite,
     };

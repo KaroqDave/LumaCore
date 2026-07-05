@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "hardware/linux/AsusAuraHidProtocol.h"
+#include "hardware/asus/AsusAuraHidProtocol.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
     QCoreApplication app(argc, argv);
     Q_UNUSED(app)
 
-    using namespace lumacore::hardware::linux;
+    using namespace lumacore::hardware::asus;
 
     if (!require(asusAuraDeviceKey() == QStringLiteral("0B05:19AF"), "default ASUS Aura key should stay on the validated write target")) {
         return 1;
