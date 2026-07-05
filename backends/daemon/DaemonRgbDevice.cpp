@@ -228,6 +228,11 @@ bool DaemonRgbDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& col
         return false;
     }
 
+    // Mirror the streamed frame into the local zone model so the interface
+    // shows the running animation; the daemon performs the hardware write.
+    const bool previewed = setZoneEffectColors(zoneIndex, colors);
+    Q_UNUSED(previewed)
+
     const quint64 requestId = m_client->callAsync(
         daemonMethodName(DaemonMethod::PaintZoneFrame),
         {

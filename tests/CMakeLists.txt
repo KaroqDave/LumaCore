@@ -138,7 +138,7 @@ target_link_libraries(lumacore_daemon_schedule_bridge_test PRIVATE lumacore_ui l
 lumacore_add_test_executable(lumacore_app_controller_test app_controller
     AppControllerTest.cpp
 )
-target_link_libraries(lumacore_app_controller_test PRIVATE lumacore_ui Qt6::Core)
+target_link_libraries(lumacore_app_controller_test PRIVATE lumacore_ui lumacore_ipc Qt6::Core)
 
 lumacore_add_test_executable(lumacore_device_tree_model_test device_tree_model
     DeviceTreeModelTest.cpp
