@@ -10,7 +10,7 @@
   </p>
 </div>
 
-**v1.1.9.3** - Cross-platform, daemon-backed RGB control for Linux and Windows, with read-only hardware discovery, portable diagnostics export, safe mock testing, and guarded ASUS Aura HID writes for validated controllers. Built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
+**v1.2.0.0** - Cross-platform, daemon-backed RGB control for Linux and Windows, with read-only hardware discovery, portable diagnostics export, safe mock testing, and guarded ASUS Aura HID writes for validated controllers. Built with C++23, Qt 6, and CMake. Licensed under GPL-2.0-or-later.
 
 LumaCore is a safe desktop RGB controller. The Qt Quick GUI stays unprivileged and talks to `lumacore-daemon` over a local IPC endpoint; hardware-facing code runs behind backend capability checks, dry-run logging, and explicit write confirmation.
 
@@ -29,6 +29,7 @@ Linux uses a system-style daemon and optional systemd unit. Windows 10/11 x64 us
 - Qt Quick desktop UI with a compact collapsible navigation rail, denser Devices workflow, Profiles, Settings, Activities, backend status, and an About dialog.
 - Global controls for applying one effect or brightness level across all compatible zones or saved device groups, plus All Off for every writable device or a selected group, with partial-result reporting.
 - In-memory RGB model for devices, zones, LEDs, profiles, static colors, rainbow, breathing, and color-cycle effects.
+- Live animated effect previews driven by the effects engine's stream phase, so the Global Controls preview bar and the device-tree swatches show rainbow, breathing, and color-cycle motion in lockstep, even under dry-run.
 - GUI-to-daemon boundary through `backends/daemon/`, `ipc/`, and `lumacore-daemon`.
 - Non-blocking interactive daemon requests with correlated responses, cancellation, bounded reconnect backoff, automatic device refresh, stable selection restoration, and manual Retry/Rescan controls.
 - Default daemon `auto` backend that prefers verified ASUS Aura HID control, adds read-only platform discovery inventory when available, and falls back to the mock backend.
