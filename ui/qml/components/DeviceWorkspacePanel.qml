@@ -42,17 +42,17 @@ Item {
     readonly property string selectedColorHex: zoneTick >= 0 ? appController.zoneColorHex(selectedDeviceIndex, selectedZoneIndex) : ""
     readonly property string selectedDeviceName: zoneTick >= 0 ? appController.deviceName(selectedDeviceIndex) : ""
     readonly property int selectedLedCount: zoneTick >= 0 ? appController.zoneLedCount(selectedDeviceIndex, selectedZoneIndex) : 0
-    // Last few non-empty activity lines, newest first. appController.logText has a NOTIFY, so
-    // this binding refreshes on its own; it is cached so the model and the empty-state check
-    // below do not each re-parse the log string.
+    // All non-empty activity lines, newest first (the controller caps its log
+    // at 500 entries). appController.logText has a NOTIFY, so this binding
+    // refreshes on its own; it is cached so the model and the empty-state
+    // check below do not each re-parse the log string.
     readonly property var recentLogLinesModel: {
         if (!appController || appController.logText.length === 0) {
             return []
         }
-        const lines = appController.logText.split("\n").filter(function(line) {
+        return appController.logText.split("\n").filter(function(line) {
             return line.trim().length > 0
-        })
-        return lines.slice(Math.max(0, lines.length - 5)).reverse()
+        }).reverse()
     }
     readonly property int columnSpacing: 12
     readonly property int dividerWidth: 1

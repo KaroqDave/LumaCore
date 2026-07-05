@@ -549,7 +549,14 @@ bool DeviceManager::paintZoneFrame(int deviceIndex, int zoneIndex, const QVector
     }
 
     if (m_dryRunEnabled) {
-        return false;
+        // Dry-run previews the frame in the local zone model only: no device
+        // write and no per-frame log entries, so animated effects stay visible
+        // in the interface while hardware is left untouched.
+        if (!device->setZoneEffectColors(zoneIndex, colors)) {
+            return false;
+        }
+        emit zoneFrameUpdated(deviceIndex, zoneIndex);
+        return true;
     }
 
     const PermissionResult permission = PermissionGate::checkWrite(*device, BackendCapability::ZoneEffectWrite);

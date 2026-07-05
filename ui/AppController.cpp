@@ -865,12 +865,10 @@ bool AppController::applyEffect(int deviceIndex, int zoneIndex, int effectType, 
                         : (error.isEmpty() ? QStringLiteral("Could not apply effect to selected zone.") : error)
                 );
                 if (success) {
-                    // Frame streaming stays real-write-only so dry-run does not
-                    // flood the daemon with per-frame [DRY-RUN] log entries; the
-                    // zone visuals update either way so the UI shows the preview.
-                    if (!dryRunExpected) {
-                        self->syncZoneFrameStreaming(deviceIndex, zoneIndex, effect);
-                    }
+                    // Streaming is safe under dry-run: paintZoneFrame previews
+                    // frames in the local model without device writes or IPC,
+                    // so animated effects stay visible in the interface.
+                    self->syncZoneFrameStreaming(deviceIndex, zoneIndex, effect);
                     emit self->zoneDataChanged(deviceIndex, zoneIndex);
                 }
                 self->refreshDaemonActivityLog();
@@ -1367,8 +1365,7 @@ bool AppController::allOffDevice(int deviceIndex)
                 if (success) {
                     // All Off turns the device off, so any host-streamed animation
                     // for this device must stop or it keeps pushing frames forever.
-                    // A dry-run preview leaves real streaming untouched.
-                    if (!dryRunExpected && self->m_deviceManager != nullptr) {
+                    if (self->m_deviceManager != nullptr) {
                         self->m_deviceManager->stopDeviceFrameStreaming(deviceIndex);
                     }
                     emit self->zoneDataChanged(deviceIndex, -1);
@@ -1612,7 +1609,7 @@ bool AppController::applyGlobalEffectInternal(
                     zoneIndex,
                     effect,
                     dryRunExpected,
-                    [self, state, finish, deviceIndex, zoneIndex, dryRunExpected, effect](bool success, const QString& error) {
+                    [self, state, finish, deviceIndex, zoneIndex, effect](bool success, const QString& error) {
                         if (self == nullptr) {
                             return;
                         }
@@ -1631,9 +1628,7 @@ bool AppController::applyGlobalEffectInternal(
                             );
                         }
                         if (success) {
-                            if (!dryRunExpected) {
-                                self->syncZoneFrameStreaming(deviceIndex, zoneIndex, effect);
-                            }
+                            self->syncZoneFrameStreaming(deviceIndex, zoneIndex, effect);
                             emit self->zoneDataChanged(deviceIndex, zoneIndex);
                         }
                         (*finish)();
@@ -1760,7 +1755,7 @@ bool AppController::allOffDevicesInternal(const QStringList& targetDeviceIds, co
             const bool dryRunExpected = dryRunEnabled();
             const quint64 requestId = daemonDevice->applyAllOffAsync(
                 dryRunExpected,
-                [self, state, finish, deviceIndex, dryRunExpected](bool success, const QString& error) {
+                [self, state, finish, deviceIndex](bool success, const QString& error) {
                     if (self == nullptr) {
                         return;
                     }
@@ -1777,7 +1772,7 @@ bool AppController::allOffDevicesInternal(const QStringList& targetDeviceIds, co
                         );
                     }
                     if (success) {
-                        if (!dryRunExpected && self->m_deviceManager != nullptr) {
+                        if (self->m_deviceManager != nullptr) {
                             self->m_deviceManager->stopDeviceFrameStreaming(deviceIndex);
                         }
                         emit self->zoneDataChanged(deviceIndex, -1);
@@ -2125,7 +2120,7 @@ bool AppController::applyProfileInternal(
                         target.zoneIndex,
                         target.effect,
                         dryRunExpected,
-                        [self, state, finish, target, dryRunExpected](bool effectSuccess, const QString& effectError) {
+                        [self, state, finish, target](bool effectSuccess, const QString& effectError) {
                             if (self == nullptr) {
                                 return;
                             }
@@ -2142,9 +2137,7 @@ bool AppController::applyProfileInternal(
                                 );
                             }
                             if (effectSuccess) {
-                                if (!dryRunExpected) {
-                                    self->syncZoneFrameStreaming(target.deviceIndex, target.zoneIndex, target.effect);
-                                }
+                                self->syncZoneFrameStreaming(target.deviceIndex, target.zoneIndex, target.effect);
                                 emit self->zoneDataChanged(target.deviceIndex, target.zoneIndex);
                             }
                             (*finish)();
