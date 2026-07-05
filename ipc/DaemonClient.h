@@ -52,6 +52,9 @@ public:
     void setAutomaticReconnectEnabled(bool enabled);
     void reconnectNow();
     void reportConnectionError(const QString& message);
+    // Test convenience only: blocks on a nested event loop until the response
+    // arrives. Production code must use callAsync; the no_sync_daemon_call
+    // guard test enforces this.
     [[nodiscard]] DaemonCallResult call(const QString& method, const QJsonObject& params = {}, int timeoutMs = 2000);
     [[nodiscard]] quint64 callAsync(
         const QString& method,
