@@ -83,6 +83,18 @@ DaemonClient::DaemonClient(QString socketPath, QObject* parent)
     });
 }
 
+DaemonClient::~DaemonClient()
+{
+    // Destroying a still-connected client would otherwise abort the socket
+    // inside ~QLocalSocket, whose disconnected/errorOccurred handlers re-enter
+    // members (the pending-call hash) that are destroyed before the socket.
+    // Detach the handlers first, then tear the connection down while the
+    // object is still intact.
+    m_socket.disconnect(this);
+    m_reconnectTimer.stop();
+    m_socket.abort();
+}
+
 const QString& DaemonClient::socketPath() const
 {
     return m_socketPath;

@@ -30,6 +30,7 @@ public:
     using CallHandler = std::function<void(DaemonCallResult)>;
 
     explicit DaemonClient(QString socketPath = defaultDaemonSocketPath(), QObject* parent = nullptr);
+    ~DaemonClient() override;
 
     [[nodiscard]] const QString& socketPath() const;
     void setSocketPath(QString socketPath);
