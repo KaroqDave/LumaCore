@@ -9,8 +9,10 @@ LumaCore is a C++23/Qt 6.5+ RGB controller split between an unprivileged Qt Quic
 - `daemon/` and `ipc/` implement the daemon process, protocol v1 methods, local socket client/server, and shared frame codec.
 - `backends/` contains `mock`, `auto`, `daemon`, Linux/Windows discovery, and ASUS Aura HID backends.
 - `ui/` and `ui/qml/` contain QML-facing controllers, models, private preference stores, and Qt Quick components.
-- `hardware/linux/` contains Linux read-only probes, HID writer glue, and shared ASUS protocol serializers.
-- `hardware/windows/` contains Windows HID discovery probes, HID writer glue, and discovery catalog helpers.
+- `hardware/common/` contains cross-platform discovery catalog helpers.
+- `hardware/asus/` contains the shared ASUS Aura HID protocol serializers (`lumacore::hardware::asus`).
+- `hardware/linux/` contains Linux read-only probes and HID writer glue.
+- `hardware/windows/` contains Windows HID discovery probes and HID writer glue.
 - `tests/` contains CTest executables; `docs/` records architecture, protocol, release, packaging, and hardware contracts.
 - `assets/` stores icons/screenshots; `packaging/` contains desktop entry, systemd, and Windows package tooling; `scripts/` contains maintenance helpers. Keep generated output in `build*/` and `dist/`.
 

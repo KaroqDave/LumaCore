@@ -194,8 +194,8 @@ if(TARGET lumacore_asus_aura_backend)
 
     lumacore_add_test_executable(lumacore_asus_aura_protocol_test asus_aura_hid_protocol
         AsusAuraHidProtocolTest.cpp
-        ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.cpp
-        ${PROJECT_SOURCE_DIR}/hardware/linux/AsusAuraHidProtocol.h
+        ${PROJECT_SOURCE_DIR}/hardware/asus/AsusAuraHidProtocol.cpp
+        ${PROJECT_SOURCE_DIR}/hardware/asus/AsusAuraHidProtocol.h
     )
     target_link_libraries(lumacore_asus_aura_protocol_test PRIVATE lumacore_core Qt6::Core)
 endif()

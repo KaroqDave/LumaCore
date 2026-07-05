@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "hardware/linux/AsusAuraHidProtocol.h"
+#include "hardware/asus/AsusAuraHidProtocol.h"
 
 #include "hardware/common/RgbControllerCatalog.h"
 
@@ -8,7 +8,7 @@
 #include <QStringList>
 #include <QtGlobal>
 
-namespace lumacore::hardware::linux {
+namespace lumacore::hardware::asus {
 
 namespace {
 
@@ -1031,4 +1031,4 @@ AsusAuraHidProtocolResult buildAsusAuraAllOffWrite(const AsusAuraConfigTable& co
     return {true, packet, {}};
 }
 
-} // namespace lumacore::hardware::linux
+} // namespace lumacore::hardware::asus

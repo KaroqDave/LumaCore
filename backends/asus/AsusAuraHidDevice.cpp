@@ -3,7 +3,7 @@
 #include "backends/asus/AsusAuraHidDevice.h"
 
 #include "core/EffectsEngine.h"
-#include "hardware/linux/AsusAuraHidProtocol.h"
+#include "hardware/asus/AsusAuraHidProtocol.h"
 
 #include <QtGlobal>
 
@@ -22,7 +22,7 @@ const RgbColor kHeader3PreviewColor(124, 92, 255);
 AsusAuraHidDevice::AsusAuraHidDevice(
     asus_aura_platform::ProbeDevice device,
     bool configTableVerified,
-    hardware::linux::AsusAuraConfigTable configTable,
+    hardware::asus::AsusAuraConfigTable configTable,
     QString configSummary,
     QObject* parent
 )
@@ -40,7 +40,7 @@ AsusAuraHidDevice::AsusAuraHidDevice(
     , m_configSummary(std::move(configSummary))
 {
     m_configTableVerified = m_configTableVerified
-        && hardware::linux::isAsusAuraConfigTableWriteReady(m_configTable);
+        && hardware::asus::isAsusAuraConfigTableWriteReady(m_configTable);
     setLikelyRgbController(true);
     initializeZones();
 }
@@ -90,16 +90,16 @@ void AsusAuraHidDevice::initializeZones()
 
     int zoneNumber = 1;
     if (m_configTableVerified && m_configTable.valid) {
-        for (const hardware::linux::AsusAuraConfigChannel& channel : m_configTable.channels) {
-            if (channel.type != hardware::linux::AsusAuraChannelType::Fixed) {
+        for (const hardware::asus::AsusAuraConfigChannel& channel : m_configTable.channels) {
+            if (channel.type != hardware::asus::AsusAuraChannelType::Fixed) {
                 continue;
             }
 
-            const int fixedHeaders = qBound(0, channel.headerCount, hardware::linux::kAsusAuraHeaderCount);
+            const int fixedHeaders = qBound(0, channel.headerCount, hardware::asus::kAsusAuraHeaderCount);
             if (fixedHeaders == 0) {
                 // The protocol decides whether the headerless fixed channel is
                 // exposable as one aggregate zone; zone indices must match it.
-                if (hardware::linux::asusAuraFixedExposedZoneCount(m_configTable) > 0) {
+                if (hardware::asus::asusAuraFixedExposedZoneCount(m_configTable) > 0) {
                     const RgbColor color = previewColors[(zoneNumber - 1) % 3];
                     mutableZones().append(
                         RgbZone(QStringLiteral("Mainboard LEDs"), RgbZoneType::Motherboard, channel.ledCount, color)
@@ -121,13 +121,13 @@ void AsusAuraHidDevice::initializeZones()
         }
 
         int addressableNumber = 1;
-        for (const hardware::linux::AsusAuraConfigChannel& channel : m_configTable.channels) {
-            if (channel.type != hardware::linux::AsusAuraChannelType::Addressable) {
+        for (const hardware::asus::AsusAuraConfigChannel& channel : m_configTable.channels) {
+            if (channel.type != hardware::asus::AsusAuraChannelType::Addressable) {
                 continue;
             }
 
             const RgbColor color = previewColors[(zoneNumber - 1) % 3];
-            const int ledCount = qBound(1, channel.ledCount, hardware::linux::kAsusAuraMaxResearchLeds);
+            const int ledCount = qBound(1, channel.ledCount, hardware::asus::kAsusAuraMaxResearchLeds);
             mutableZones().append(
                 RgbZone(
                     QStringLiteral("Addressable Header %1").arg(addressableNumber),
@@ -163,7 +163,7 @@ QString AsusAuraHidDevice::writeDisabledReason() const
 }
 
 bool AsusAuraHidDevice::sendApprovedPacket(
-    const hardware::linux::AsusAuraHidProtocolResult& protocol,
+    const hardware::asus::AsusAuraHidProtocolResult& protocol,
     const QString& operation
 )
 {
@@ -208,14 +208,14 @@ bool AsusAuraHidDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
         return false;
     }
 
-    const hardware::linux::AsusAuraHidProtocolResult protocol = effect.isAnimated()
-        ? hardware::linux::buildAsusAuraDirectFrameWrite(
+    const hardware::asus::AsusAuraHidProtocolResult protocol = effect.isAnimated()
+        ? hardware::asus::buildAsusAuraDirectFrameWrite(
               m_configTable,
               zoneIndex,
               EffectsEngine::computeFrame(effect, zones().at(zoneIndex).ledCount(), 0.0),
               true
           )
-        : hardware::linux::buildAsusAuraStaticColorWrite(
+        : hardware::asus::buildAsusAuraStaticColorWrite(
               m_configTable,
               zoneIndex,
               effect.color(),
@@ -252,8 +252,8 @@ bool AsusAuraHidDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& c
         return false;
     }
 
-    const hardware::linux::AsusAuraHidProtocolResult protocol =
-        hardware::linux::buildAsusAuraDirectFrameWrite(m_configTable, zoneIndex, colors, false);
+    const hardware::asus::AsusAuraHidProtocolResult protocol =
+        hardware::asus::buildAsusAuraDirectFrameWrite(m_configTable, zoneIndex, colors, false);
     if (!sendApprovedPacket(protocol, QStringLiteral("stream frame"))) {
         return false;
     }
@@ -270,7 +270,7 @@ bool AsusAuraHidDevice::applyAllOff()
         return false;
     }
 
-    const hardware::linux::AsusAuraHidProtocolResult protocol = hardware::linux::buildAsusAuraAllOffWrite(m_configTable);
+    const hardware::asus::AsusAuraHidProtocolResult protocol = hardware::asus::buildAsusAuraAllOffWrite(m_configTable);
     if (!sendApprovedPacket(protocol, QStringLiteral("all-off"))) {
         return false;
     }
@@ -291,7 +291,7 @@ void AsusAuraHidDevice::applyLocalAllOff()
 
 bool AsusAuraHidDevice::updateZoneMetadata(int zoneIndex, const QString& name, int ledCount)
 {
-    if (zoneIndex < 0 || zoneIndex >= zones().size() || ledCount < 1 || ledCount > hardware::linux::kAsusAuraMaxResearchLeds) {
+    if (zoneIndex < 0 || zoneIndex >= zones().size() || ledCount < 1 || ledCount > hardware::asus::kAsusAuraMaxResearchLeds) {
         return false;
     }
     if (zoneIndex < fixedZoneCount() && ledCount != zones().at(zoneIndex).ledCount()) {
@@ -324,14 +324,14 @@ QString AsusAuraHidDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect
         return writeDisabledReason();
     }
 
-    const hardware::linux::AsusAuraHidProtocolResult protocol = effect.isAnimated()
-        ? hardware::linux::buildAsusAuraDirectFrameWrite(
+    const hardware::asus::AsusAuraHidProtocolResult protocol = effect.isAnimated()
+        ? hardware::asus::buildAsusAuraDirectFrameWrite(
               m_configTable,
               zoneIndex,
               EffectsEngine::computeFrame(effect, zones().at(zoneIndex).ledCount(), 0.0),
               true
           )
-        : hardware::linux::buildAsusAuraStaticColorWrite(
+        : hardware::asus::buildAsusAuraStaticColorWrite(
               m_configTable,
               zoneIndex,
               effect.color(),
@@ -452,7 +452,7 @@ int AsusAuraHidDevice::fixedZoneCount() const
         return 0;
     }
 
-    return hardware::linux::asusAuraFixedExposedZoneCount(m_configTable);
+    return hardware::asus::asusAuraFixedExposedZoneCount(m_configTable);
 }
 
 bool AsusAuraHidDevice::isAddressableZone(int zoneIndex) const

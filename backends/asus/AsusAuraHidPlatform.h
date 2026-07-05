@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "hardware/linux/AsusAuraHidProtocol.h"
-
 #include <QtGlobal>
 
 #ifdef Q_OS_WIN

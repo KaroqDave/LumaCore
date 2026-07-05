@@ -302,8 +302,10 @@ serializer.
 - `backends/windows/` - daemon-only read-only Windows HID discovery backend.
 - `backends/asus/` - ASUS Aura USB HID backend.
 - `daemon/` - privileged daemon entry point and backend registration.
-- `hardware/linux/` - Linux provider probes, HID writer, and ASUS Aura protocol helpers.
-- `hardware/windows/` - Windows HID provider probes and discovery catalog helpers.
+- `hardware/common/` - cross-platform discovery catalog helpers.
+- `hardware/asus/` - shared ASUS Aura HID protocol serializers.
+- `hardware/linux/` - Linux provider probes and HID writer.
+- `hardware/windows/` - Windows HID provider probes and HID writer.
 - `ipc/` - local daemon protocol, shared frame codec, client, and server.
 - `ui/` and `ui/qml/` - QML-facing controllers, models, private UI preference stores, and Qt Quick UI.
 - `docs/` - architecture, daemon protocol, refactor parity, release verification, release package notes, hardware notes, and Linux systemd packaging notes.

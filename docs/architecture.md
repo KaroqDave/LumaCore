@@ -34,7 +34,7 @@ planning helpers so compatibility reports and apply summaries are shaped in one 
 - `ipc/DaemonServer` owns request dispatch after frames are decoded.
 - `backends/daemon/` adapts daemon snapshots and calls to the backend-neutral interfaces.
 - `backends/auto/` selects and aggregates concrete daemon-side backends.
-- `hardware/linux/` contains provider probes and protocol serializers; it does not make UI decisions.
+- `hardware/common/` contains shared discovery catalog helpers; `hardware/asus/` contains the cross-platform ASUS Aura HID protocol serializers; `hardware/linux/` and `hardware/windows/` contain platform probes and HID writer glue. None of these make UI decisions.
 - `ui/` exposes stable QML-facing controllers and models. Private UI stores own QSettings-backed device groups and per-zone effect-panel preferences behind the `AppController` facade.
 
 ## Stable boundaries

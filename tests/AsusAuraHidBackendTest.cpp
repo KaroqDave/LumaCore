@@ -2,7 +2,7 @@
 
 #include "backends/asus/AsusAuraHidBackend.h"
 #include "backends/asus/AsusAuraHidDevice.h"
-#include "hardware/linux/AsusAuraHidProtocol.h"
+#include "hardware/asus/AsusAuraHidProtocol.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -80,21 +80,21 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    lumacore::hardware::linux::AsusAuraConfigTable config;
+    lumacore::hardware::asus::AsusAuraConfigTable config;
     config.valid = true;
     config.addressableHeaderCount = 1;
     config.mainboardLedCount = 3;
     config.rgbHeaderCount = 1;
     config.channels = {
         {
-            lumacore::hardware::linux::AsusAuraChannelType::Fixed,
+            lumacore::hardware::asus::AsusAuraChannelType::Fixed,
             0,
             0,
             3,
             1,
         },
         {
-            lumacore::hardware::linux::AsusAuraChannelType::Addressable,
+            lumacore::hardware::asus::AsusAuraChannelType::Addressable,
             1,
             1,
             20,

@@ -4,7 +4,7 @@
 
 #include "core/RgbDevice.h"
 #include "backends/asus/AsusAuraHidPlatform.h"
-#include "hardware/linux/AsusAuraHidProtocol.h"
+#include "hardware/asus/AsusAuraHidProtocol.h"
 
 namespace lumacore {
 
@@ -16,7 +16,7 @@ public:
     AsusAuraHidDevice(
         asus_aura_platform::ProbeDevice device,
         bool configTableVerified,
-        hardware::linux::AsusAuraConfigTable configTable,
+        hardware::asus::AsusAuraConfigTable configTable,
         QString configSummary,
         QObject* parent = nullptr
     );
@@ -51,7 +51,7 @@ private:
     void applyLocalAllOff();
     [[nodiscard]] QString writeDisabledReason() const;
     [[nodiscard]] bool sendApprovedPacket(
-        const hardware::linux::AsusAuraHidProtocolResult& protocol,
+        const hardware::asus::AsusAuraHidProtocolResult& protocol,
         const QString& operation
     );
     [[nodiscard]] bool supportsHostStreamedEffect(int zoneIndex, int effectType) const;
@@ -61,7 +61,7 @@ private:
     asus_aura_platform::ProbeDevice m_device;
     asus_aura_platform::DiscoverySupportInfo m_support;
     bool m_configTableVerified {false};
-    hardware::linux::AsusAuraConfigTable m_configTable;
+    hardware::asus::AsusAuraConfigTable m_configTable;
     QString m_configSummary;
     QString m_lastHardwareWriteStatus;
     asus_aura_platform::HidDeviceWriter m_writer;
