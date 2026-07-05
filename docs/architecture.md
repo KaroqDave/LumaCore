@@ -5,15 +5,16 @@ The public boundaries are intentionally narrower than the implementation modules
 
 ## Runtime flow
 
-1. `lumacore` starts or connects to `lumacore-daemon`.
-2. The GUI registers `DaemonBackend` with its local `DeviceManager`.
-3. `DaemonBackend` obtains device snapshots through daemon protocol version 1.
+1. `lumacore` loads its interface immediately and starts or connects to `lumacore-daemon` in the background.
+2. The GUI registers `DaemonBackend` with its local `DeviceManager` as a non-blocking transport proxy.
+3. Device snapshots arrive asynchronously through daemon protocol version 1 (`listDevices`) and replace the proxy-device set atomically; a pending launch-profile apply fires on the first successful snapshot.
 4. QML reads device data through `DeviceTreeModel` and invokes actions through `AppController`.
-5. Proxy `DaemonRgbDevice` objects translate interactive write operations into correlated asynchronous daemon calls.
+5. Proxy `DaemonRgbDevice` objects translate write operations into correlated asynchronous daemon calls.
 6. The daemon's `DeviceManager` applies permission checks, confirmation state, dry-run policy, and backend writes.
 
-`DaemonClient` supports concurrent request correlation, cancellation, timeouts, bounded reconnect,
-and a synchronous compatibility wrapper used by startup discovery and bulk profile application.
+`DaemonClient` supports concurrent request correlation, cancellation, timeouts, and bounded reconnect.
+Its synchronous `call` wrapper is retained as a test convenience only; production code stays on the
+asynchronous path, enforced by the `no_sync_daemon_call` guard test.
 After reconnect, the GUI requests a fresh device snapshot and replaces the proxy-device set atomically.
 When the desktop exposes a system tray, `TrayController` owns the native tray icon and mediates
 Show/Hide, explicit Quit, and the opt-in close-to-tray window lifecycle.
@@ -58,7 +59,6 @@ Behavior-preserving refactors must keep these boundaries stable unless a dedicat
 
 The following should not be bundled into structural refactors:
 
-- replacing the remaining synchronous startup/profile compatibility paths;
 - daemon protocol version changes or field removal;
 - profile location or schema changes;
 - replacing the QML controller surface;
