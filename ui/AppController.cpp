@@ -2727,6 +2727,25 @@ bool AppController::applyScheduledProfile(const QString& profileName)
     return *completed ? *succeeded : true;
 }
 
+void AppController::armLaunchProfileApply(const QString& profileName)
+{
+    const QString selectedProfile = profileName.trimmed();
+    if (selectedProfile.isEmpty()) {
+        setStatusMessage(QStringLiteral("No active profile is selected for launch."));
+        return;
+    }
+
+    // Applied on the first successful device snapshot; a session without a
+    // daemon backend applies immediately when devices are already present.
+    if (m_daemonClient == nullptr || m_daemonDevicesLoaded
+        || (m_deviceManager != nullptr && m_deviceManager->deviceCount() > 0)) {
+        const bool applied = applyProfileOnLaunch(selectedProfile);
+        Q_UNUSED(applied)
+        return;
+    }
+    m_pendingLaunchProfile = selectedProfile;
+}
+
 void AppController::enableDaemonRecovery()
 {
     if (m_daemonClient == nullptr || m_daemonRecoveryEnabled) {
@@ -2735,6 +2754,9 @@ void AppController::enableDaemonRecovery()
 
     m_daemonRecoveryEnabled = true;
     m_daemonClient->setAutomaticReconnectEnabled(true);
+    if (m_daemonClient->isConnected() && !m_daemonDevicesLoaded && !m_daemonRefreshInProgress) {
+        QTimer::singleShot(0, this, [this] { refreshDaemonDevices(false); });
+    }
 }
 
 void AppController::appendLog(const QString& message)
@@ -2907,6 +2929,12 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
             self->syncDaemonDryRun();
             self->refreshBackendInfo();
             emit self->daemonDevicesRefreshed();
+            if (!self->m_pendingLaunchProfile.isEmpty()) {
+                const QString pendingLaunch = self->m_pendingLaunchProfile;
+                self->m_pendingLaunchProfile.clear();
+                const bool launchApplied = self->applyProfileOnLaunch(pendingLaunch);
+                Q_UNUSED(launchApplied)
+            }
             if (!self->m_pendingScheduledProfile.isEmpty()) {
                 const QString pendingProfile = self->m_pendingScheduledProfile;
                 self->m_pendingScheduledProfile.clear();

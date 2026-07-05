@@ -213,6 +213,13 @@ private:
         std::function<void(const QVariantMap&)> completion,
         bool emitFinished
     );
+
+public:
+    // Arm a one-shot launch-profile apply that fires on the first successful
+    // daemon device snapshot; used by the asynchronous startup path.
+    void armLaunchProfileApply(const QString& profileName);
+
+private:
     [[nodiscard]] static QString normalizeDeviceGroupName(const QString& groupName);
     [[nodiscard]] QStringList storedDeviceGroupIds(const QString& groupName) const;
     bool refreshDaemonDevices(bool recoveredConnection);
@@ -225,6 +232,7 @@ private:
     bool m_daemonRecoveryEnabled {false};
     bool m_daemonDevicesLoaded {false};
     QString m_pendingScheduledProfile;
+    QString m_pendingLaunchProfile;
     bool m_daemonRefreshInProgress {false};
     bool m_profileApplyInProgress {false};
     bool m_daemonDryRunSyncInProgress {false};

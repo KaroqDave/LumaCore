@@ -7,11 +7,13 @@
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QProcess>
 #include <QThread>
 
+#include <functional>
 #include <memory>
 
 namespace {
@@ -42,6 +44,19 @@ bool waitForConnection(const std::shared_ptr<lumacore::DaemonClient>& client, in
         QThread::msleep(25);
     }
     return false;
+}
+
+// Event-loop-driven wait for the asynchronous launcher cases, where the
+// client's own reconnect machinery (timers and socket signals) must run.
+bool waitUntil(const std::function<bool()>& condition, int timeoutMs = 5000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (!condition() && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(5);
+    }
+    return condition();
 }
 
 void startDaemon(QProcess& process, const QString& daemonPath, const QString& endpoint)
@@ -131,7 +146,61 @@ int main(int argc, char* argv[])
         }
     }
 
+    {
+        // Asynchronous launch failure: a missing executable reports through
+        // the client immediately without blocking.
+        auto client = std::make_shared<lumacore::DaemonClient>(uniqueEndpoint(QStringLiteral("async-missing")));
+        lumacore::DaemonLauncher launcher(client);
+        launcher.ensureAvailableAsync(true, QDir::temp().filePath(QStringLiteral("missing-lumacore-daemon.exe")));
+        if (!require(launcher.lastError().contains(QStringLiteral("not found")), "async missing daemon should report an actionable error")
+            || !require(client->lastError().contains(QStringLiteral("not found")), "async missing daemon should surface the error through the client")) {
+            return 1;
+        }
+    }
+
+    {
+        // Asynchronous launch with an immediately-exiting daemon: the exit is
+        // reported with its code once the event loop delivers it.
+        auto client = std::make_shared<lumacore::DaemonClient>(uniqueEndpoint(QStringLiteral("async-early-exit")));
+        lumacore::DaemonLauncher launcher(client);
+        launcher.ensureAvailableAsync(true, exitFixturePath);
+        if (!require(
+                waitUntil([&launcher] { return launcher.lastError().contains(QStringLiteral("exited before")); }),
+                "async early daemon exit should be reported"
+            )
+            || !require(!launcher.startedDaemon(), "an exited daemon should not stay marked as launcher-owned")) {
+            return 1;
+        }
+    }
+
 #ifdef Q_OS_WIN
+    {
+        // Asynchronous launch happy path: the launcher starts the daemon
+        // without blocking and the client's reconnect machinery connects.
+        const QString endpoint = uniqueEndpoint(QStringLiteral("async-owned"));
+        auto client = std::make_shared<lumacore::DaemonClient>(endpoint);
+        lumacore::DaemonLauncher launcher(client);
+        launcher.ensureAvailableAsync(true, daemonPath);
+        if (!require(launcher.startedDaemon(), "async launcher should start the bundled daemon")) {
+            return 1;
+        }
+        client->setAutomaticReconnectEnabled(true);
+        if (!require(
+                waitUntil([&client] { return client->isConnected(); }),
+                "reconnect machinery should connect to the async-launched daemon"
+            )) {
+            return 1;
+        }
+        const lumacore::DaemonCallResult asyncDevices = client->call(QStringLiteral("listDevices"));
+        if (!require(asyncDevices.ok, "async-launched daemon should answer listDevices")) {
+            return 1;
+        }
+        client->disconnectFromDaemon();
+        if (!require(launcher.waitForStartedDaemonExit(3000), "async-launched daemon should exit when its client disconnects")) {
+            return 1;
+        }
+    }
+
     {
         const QString endpoint = uniqueEndpoint(QStringLiteral("owned"));
         auto client = std::make_shared<lumacore::DaemonClient>(endpoint);
