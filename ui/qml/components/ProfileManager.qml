@@ -348,31 +348,43 @@ Item {
             }
         }
 
-        footer: RowLayout {
-            spacing: 10
+        footer: Item {
+            implicitHeight: compatibilityFooterRow.implicitHeight + 28
 
-            Item {
-                Layout.fillWidth: true
-            }
+            RowLayout {
+                id: compatibilityFooterRow
 
-            AppButton {
-                variant: "secondary"
-                text: qsTr("Cancel")
-                compact: true
-                enabled: !manager.profileBusy
-                animationsEnabled: manager.animationsEnabled
-                onClicked: compatibilityDialog.close()
-            }
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.bottomMargin: 16
+                spacing: 10
 
-            AppButton {
-                variant: "primary"
-                enabled: manager.compatibilityReport.canApply === true && !manager.profileBusy
-                text: manager.profileBusy ? qsTr("Applying...") : qsTr("Apply Profile")
-                compact: true
-                animationsEnabled: manager.animationsEnabled
-                onClicked: {
-                    compatibilityDialog.close()
-                    manager.appController.applyProfileAsync(manager.pendingProfile)
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                AppButton {
+                    variant: "secondary"
+                    text: qsTr("Cancel")
+                    compact: true
+                    enabled: !manager.profileBusy
+                    animationsEnabled: manager.animationsEnabled
+                    onClicked: compatibilityDialog.close()
+                }
+
+                AppButton {
+                    variant: "primary"
+                    enabled: manager.compatibilityReport.canApply === true && !manager.profileBusy
+                    text: manager.profileBusy ? qsTr("Applying...") : qsTr("Apply Profile")
+                    compact: true
+                    animationsEnabled: manager.animationsEnabled
+                    onClicked: {
+                        compatibilityDialog.close()
+                        manager.appController.applyProfileAsync(manager.pendingProfile)
+                    }
                 }
             }
         }
@@ -521,31 +533,43 @@ Item {
             }
         }
 
-        footer: RowLayout {
-            spacing: 10
+        footer: Item {
+            implicitHeight: overwriteFooterRow.implicitHeight + 28
 
-            Item {
-                Layout.fillWidth: true
-            }
+            RowLayout {
+                id: overwriteFooterRow
 
-            AppButton {
-                variant: "secondary"
-                text: qsTr("Cancel")
-                compact: true
-                animationsEnabled: manager.animationsEnabled
-                onClicked: overwriteDialog.close()
-            }
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.bottomMargin: 16
+                spacing: 10
 
-            AppButton {
-                variant: "primary"
-                text: qsTr("Overwrite")
-                compact: true
-                animationsEnabled: manager.animationsEnabled
-                onClicked: {
-                    overwriteDialog.close()
-                    if (manager.appController.saveProfile(manager.pendingSaveProfile)) {
-                        manager.refreshProfiles(manager.pendingSaveProfile)
-                        profileNameField.text = manager.pendingSaveProfile
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                AppButton {
+                    variant: "secondary"
+                    text: qsTr("Cancel")
+                    compact: true
+                    animationsEnabled: manager.animationsEnabled
+                    onClicked: overwriteDialog.close()
+                }
+
+                AppButton {
+                    variant: "primary"
+                    text: qsTr("Overwrite")
+                    compact: true
+                    animationsEnabled: manager.animationsEnabled
+                    onClicked: {
+                        overwriteDialog.close()
+                        if (manager.appController.saveProfile(manager.pendingSaveProfile)) {
+                            manager.refreshProfiles(manager.pendingSaveProfile)
+                            profileNameField.text = manager.pendingSaveProfile
+                        }
                     }
                 }
             }
@@ -597,40 +621,52 @@ Item {
             }
         }
 
-        footer: RowLayout {
-            spacing: 10
+        footer: Item {
+            implicitHeight: deleteFooterRow.implicitHeight + 28
 
-            Item {
-                Layout.fillWidth: true
-            }
+            RowLayout {
+                id: deleteFooterRow
 
-            AppButton {
-                variant: "secondary"
-                text: qsTr("Cancel")
-                compact: true
-                animationsEnabled: manager.animationsEnabled
-                onClicked: deleteDialog.close()
-            }
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.bottomMargin: 16
+                spacing: 10
 
-            AppButton {
-                variant: "primary"
-                text: qsTr("Delete")
-                compact: true
-                animationsEnabled: manager.animationsEnabled
-                onClicked: {
-                    deleteDialog.close()
-                    const deletedName = manager.pendingDeleteProfile
-                    if (manager.appController.deleteProfile(deletedName)) {
-                        if (manager.settingsController
-                                && manager.settingsController.activeProfile === deletedName) {
-                            manager.settingsController.activeProfile = ""
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                AppButton {
+                    variant: "secondary"
+                    text: qsTr("Cancel")
+                    compact: true
+                    animationsEnabled: manager.animationsEnabled
+                    onClicked: deleteDialog.close()
+                }
+
+                AppButton {
+                    variant: "primary"
+                    text: qsTr("Delete")
+                    compact: true
+                    animationsEnabled: manager.animationsEnabled
+                    onClicked: {
+                        deleteDialog.close()
+                        const deletedName = manager.pendingDeleteProfile
+                        if (manager.appController.deleteProfile(deletedName)) {
+                            if (manager.settingsController
+                                    && manager.settingsController.activeProfile === deletedName) {
+                                manager.settingsController.activeProfile = ""
+                            }
+                            if (manager.settingsController
+                                    && manager.settingsController.scheduledProfile === deletedName) {
+                                manager.settingsController.scheduledProfile = ""
+                            }
+                            profileNameField.text = "default"
+                            manager.refreshProfiles()
                         }
-                        if (manager.settingsController
-                                && manager.settingsController.scheduledProfile === deletedName) {
-                            manager.settingsController.scheduledProfile = ""
-                        }
-                        profileNameField.text = "default"
-                        manager.refreshProfiles()
                     }
                 }
             }
