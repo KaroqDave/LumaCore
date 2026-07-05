@@ -162,29 +162,14 @@ bool DaemonRgbDevice::setZoneStaticColor(int zoneIndex, const RgbColor& color)
 
 bool DaemonRgbDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
 {
-    m_lastHardwareWriteStatus.clear();
-    if (m_client == nullptr || zoneIndex < 0 || zoneIndex >= zones().size()) {
-        m_lastHardwareWriteStatus = QStringLiteral("Daemon write skipped: invalid proxy device or zone.");
-        return false;
-    }
-
-    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::ApplyEffect), {
-        {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
-        {QStringLiteral("zoneIndex"), zoneIndex},
-        {QStringLiteral("effect"), effect.toJson()},
-        {QStringLiteral("clientStreamsFrames"), usesLocalFrameRenderingForEffect(zoneIndex, effect)},
-        // Synchronous writes are only reachable through WriteGate when dry-run is
-        // disabled, so the request always declares a real-write expectation. The
-        // daemon refuses the call if its own dry-run state disagrees.
-        {QStringLiteral("dryRunEnabled"), false},
-    });
-    m_lastHardwareWriteStatus = daemonHardwareStatus(result);
-    if (!daemonCallSucceeded(result)) {
-        return false;
-    }
-
-    applyLocalZoneEffect(zoneIndex, effect);
-    return true;
+    // Synchronous daemon writes were retired with the async startup/profile
+    // migration; every production write reaches the daemon through the
+    // asynchronous overloads below.
+    Q_UNUSED(zoneIndex)
+    Q_UNUSED(effect)
+    m_lastHardwareWriteStatus =
+        QStringLiteral("Synchronous daemon writes were retired; use the asynchronous apply path.");
+    return false;
 }
 
 quint64 DaemonRgbDevice::applyZoneEffectAsync(
@@ -257,24 +242,10 @@ bool DaemonRgbDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& col
 
 bool DaemonRgbDevice::applyAllOff()
 {
-    m_lastHardwareWriteStatus.clear();
-    if (m_client == nullptr || m_daemonDeviceIndex < 0) {
-        m_lastHardwareWriteStatus = QStringLiteral("Daemon all-off skipped: invalid proxy device.");
-        return false;
-    }
-
-    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::AllOff), {
-        {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
-        // See applyZoneEffect: sync writes always expect a real hardware write.
-        {QStringLiteral("dryRunEnabled"), false},
-    });
-    m_lastHardwareWriteStatus = daemonHardwareStatus(result);
-    if (!daemonCallSucceeded(result)) {
-        return false;
-    }
-
-    applyLocalAllOff();
-    return true;
+    // See applyZoneEffect: the synchronous write path is retired.
+    m_lastHardwareWriteStatus =
+        QStringLiteral("Synchronous daemon writes were retired; use the asynchronous apply path.");
+    return false;
 }
 
 quint64 DaemonRgbDevice::applyAllOffAsync(bool dryRunExpected, OperationHandler handler)
@@ -315,23 +286,13 @@ quint64 DaemonRgbDevice::applyAllOffAsync(bool dryRunExpected, OperationHandler 
 
 bool DaemonRgbDevice::updateZoneMetadata(int zoneIndex, const QString& name, int ledCount)
 {
-    if (m_client == nullptr || zoneIndex < 0 || zoneIndex >= zones().size()) {
-        return false;
-    }
-
-    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::UpdateZone), {
-        {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
-        {QStringLiteral("zoneIndex"), zoneIndex},
-        {QStringLiteral("name"), name.trimmed()},
-        {QStringLiteral("ledCount"), ledCount},
-    });
-    if (!daemonCallSucceeded(result)) {
-        return false;
-    }
-
-    const bool changedName = setZoneName(zoneIndex, name);
-    const bool changedLedCount = setZoneLedCount(zoneIndex, ledCount);
-    return changedName || changedLedCount;
+    // See applyZoneEffect: the synchronous write path is retired.
+    Q_UNUSED(zoneIndex)
+    Q_UNUSED(name)
+    Q_UNUSED(ledCount)
+    m_lastHardwareWriteStatus =
+        QStringLiteral("Synchronous daemon writes were retired; use the asynchronous apply path.");
+    return false;
 }
 
 quint64 DaemonRgbDevice::updateZoneMetadataAsync(
@@ -402,20 +363,12 @@ bool DaemonRgbDevice::supportsHostStreamedEffect(int zoneIndex, int effectType) 
 
 QString DaemonRgbDevice::previewZoneEffectWrite(int zoneIndex, const RgbEffect& effect) const
 {
-    if (m_client == nullptr || zoneIndex < 0 || zoneIndex >= zones().size()) {
-        return {};
-    }
-
-    const DaemonCallResult result = m_client->call(daemonMethodName(DaemonMethod::PreviewEffect), {
-        {QStringLiteral("deviceIndex"), m_daemonDeviceIndex},
-        {QStringLiteral("zoneIndex"), zoneIndex},
-        {QStringLiteral("effect"), effect.toJson()},
-    });
-    if (!daemonCallSucceeded(result)) {
-        return {};
-    }
-
-    return result.result.value(QStringLiteral("preview")).toString();
+    // Only the retired synchronous write path consumed GUI-side previews; the
+    // asynchronous path relies on the daemon's own [DRY-RUN] activity-log
+    // summaries instead of a blocking preview round trip.
+    Q_UNUSED(zoneIndex)
+    Q_UNUSED(effect)
+    return {};
 }
 
 QString DaemonRgbDevice::lastHardwareWriteStatus() const

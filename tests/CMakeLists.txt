@@ -189,6 +189,13 @@ add_test(
 )
 lumacore_set_windows_test_runtime_path(daemon_end_to_end)
 
+# Guard: the synchronous DaemonClient::call wrapper is a test convenience only;
+# production sources must stay on the asynchronous correlated-request path.
+add_test(
+    NAME no_sync_daemon_call
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/NoSyncDaemonCallGuard.cmake
+)
+
 # Headless smoke test: drive the real lumacore GUI's --self-test path, which
 # loads Main.qml with the production bindings and fails on any QML warning. The
 # offscreen platform lets it run without a display in CI.
