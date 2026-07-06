@@ -267,6 +267,7 @@ lumacore_apply_project_options(
     lumacore_profile_persistence_test
     lumacore_effects_engine_test
     lumacore_auto_backend_test
+    lumacore_mock_backend_test
     lumacore_probe_result_test
     lumacore_daemon_protocol_test
     lumacore_option_parsing_test

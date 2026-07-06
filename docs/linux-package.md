@@ -30,6 +30,8 @@ Use this path first. It does not require installation and does not touch hardwar
 ./usr/bin/lumacore-daemon --allow-unprivileged --backend mock --socket /tmp/lumacore.sock
 ```
 
+Add `--mock-scenario read-only`, `confirmation-required`, `failing-writes`, or `many-zones` to exercise specific UI and daemon paths without hardware. The default scenario is `asus-board`.
+
 In another terminal:
 
 ```sh

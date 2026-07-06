@@ -49,6 +49,11 @@ lumacore_add_test_executable(lumacore_auto_backend_test auto_backend
 target_include_directories(lumacore_auto_backend_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(lumacore_auto_backend_test PRIVATE lumacore_core Qt6::Core)
 
+lumacore_add_test_executable(lumacore_mock_backend_test mock_backend
+    MockBackendTest.cpp
+)
+target_link_libraries(lumacore_mock_backend_test PRIVATE lumacore_core Qt6::Core)
+
 lumacore_add_test_executable(lumacore_probe_result_test probe_result
     ProbeResultTest.cpp
     ${PROJECT_SOURCE_DIR}/backends/windows/WindowsDiscoveryBackend.cpp
