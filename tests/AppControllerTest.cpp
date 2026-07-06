@@ -619,6 +619,65 @@ int main(int argc, char* argv[])
     }
 
     {
+        lumacore::DeviceManager scenarioFailManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("scenario-fail-profiles"))
+        );
+        scenarioFailManager.setDryRunEnabled(false);
+        scenarioFailManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("failing-writes")));
+        scenarioFailManager.initializeBackends(QStringLiteral("mock"));
+        lumacore::AppController scenarioFailController(&scenarioFailManager);
+        if (!require(
+                scenarioFailController.deviceId(0) == QStringLiteral("mock-failing-writes-controller"),
+                "failing-writes mock scenario should reach the AppController"
+            )
+            || !require(
+                scenarioFailController.deviceWritable(0),
+                "failing-writes mock scenario should remain write-capable"
+            )
+            || !require(
+                scenarioFailController.setupStatusSummary() == QStringLiteral("Ready"),
+                "failing-writes mock scenario should look ready before a simulated transport failure"
+            )) {
+            return 1;
+        }
+
+        if (!require(
+                !scenarioFailController.applyEffect(
+                    0,
+                    0,
+                    static_cast<int>(lumacore::RgbEffectType::Static),
+                    QColor(QStringLiteral("#123456")),
+                    1.0,
+                    80
+                ),
+                "failing-writes mock scenario should reject selected-zone effects"
+            )
+            || !require(
+                scenarioFailController.statusMessage().contains(QStringLiteral("failing-writes")),
+                "selected-zone failure should surface the mock hardware status"
+            )
+            || !require(
+                scenarioFailController.deviceLastHardwareWriteStatus(0).contains(QStringLiteral("effect")),
+                "selected-zone failure should persist the effect failure status"
+            )
+            || !require(
+                !scenarioFailController.allOffDevice(0),
+                "failing-writes mock scenario should reject selected-device All Off"
+            )
+            || !require(
+                scenarioFailController.statusMessage().contains(QStringLiteral("failing-writes")),
+                "selected-device All Off failure should surface the mock hardware status"
+            )
+            || !require(
+                scenarioFailController.deviceLastHardwareWriteStatus(0).contains(QStringLiteral("all-off")),
+                "selected-device All Off failure should persist the all-off failure status"
+            )) {
+            return 1;
+        }
+    }
+
+    {
         auto effectiveBackendClient = std::make_shared<lumacore::DaemonClient>(
             QStringLiteral("lumacore-app-controller-effective-backend-%1")
                 .arg(QCoreApplication::applicationPid())
