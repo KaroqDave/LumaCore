@@ -28,12 +28,18 @@ void configureParser(QCommandLineParser& parser)
         QStringLiteral("no-auto-start-daemon"),
         QStringLiteral("Do not automatically start the bundled daemon when it is unavailable.")
     );
+    const QCommandLineOption mockScenarioOption(
+        QStringLiteral("mock-scenario"),
+        QStringLiteral("Mock device scenario to pass to an auto-started daemon."),
+        QStringLiteral("id")
+    );
     const QCommandLineOption selfTestOption(
         QStringLiteral("self-test"),
         QStringLiteral("Load the QML interface headlessly, report any load or binding errors, and exit.")
     );
     parser.addOption(socketOption);
     parser.addOption(noAutoStartDaemonOption);
+    parser.addOption(mockScenarioOption);
     parser.addOption(selfTestOption);
 }
 
@@ -41,6 +47,7 @@ GuiOptions optionsFromParser(const QCommandLineParser& parser)
 {
     return {
         .daemonSocketPath = parser.value(QStringLiteral("socket")),
+        .mockScenarioId = parser.value(QStringLiteral("mock-scenario")).trimmed(),
 #ifdef Q_OS_WIN
         .autoStartDaemon = !parser.isSet(QStringLiteral("no-auto-start-daemon")),
 #else

@@ -54,6 +54,7 @@ private:
     std::unique_ptr<TrayController> m_trayController;
     std::unique_ptr<ProfileScheduleRunner> m_profileScheduleRunner;
     std::unique_ptr<DaemonScheduleBridge> m_daemonScheduleBridge;
+    QString m_mockScenarioId;
     bool m_autoStartDaemon {false};
 };
 

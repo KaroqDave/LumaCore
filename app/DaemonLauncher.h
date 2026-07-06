@@ -25,7 +25,8 @@ public:
         bool autoStart,
         const QString& daemonExecutable = {},
         int startupTimeoutMs = 3000,
-        std::optional<bool> initialDryRun = std::nullopt
+        std::optional<bool> initialDryRun = std::nullopt,
+        const QString& mockScenarioId = {}
     );
     // Start the bundled daemon (when autoStart is set) without blocking on the
     // connection: acquisition is owned by the client's reconnect machinery,
@@ -34,7 +35,8 @@ public:
     void ensureAvailableAsync(
         bool autoStart,
         const QString& daemonExecutable = {},
-        std::optional<bool> initialDryRun = std::nullopt
+        std::optional<bool> initialDryRun = std::nullopt,
+        const QString& mockScenarioId = {}
     );
     [[nodiscard]] bool startedDaemon() const;
     [[nodiscard]] QString lastError() const;
@@ -42,6 +44,7 @@ public:
 
 private:
     [[nodiscard]] QString resolvedDaemonExecutable(const QString& overridePath) const;
+    [[nodiscard]] QStringList daemonArguments(std::optional<bool> initialDryRun, const QString& mockScenarioId) const;
     void stopStartedProcess();
 
     std::shared_ptr<DaemonClient> m_client;

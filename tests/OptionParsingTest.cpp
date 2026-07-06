@@ -29,11 +29,14 @@ int main(int argc, char* argv[])
         QStringLiteral("lumacore"),
         QStringLiteral("--socket"),
         QStringLiteral("custom-endpoint"),
+        QStringLiteral("--mock-scenario"),
+        QStringLiteral("read-only"),
         QStringLiteral("--no-auto-start-daemon"),
         QStringLiteral("--self-test"),
     }, &error);
     if (!require(error.isEmpty(), "GUI options should parse without errors")
         || !require(guiOptions.daemonSocketPath == QStringLiteral("custom-endpoint"), "GUI socket option should be retained")
+        || !require(guiOptions.mockScenarioId == QStringLiteral("read-only"), "GUI mock scenario option should be retained")
         || !require(!guiOptions.autoStartDaemon, "GUI no-auto-start option should disable daemon startup")
         || !require(guiOptions.selfTest, "GUI self-test option should be retained")) {
         return 1;

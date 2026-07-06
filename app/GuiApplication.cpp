@@ -52,6 +52,7 @@ GuiApplication::GuiApplication(QApplication& qtApplication, const GuiOptions& op
     , m_backendContext(options.daemonSocketPath)
     , m_deviceTreeModel(&m_backendContext.deviceManager)
     , m_appController(&m_backendContext.deviceManager, m_backendContext.daemonClient)
+    , m_mockScenarioId(options.mockScenarioId)
     , m_autoStartDaemon(options.autoStartDaemon)
 {
     m_daemonLauncher = std::make_unique<DaemonLauncher>(m_backendContext.daemonClient);
@@ -111,7 +112,8 @@ int GuiApplication::run()
     m_daemonLauncher->ensureAvailableAsync(
         m_autoStartDaemon,
         {},
-        m_settingsController.dryRunEnabled()
+        m_settingsController.dryRunEnabled(),
+        m_mockScenarioId
     );
     if (m_settingsController.applyOnLaunch()) {
         m_appController.armLaunchProfileApply(m_settingsController.activeProfile());

@@ -11,6 +11,7 @@ namespace lumacore {
 
 struct GuiOptions {
     QString daemonSocketPath;
+    QString mockScenarioId;
     bool autoStartDaemon {false};
     // When set, the GUI loads the QML interface once headlessly and exits with a
     // status code instead of entering the event loop. Used by the qml_smoke test

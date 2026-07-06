@@ -10,6 +10,7 @@
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QProcess>
 #include <QThread>
 
@@ -205,14 +206,27 @@ int main(int argc, char* argv[])
         const QString endpoint = uniqueEndpoint(QStringLiteral("owned"));
         auto client = std::make_shared<lumacore::DaemonClient>(endpoint);
         lumacore::DaemonLauncher launcher(client);
-        if (!require(launcher.ensureAvailable(true, daemonPath), "launcher should start the bundled daemon")
+        if (!require(
+                launcher.ensureAvailable(true, daemonPath, 3000, std::nullopt, QStringLiteral("many-zones")),
+                "launcher should start the bundled daemon with a mock scenario"
+            )
             || !require(launcher.startedDaemon(), "started daemon should be marked as launcher-owned")) {
             return 1;
         }
 
         const lumacore::DaemonCallResult devices = client->call(QStringLiteral("listDevices"));
+        const QJsonArray deviceArray = devices.result.value(QStringLiteral("devices")).toArray();
+        const QJsonObject device = deviceArray.first().toObject();
         if (!require(devices.ok, "launcher-owned daemon should answer listDevices")
-            || !require(!devices.result.value(QStringLiteral("devices")).toArray().isEmpty(), "launcher-owned auto daemon should expose inventory or mock fallback")) {
+            || !require(deviceArray.size() == 1, "launcher-owned auto daemon should expose one mock fallback device")
+            || !require(
+                device.value(QStringLiteral("id")).toString() == QStringLiteral("mock-many-zone-controller"),
+                "launcher-owned daemon should pass the selected mock scenario to the daemon"
+            )
+            || !require(
+                device.value(QStringLiteral("zones")).toArray().size() == 16,
+                "launcher-owned daemon should expose the selected many-zones fixture"
+            )) {
             return 1;
         }
         client->disconnectFromDaemon();
