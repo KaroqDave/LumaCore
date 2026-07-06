@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "backends/mock/MockBackend.h"
 #include "core/DeviceManager.h"
 #include "ui/DeviceTreeModel.h"
 
@@ -97,6 +98,81 @@ int main(int argc, char* argv[])
     const QString badgeText = treeModel.data(rgbDeviceIndex, lumacore::DeviceTreeModel::DeviceBadgeTextRole).toString();
     if (!require(badgeText == QStringLiteral("Writable"), "writable device should expose a writable badge")) {
         return 1;
+    }
+
+    {
+        lumacore::DeviceManager manyZoneManager;
+        manyZoneManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("many-zones")));
+        manyZoneManager.initializeBackends(QStringLiteral("mock"));
+        lumacore::DeviceTreeModel manyZoneModel(&manyZoneManager);
+        if (!require(manyZoneModel.rowCount({}) == 1, "many-zones scenario should expose one device row")) {
+            return 1;
+        }
+
+        const QModelIndex deviceIndex = manyZoneModel.index(0, 0, {});
+        if (!require(deviceIndex.isValid(), "many-zones device index should be valid")
+            || !require(
+                manyZoneModel.data(deviceIndex, lumacore::DeviceTreeModel::DisplayNameRole).toString()
+                    == QStringLiteral("Mock Many-Zone Controller"),
+                "many-zones device row should expose the mock device name"
+            )
+            || !require(
+                manyZoneModel.data(deviceIndex, lumacore::DeviceTreeModel::ZoneCountRole).toInt() == 16,
+                "many-zones device row should expose sixteen child zones"
+            )
+            || !require(
+                manyZoneModel.rowCount(deviceIndex) == 16,
+                "many-zones device row should have sixteen child rows"
+            )
+            || !require(
+                manyZoneModel.data(deviceIndex, lumacore::DeviceTreeModel::DeviceBadgeTextRole).toString()
+                    == QStringLiteral("Writable"),
+                "many-zones device row should remain writable"
+            )) {
+            return 1;
+        }
+
+        const QModelIndex firstZone = manyZoneModel.index(0, 0, deviceIndex);
+        const QModelIndex tenthZone = manyZoneModel.index(9, 0, deviceIndex);
+        const QModelIndex lastZone = manyZoneModel.index(15, 0, deviceIndex);
+        if (!require(firstZone.isValid(), "first many-zones child should be valid")
+            || !require(tenthZone.isValid(), "tenth many-zones child should be valid")
+            || !require(lastZone.isValid(), "last many-zones child should be valid")
+            || !require(
+                manyZoneModel.parent(firstZone) == deviceIndex,
+                "many-zones first child should parent back to the device"
+            )
+            || !require(
+                manyZoneModel.data(firstZone, lumacore::DeviceTreeModel::DisplayNameRole).toString()
+                    == QStringLiteral("Zone 01"),
+                "many-zones first child should expose the padded first zone name"
+            )
+            || !require(
+                manyZoneModel.data(tenthZone, lumacore::DeviceTreeModel::DisplayNameRole).toString()
+                    == QStringLiteral("Zone 10"),
+                "many-zones tenth child should expose a double-digit zone name"
+            )
+            || !require(
+                manyZoneModel.data(lastZone, lumacore::DeviceTreeModel::DisplayNameRole).toString()
+                    == QStringLiteral("Zone 16"),
+                "many-zones last child should expose the final zone name"
+            )
+            || !require(
+                manyZoneModel.data(lastZone, lumacore::DeviceTreeModel::ZoneIndexRole).toInt() == 15,
+                "many-zones last child should preserve the zero-based zone index"
+            )
+            || !require(
+                manyZoneModel.data(lastZone, lumacore::DeviceTreeModel::LedCountRole).toInt() == 36,
+                "many-zones last child should expose the addressable stress LED count"
+            )) {
+            return 1;
+        }
+
+        manyZoneModel.setDeviceFilter(lumacore::DeviceTreeModel::RgbControllers);
+        if (!require(manyZoneModel.rowCount({}) == 1, "RGB filter should keep the many-zones controller visible")
+            || !require(manyZoneModel.isDeviceVisible(0), "many-zones controller should be visible under the RGB filter")) {
+            return 1;
+        }
     }
 
     return 0;
