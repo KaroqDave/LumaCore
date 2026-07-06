@@ -1635,6 +1635,31 @@ int main(int argc, char* argv[])
         )) {
         return 1;
     }
+    // The confirmation upgrade must stay recoverable on the client: a proxy
+    // rebuilt from a snapshot taken while confirmed still requires
+    // confirmation underneath, so revoking locally has to downgrade the
+    // effective permission back to RequiresConfirmation. Regression for
+    // snapshots that baked Granted into the permissions map, which made a
+    // confirmed-then-revoked device look permanently writable until a rescan.
+    auto confirmedClient = std::make_shared<DaemonClient>(QStringLiteral("unused-confirmed"));
+    DaemonRgbDevice confirmedProxy(confirmedJson, confirmedClient);
+    if (!require(
+            confirmedProxy.writeConfirmed(),
+            "confirmed daemon proxies should start in the confirmed state"
+        )
+        || !require(
+            !confirmedProxy.writeRequiresConfirmation(),
+            "confirmed daemon proxies should not request confirmation while confirmed"
+        )) {
+        return 1;
+    }
+    confirmedProxy.setWriteConfirmed(false);
+    if (!require(
+            confirmedProxy.writeRequiresConfirmation(),
+            "revoking a confirmed daemon proxy should restore the confirmation requirement"
+        )) {
+        return 1;
+    }
 
     const EffectOnlySnapshotDevice effectOnlySnapshot;
     const QJsonObject effectOnlyJson = deviceToJson(effectOnlySnapshot, 2, false);

@@ -49,6 +49,8 @@ Hardware writes are not exposed as raw packet methods. Backends must build appro
 
 `listDevices` returns device snapshots with capability, permission, write-confirmation, discovery metadata, and zone data. Device-level `effectSupport` summarizes whether any zone can use each known effect type. Each zone also includes its own `effectSupport` array so the GUI can disable effects, speed controls, and brightness controls that are not valid for that specific header.
 
+The per-capability `permissions` map always carries the raw permission results; the per-session confirmation is reported separately via `writeConfirmed`, and clients apply the `RequiresConfirmation` → `Granted` upgrade dynamically from that flag. This keeps the confirmation requirement recoverable when a confirmation is revoked after the snapshot was taken. Only the aggregate `permission` field is serialized pre-upgraded, as the effective status for display fallbacks.
+
 Effect support entries use:
 
 ```json

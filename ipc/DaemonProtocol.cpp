@@ -294,33 +294,26 @@ QJsonObject deviceToJson(
     for (int zoneIndex = 0; zoneIndex < device.zones().size(); ++zoneIndex) {
         zones.append(zoneToJson(device, zoneIndex));
     }
-    QJsonObject permissions = permissionResultsToJson(device);
+    // The per-capability permissions map stays raw: the client applies the
+    // session-confirmation upgrade dynamically from the writeConfirmed flag,
+    // so a proxy built from a confirmed snapshot can downgrade again when the
+    // confirmation is revoked locally. Only the aggregate permission below is
+    // serialized pre-upgraded, as the effective status for display fallbacks.
+    const QJsonObject permissions = permissionResultsToJson(device);
     const BackendCapabilities capabilities = device.capabilities();
     PermissionResult writePermission = PermissionGate::checkAnyWrite(device);
-    PermissionResult colorPermission = PermissionGate::withSessionConfirmation(
+    const PermissionResult colorPermission = PermissionGate::withSessionConfirmation(
         permissionResultFromJson(
             permissions.value(backendCapabilityToString(BackendCapability::ZoneColorWrite)).toObject()
         ),
         writeConfirmed
     );
-    if (writeConfirmed) {
-        permissions.insert(
-            backendCapabilityToString(BackendCapability::ZoneColorWrite),
-            permissionResultToJson(colorPermission)
-        );
-    }
-    PermissionResult effectPermission = PermissionGate::withSessionConfirmation(
+    const PermissionResult effectPermission = PermissionGate::withSessionConfirmation(
         permissionResultFromJson(
             permissions.value(backendCapabilityToString(BackendCapability::ZoneEffectWrite)).toObject()
         ),
         writeConfirmed
     );
-    if (writeConfirmed) {
-        permissions.insert(
-            backendCapabilityToString(BackendCapability::ZoneEffectWrite),
-            permissionResultToJson(effectPermission)
-        );
-    }
     writePermission = PermissionGate::withSessionConfirmation(writePermission, writeConfirmed);
     const bool writeRequiresConfirmation =
         colorPermission.status == PermissionStatus::RequiresConfirmation

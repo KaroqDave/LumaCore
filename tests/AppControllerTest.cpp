@@ -1418,5 +1418,130 @@ int main(int argc, char* argv[])
         animClient->disconnectFromDaemon();
     }
 
+    // The setup-status banner must track per-session hardware-write confirmation
+    // live: confirming a write-gated device clears "Hardware confirmation
+    // required" and revoking brings it back, both without waiting for a device
+    // rescan. Regression for a banner that only refreshed on rescan.
+    {
+        lumacore::DeviceManager confirmServerManager;
+        confirmServerManager.setDryRunEnabled(false);
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> confirmServerDevices;
+        confirmServerDevices.push_back(std::make_unique<EffectOnlyConfirmationTestDevice>());
+        confirmServerManager.replaceDevices(std::move(confirmServerDevices));
+        lumacore::DaemonServer confirmServer(&confirmServerManager);
+        const QString confirmServerName =
+            QStringLiteral("lumacore-app-controller-confirm-%1").arg(QCoreApplication::applicationPid());
+        QString confirmListenError;
+        if (!require(confirmServer.listen(confirmServerName, &confirmListenError), "confirm banner server should listen")) {
+            return 1;
+        }
+
+        QTemporaryDir confirmProfilesDirectory;
+        auto confirmClient = std::make_shared<lumacore::DaemonClient>(confirmServerName);
+        if (!require(confirmClient->connectToDaemon(3000), "confirm banner client should connect")) {
+            return 1;
+        }
+        lumacore::DeviceManager confirmManager(nullptr, confirmProfilesDirectory.filePath(QStringLiteral("profiles")));
+        confirmManager.setDryRunEnabled(false);
+        confirmManager.registerBackend(std::make_unique<lumacore::DaemonBackend>(confirmClient));
+        if (!require(
+                confirmManager.activateBackend(QStringLiteral("daemon")),
+                "confirm banner fixture should activate the daemon proxy backend"
+            )) {
+            return 1;
+        }
+        lumacore::AppController confirmController(&confirmManager, confirmClient);
+
+        const auto pumpUntil = [](const std::function<bool()>& condition, int timeoutMs) {
+            QElapsedTimer timer;
+            timer.start();
+            while (!condition() && timer.elapsed() < timeoutMs) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+                QThread::msleep(1);
+            }
+            return condition();
+        };
+        const auto rescanAndWait = [&confirmController, &pumpUntil] {
+            if (!confirmController.rescanDaemonDevices()) {
+                return false;
+            }
+            return pumpUntil(
+                [&confirmController] {
+                    return confirmController.daemonState() == QStringLiteral("Connected");
+                },
+                3000
+            );
+        };
+
+        if (!require(rescanAndWait(), "initial daemon device load should complete")
+            || !require(
+                confirmManager.deviceCount() == 1,
+                "confirm banner fixture should load the daemon device proxy"
+            )
+            || !require(
+                confirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
+                "setup banner should report confirmation required before confirming"
+            )) {
+            return 1;
+        }
+
+        confirmController.confirmDeviceWrites(0);
+        const bool confirmedLive = pumpUntil(
+            [&confirmController] { return confirmController.deviceWriteConfirmed(0); },
+            3000
+        );
+        if (!require(confirmedLive, "device should report confirmed after the confirm response lands")
+            || !require(
+                confirmController.setupStatusSummary() == QStringLiteral("Ready"),
+                "setup banner should clear to Ready as soon as writes are confirmed, without a rescan"
+            )) {
+            return 1;
+        }
+
+        // Reload proxies from a snapshot taken while confirmed, then revoke.
+        // The banner must come back: the confirmation requirement has to stay
+        // recoverable across a rescan in the confirmed state.
+        if (!require(rescanAndWait(), "rescan while confirmed should complete")
+            || !require(
+                confirmController.deviceWriteConfirmed(0),
+                "rescan while confirmed should preserve the confirmed state"
+            )
+            || !require(
+                confirmController.setupStatusSummary() == QStringLiteral("Ready"),
+                "setup banner should stay Ready across a rescan while confirmed"
+            )) {
+            return 1;
+        }
+
+        confirmController.revokeDeviceWrites(0);
+        const bool revokedLive = pumpUntil(
+            [&confirmController] { return !confirmController.deviceWriteConfirmed(0); },
+            3000
+        );
+        if (!require(revokedLive, "device should report unconfirmed after the revoke response lands")
+            || !require(
+                confirmController.deviceRequiresConfirmation(0),
+                "revoking after a confirmed-state rescan should restore the confirmation requirement"
+            )
+            || !require(
+                confirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
+                "setup banner should return to confirmation required as soon as writes are revoked, without a rescan"
+            )) {
+            return 1;
+        }
+
+        // A rescan in the revoked state must agree with the live update.
+        if (!require(rescanAndWait(), "rescan after revoking should complete")
+            || !require(
+                confirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
+                "setup banner should keep requiring confirmation after a rescan in the revoked state"
+            )) {
+            return 1;
+        }
+
+        confirmClient->disconnectFromDaemon();
+        confirmServer.close();
+    }
+
     return 0;
 }
