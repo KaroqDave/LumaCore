@@ -30,14 +30,16 @@ Item {
     readonly property bool operationPending: appController
         ? appController.pendingDaemonOperations > 0
         : false
-    // Confirmation is granted per device; the affordance is offered in zone mode
-    // where a single device is selected (matches the legacy ZoneEditor flow).
+    // Confirmation is granted per device for whichever device is selected in the
+    // tree, so the affordance follows the tree selection rather than the per-zone
+    // effects toggle: a device that needs confirmation can be armed from global
+    // mode too, matching the "Confirm" status badges shown in both modes.
     readonly property bool selectedDeviceRequiresConfirmation: confirmationRevision >= 0
-            && appController && selectedZoneMode && selectedDeviceIndex >= 0
+            && appController && selectedDeviceIndex >= 0
         ? appController.deviceRequiresConfirmation(selectedDeviceIndex)
         : false
     readonly property bool selectedDeviceWriteConfirmed: confirmationRevision >= 0
-            && appController && selectedZoneMode && selectedDeviceIndex >= 0
+            && appController && selectedDeviceIndex >= 0
         ? appController.deviceWriteConfirmed(selectedDeviceIndex)
         : false
     readonly property bool zoneSelected: selectedDeviceIndex >= 0 && selectedZoneIndex >= 0
@@ -790,8 +792,7 @@ Item {
             id: confirmationBanner
 
             Layout.fillWidth: true
-            visible: controls.selectedZoneMode
-                     && (controls.selectedDeviceRequiresConfirmation || controls.selectedDeviceWriteConfirmed)
+            visible: (controls.selectedDeviceRequiresConfirmation || controls.selectedDeviceWriteConfirmed)
                      && controls.appController
                      && !controls.appController.dryRunEnabled
             Layout.preferredHeight: visible ? confirmationColumn.implicitHeight + 20 : 0
