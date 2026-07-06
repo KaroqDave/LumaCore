@@ -1,10 +1,12 @@
 # LumaCore Linux Package
 
-LumaCore ships a Linux x64 release archive named `LumaCore-Linux-x64.tar.gz`.
+LumaCore's Linux packaging produces an x64 archive named `LumaCore-Linux-x64.tar.gz`.
+No packaged releases are published yet; the archive is built locally following the
+staging steps in `docs/release-verification.md`.
 The archive is a staged `/usr` install tree, not an AppImage or distro package.
 Target systems must provide Qt 6 runtime libraries and normal Linux shared-library dependencies.
 
-## Download and Inspect
+## Unpack and Inspect
 
 ```sh
 tar -xzf LumaCore-Linux-x64.tar.gz

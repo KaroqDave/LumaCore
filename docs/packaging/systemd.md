@@ -30,7 +30,7 @@ cmake --build build-linux-release
 DESTDIR="$PWD/dist/linux-stage" cmake --install build-linux-release --prefix /usr
 ```
 
-For a manual install-style test from a staged release archive:
+For a manual install-style test from a staged package archive:
 
 ```sh
 sudo cp -a usr/* /usr/

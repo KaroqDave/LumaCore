@@ -1,10 +1,10 @@
 # LumaCore Windows Package
 
-LumaCore ships an unsigned portable package for 64-bit Windows 10 and Windows 11.
+LumaCore's Windows packaging produces an unsigned portable package for 64-bit Windows 10 and Windows 11. No packaged releases are published yet; the ZIP is uploaded as a CI artifact by the Build workflow and can be built locally with `packaging\windows\package.ps1`.
 
-## Download and Run
+## Get and Run
 
-1. Download `LumaCore-Windows-x64.zip` from the latest GitHub release.
+1. Get `LumaCore-Windows-x64.zip` from a recent Build workflow run's artifacts, or build it locally.
 2. Extract the complete ZIP to a writable folder.
 3. Double-click `lumacore.exe`.
 4. Keep `lumacore-daemon.exe` beside it.
