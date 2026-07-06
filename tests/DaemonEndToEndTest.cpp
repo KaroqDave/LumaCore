@@ -54,19 +54,159 @@ bool waitForConnection(const std::shared_ptr<lumacore::DaemonClient>& client, in
     return false;
 }
 
-void startMockDaemon(QProcess& process, const QString& daemonPath, const QString& endpoint)
+void startMockDaemon(
+    QProcess& process,
+    const QString& daemonPath,
+    const QString& endpoint,
+    const QString& scenarioId = {}
+)
 {
-    process.setProgram(daemonPath);
-    process.setArguments({
+    QStringList arguments {
         QStringLiteral("--backend"),
         QStringLiteral("mock"),
         QStringLiteral("--socket"),
         endpoint,
         QStringLiteral("--allow-unprivileged"),
         QStringLiteral("--exit-on-disconnect"),
-    });
+    };
+    if (!scenarioId.isEmpty()) {
+        arguments.append(QStringLiteral("--mock-scenario"));
+        arguments.append(scenarioId);
+    }
+
+    process.setProgram(daemonPath);
+    process.setArguments(arguments);
     process.start();
     process.waitForStarted(2000);
+}
+
+bool readOnlyScenarioMatches(const QJsonObject& device, const QJsonArray& zones)
+{
+    return require(zones.size() == 2, "read-only scenario should expose two inventory zones")
+        && require(device.value(QStringLiteral("readOnly")).toBool(false), "read-only scenario should serialize readOnly")
+        && require(
+            !device.value(QStringLiteral("writeRequiresConfirmation")).toBool(true),
+            "read-only scenario should not report a confirmation-gated write path"
+        );
+}
+
+bool confirmationScenarioMatches(const QJsonObject& device, const QJsonArray& zones)
+{
+    Q_UNUSED(zones)
+    return require(
+        device.value(QStringLiteral("writeRequiresConfirmation")).toBool(false),
+        "confirmation-required scenario should serialize the write confirmation requirement"
+    )
+        && require(
+            device.value(QStringLiteral("permission")).toObject().value(QStringLiteral("status")).toString()
+                == QStringLiteral("requiresConfirmation"),
+            "confirmation-required scenario should expose aggregate permission status"
+        );
+}
+
+bool manyZonesScenarioMatches(const QJsonObject& device, const QJsonArray& zones)
+{
+    Q_UNUSED(device)
+    return require(zones.size() == 16, "many-zones scenario should serialize sixteen zones")
+        && require(
+            zones.first().toObject().value(QStringLiteral("name")).toString() == QStringLiteral("Zone 01"),
+            "many-zones scenario should keep stable first zone naming"
+        )
+        && require(
+            zones.last().toObject().value(QStringLiteral("ledCount")).toInt() == 36,
+            "many-zones scenario should expose an addressable stress zone last"
+        );
+}
+
+bool runMockScenarioInventorySmoke(
+    const QString& daemonPath,
+    const QString& scenarioId,
+    const QString& expectedDeviceId,
+    bool (*matches)(const QJsonObject& device, const QJsonArray& zones)
+)
+{
+    QProcess daemon;
+    const QString endpoint = uniqueEndpoint(QStringLiteral("scenario-%1").arg(scenarioId));
+    startMockDaemon(daemon, daemonPath, endpoint, scenarioId);
+    if (!require(daemon.state() != QProcess::NotRunning, "scenario daemon should start")) {
+        return false;
+    }
+
+    auto client = std::make_shared<lumacore::DaemonClient>(endpoint);
+    if (!require(waitForConnection(client), "scenario client should connect to the launched daemon")) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+        return false;
+    }
+
+    const lumacore::DaemonCallResult status =
+        client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::Status), {}, 3000);
+    const lumacore::DaemonCallResult devices =
+        client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices), {}, 3000);
+    const QJsonArray deviceArray = devices.result.value(QStringLiteral("devices")).toArray();
+    if (!require(status.ok, "scenario status should succeed")
+        || !require(
+            status.result.value(QStringLiteral("backend")).toObject().value(QStringLiteral("id")).toString()
+                == QStringLiteral("mock"),
+            "scenario status should report the mock backend"
+        )
+        || !require(devices.ok, "scenario listDevices should succeed")
+        || !require(deviceArray.size() == 1, "scenario listDevices should report one mock device")) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+        return false;
+    }
+
+    const QJsonObject device = deviceArray.first().toObject();
+    const QJsonArray zones = device.value(QStringLiteral("zones")).toArray();
+    const bool matched = require(
+        device.value(QStringLiteral("id")).toString() == expectedDeviceId,
+        "scenario mock device should expose the expected id"
+    ) && matches(device, zones);
+
+    client->disconnectFromDaemon();
+    const bool exited = daemon.waitForFinished(3000);
+    if (!exited) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+    }
+    return matched
+        && require(exited, "scenario daemon should exit after the client disconnects")
+        && require(
+            daemon.exitStatus() == QProcess::NormalExit && daemon.exitCode() == 0,
+            "scenario daemon should exit cleanly"
+        );
+}
+
+bool runInvalidMockScenarioSmoke(const QString& daemonPath)
+{
+    QProcess daemon;
+    daemon.setProgram(daemonPath);
+    daemon.setArguments({
+        QStringLiteral("--backend"),
+        QStringLiteral("mock"),
+        QStringLiteral("--socket"),
+        uniqueEndpoint(QStringLiteral("invalid-scenario")),
+        QStringLiteral("--allow-unprivileged"),
+        QStringLiteral("--mock-scenario"),
+        QStringLiteral("not-a-scenario"),
+    });
+    daemon.start();
+    if (!require(daemon.waitForFinished(3000), "invalid scenario daemon should exit promptly")) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+        return false;
+    }
+
+    const QString standardError = QString::fromLocal8Bit(daemon.readAllStandardError());
+    return require(
+        daemon.exitStatus() == QProcess::NormalExit && daemon.exitCode() != 0,
+        "invalid scenario daemon should fail startup"
+    )
+        && require(
+            standardError.contains(QStringLiteral("Unknown mock scenario")),
+            "invalid scenario daemon should explain the rejected scenario"
+        );
 }
 
 } // namespace
@@ -81,6 +221,28 @@ int main(int argc, char* argv[])
     }
 
     const QString daemonPath = QFileInfo(QString::fromLocal8Bit(argv[1])).absoluteFilePath();
+    if (!runMockScenarioInventorySmoke(
+            daemonPath,
+            QStringLiteral("read-only"),
+            QStringLiteral("mock-read-only-inventory"),
+            readOnlyScenarioMatches
+        )
+        || !runMockScenarioInventorySmoke(
+            daemonPath,
+            QStringLiteral("confirmation-required"),
+            QStringLiteral("mock-confirmation-required-controller"),
+            confirmationScenarioMatches
+        )
+        || !runMockScenarioInventorySmoke(
+            daemonPath,
+            QStringLiteral("many-zones"),
+            QStringLiteral("mock-many-zone-controller"),
+            manyZonesScenarioMatches
+        )
+        || !runInvalidMockScenarioSmoke(daemonPath)) {
+        return 1;
+    }
+
     const QString endpoint = uniqueEndpoint(QStringLiteral("flow"));
 
     QProcess daemon;
