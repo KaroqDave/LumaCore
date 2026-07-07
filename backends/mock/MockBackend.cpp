@@ -24,10 +24,9 @@ MockRgbDeviceConfig readOnlyConfig()
     config.vendor = QStringLiteral("Generic");
     config.type = RgbDeviceType::Controller;
     config.capabilities = BackendCapability::DiscoveryRead;
-    config.runtimeWritePermission = {
-        PermissionStatus::NotApplicable,
-        QStringLiteral("Mock read-only scenario has no write capabilities."),
-    };
+    // No write capabilities, so checkRuntimePermission always returns the
+    // "does not support" Denied result before runtimeWritePermission is read;
+    // the field is intentionally left at its struct default here.
     config.likelyRgbController = true;
     config.zones.append(RgbZone(
         QStringLiteral("Read-Only Strip"),
