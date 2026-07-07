@@ -23,6 +23,7 @@
 #include <QUrl>
 
 #include <functional>
+#include <memory>
 #include <utility>
 #include <vector>
 #include <cstdio>
@@ -323,33 +324,97 @@ QJsonObject profileZone(
     };
 }
 
-} // namespace
-
-int main(int argc, char* argv[])
+struct TestContext
 {
-    QCoreApplication application(argc, argv);
-    Q_UNUSED(application)
-
     QTemporaryDir profileDirectory;
-    if (!require(profileDirectory.isValid(), "temporary profile directory should be available")) {
-        return 1;
-    }
     QTemporaryDir settingsDirectory;
-    if (!require(settingsDirectory.isValid(), "temporary settings directory should be available")) {
-        return 1;
+
+    bool initialize()
+    {
+        if (!require(profileDirectory.isValid(), "temporary profile directory should be available")) {
+            return false;
+        }
+        if (!require(settingsDirectory.isValid(), "temporary settings directory should be available")) {
+            return false;
+        }
+
+        QCoreApplication::setOrganizationName(QStringLiteral("LumaCoreTests"));
+        QCoreApplication::setApplicationName(QStringLiteral("AppControllerTest"));
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
+        return true;
     }
 
-    QCoreApplication::setOrganizationName(QStringLiteral("LumaCoreTests"));
-    QCoreApplication::setApplicationName(QStringLiteral("AppControllerTest"));
-    QSettings::setDefaultFormat(QSettings::IniFormat);
-    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
+    [[nodiscard]] QString profilePath(const QString& name) const
+    {
+        return profileDirectory.filePath(name);
+    }
+};
 
-    lumacore::DeviceManager manager(nullptr, profileDirectory.filePath(QStringLiteral("profiles")));
-    manager.setDryRunEnabled(false);
-    manager.registerBackend(std::make_unique<lumacore::MockBackend>());
-    manager.initializeBackends(QStringLiteral("mock"));
+QString uniqueDaemonEndpoint(const QString& suffix)
+{
+    return QStringLiteral("lumacore-app-controller-%1-%2")
+        .arg(suffix)
+        .arg(QCoreApplication::applicationPid());
+}
 
-    lumacore::AppController controller(&manager);
+bool waitUntil(const std::function<bool()>& condition, int timeoutMs, int sleepMs = 1)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (!condition() && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(sleepMs);
+    }
+    return condition();
+}
+
+std::unique_ptr<lumacore::DeviceManager> createMockManager(
+    const QString& profilesDirectory,
+    const QString& scenario = {}
+)
+{
+    auto manager = std::make_unique<lumacore::DeviceManager>(nullptr, profilesDirectory);
+    manager->setDryRunEnabled(false);
+    if (scenario.isEmpty()) {
+        manager->registerBackend(std::make_unique<lumacore::MockBackend>());
+    } else {
+        manager->registerBackend(std::make_unique<lumacore::MockBackend>(scenario));
+    }
+    manager->initializeBackends(QStringLiteral("mock"));
+    return manager;
+}
+
+std::unique_ptr<lumacore::DeviceManager> createDeviceManager(
+    const QString& profilesDirectory,
+    std::vector<std::unique_ptr<lumacore::RgbDevice>> devices,
+    bool dryRun = false
+)
+{
+    auto manager = std::make_unique<lumacore::DeviceManager>(nullptr, profilesDirectory);
+    manager->setDryRunEnabled(dryRun);
+    manager->replaceDevices(std::move(devices));
+    return manager;
+}
+
+struct MockControllerFixture
+{
+    explicit MockControllerFixture(const QString& profilesDirectory)
+        : manager(createMockManager(profilesDirectory))
+        , controller(manager.get())
+    {
+    }
+
+    std::unique_ptr<lumacore::DeviceManager> manager;
+    lumacore::AppController controller;
+};
+
+bool testControllerBasicsAndSetupStatus(
+    TestContext& context,
+    lumacore::DeviceManager& manager,
+    lumacore::AppController& controller
+)
+{
     if (!require(controller.backendId() == QStringLiteral("mock"), "controller should expose the active backend")
         || !require(controller.backendDeviceCount() == 1, "controller should expose the loaded device count")
         || !require(controller.zoneCount(0) > 0, "mock device should expose zones")
@@ -405,7 +470,7 @@ int main(int argc, char* argv[])
             !controller.rescanDaemonDevices(),
             "manual rescan should reject an offline daemon"
         )) {
-        return 1;
+        return false;
     }
 
     controller.setZoneEffectsPanelEnabled(0, 0, true);
@@ -415,7 +480,7 @@ int main(int argc, char* argv[])
                 persistedController.zoneEffectsPanelEnabled(0, 0),
                 "selected-zone effects toggle should persist per zone"
             )) {
-            return 1;
+            return false;
         }
     }
     controller.setZoneEffectsPanelEnabled(0, 0, false);
@@ -423,7 +488,7 @@ int main(int argc, char* argv[])
             !controller.zoneEffectsPanelEnabled(0, 0),
             "selected-zone effects toggle should save the off state"
         )) {
-        return 1;
+        return false;
     }
 
     manager.setDryRunEnabled(true);
@@ -439,14 +504,14 @@ int main(int argc, char* argv[])
             controller.setupAttentionRequired(),
             "dry-run setup warning should require user attention"
         )) {
-        return 1;
+        return false;
     }
     manager.setDryRunEnabled(false);
 
     {
         lumacore::DeviceManager emptyManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("empty-profiles"))
+            context.profilePath(QStringLiteral("empty-profiles"))
         );
         lumacore::AppController emptyController(&emptyManager);
         if (!require(
@@ -457,14 +522,14 @@ int main(int argc, char* argv[])
                 emptyController.setupStatusSummary() == QStringLiteral("No devices loaded"),
                 "empty inventory warning should explain that no devices are available"
             )) {
-            return 1;
+            return false;
         }
     }
 
     {
         lumacore::DeviceManager readOnlyManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("read-only-profiles"))
+            context.profilePath(QStringLiteral("read-only-profiles"))
         );
         readOnlyManager.setDryRunEnabled(false);
         readOnlyManager.registerBackend(std::make_unique<lumacore::MockBackend>());
@@ -472,7 +537,7 @@ int main(int argc, char* argv[])
                 readOnlyManager.activateBackend(QStringLiteral("mock")),
                 "read-only setup fixture should activate a write-capable backend descriptor"
             )) {
-            return 1;
+            return false;
         }
 
         std::vector<std::unique_ptr<lumacore::RgbDevice>> readOnlyDevices;
@@ -499,32 +564,35 @@ int main(int argc, char* argv[])
                 readOnlyController.setupStatusAction().contains(QStringLiteral("write-gate verification")),
                 "read-only setup action should direct users toward write-gate diagnostics"
             )) {
-            return 1;
+            return false;
         }
     }
 
     {
-        lumacore::DeviceManager effectOnlyManager(
-            nullptr,
-            profileDirectory.filePath(QStringLiteral("effect-only-profiles"))
-        );
-        effectOnlyManager.setDryRunEnabled(false);
         std::vector<std::unique_ptr<lumacore::RgbDevice>> effectOnlyDevices;
         effectOnlyDevices.push_back(std::make_unique<EffectOnlyConfirmationTestDevice>());
-        effectOnlyManager.replaceDevices(std::move(effectOnlyDevices));
-        lumacore::AppController effectOnlyController(&effectOnlyManager);
+        const auto effectOnlyManager = createDeviceManager(
+            context.profilePath(QStringLiteral("effect-only-profiles")),
+            std::move(effectOnlyDevices)
+        );
+        lumacore::AppController effectOnlyController(effectOnlyManager.get());
         if (!require(
                 effectOnlyController.deviceRequiresConfirmation(0),
                 "effect-only write devices should still require confirmation in the controller"
             )) {
-            return 1;
+            return false;
         }
     }
 
+    return true;
+}
+
+bool testMockScenarioWriteStates(TestContext& context)
+{
     {
         lumacore::DeviceManager scenarioReadOnlyManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("scenario-read-only-profiles"))
+            context.profilePath(QStringLiteral("scenario-read-only-profiles"))
         );
         scenarioReadOnlyManager.setDryRunEnabled(false);
         scenarioReadOnlyManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("read-only")));
@@ -554,14 +622,14 @@ int main(int argc, char* argv[])
                 scenarioReadOnlyController.zoneCount(0) == 2,
                 "read-only mock scenario should expose its inventory zones"
             )) {
-            return 1;
+            return false;
         }
     }
 
     {
         lumacore::DeviceManager scenarioConfirmManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("scenario-confirm-profiles"))
+            context.profilePath(QStringLiteral("scenario-confirm-profiles"))
         );
         scenarioConfirmManager.setDryRunEnabled(false);
         scenarioConfirmManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("confirmation-required")));
@@ -587,7 +655,7 @@ int main(int argc, char* argv[])
                 scenarioConfirmController.devicePermissionReason(0).contains(QStringLiteral("requires per-session confirmation")),
                 "confirmation-required mock scenario should expose the confirmation reason"
             )) {
-            return 1;
+            return false;
         }
 
         if (!require(
@@ -614,14 +682,14 @@ int main(int argc, char* argv[])
                 scenarioConfirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
                 "revoked mock scenario should restore the setup warning"
             )) {
-            return 1;
+            return false;
         }
     }
 
     {
         lumacore::DeviceManager scenarioFailManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("scenario-fail-profiles"))
+            context.profilePath(QStringLiteral("scenario-fail-profiles"))
         );
         scenarioFailManager.setDryRunEnabled(false);
         scenarioFailManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("failing-writes")));
@@ -639,7 +707,7 @@ int main(int argc, char* argv[])
                 scenarioFailController.setupStatusSummary() == QStringLiteral("Ready"),
                 "failing-writes mock scenario should look ready before a simulated transport failure"
             )) {
-            return 1;
+            return false;
         }
 
         if (!require(
@@ -673,14 +741,18 @@ int main(int argc, char* argv[])
                 scenarioFailController.deviceLastHardwareWriteStatus(0).contains(QStringLiteral("all-off")),
                 "selected-device All Off failure should persist the all-off failure status"
             )) {
-            return 1;
+            return false;
         }
     }
 
+    return true;
+}
+
+bool testDaemonBackendStatus(TestContext& context, lumacore::DeviceManager& manager)
+{
     {
         auto effectiveBackendClient = std::make_shared<lumacore::DaemonClient>(
-            QStringLiteral("lumacore-app-controller-effective-backend-%1")
-                .arg(QCoreApplication::applicationPid())
+            uniqueDaemonEndpoint(QStringLiteral("effective-backend"))
         );
         auto daemonBackend = std::make_unique<lumacore::DaemonBackend>(effectiveBackendClient);
         const std::vector<std::unique_ptr<lumacore::RgbDevice>> effectiveBackendDevices =
@@ -697,14 +769,14 @@ int main(int argc, char* argv[])
 
         lumacore::DeviceManager effectiveBackendManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("effective-backend-profiles"))
+            context.profilePath(QStringLiteral("effective-backend-profiles"))
         );
         effectiveBackendManager.registerBackend(std::move(daemonBackend));
         if (!require(
                 effectiveBackendManager.activateBackend(QStringLiteral("daemon")),
                 "effective backend fixture should activate the daemon proxy backend"
             )) {
-            return 1;
+            return false;
         }
 
         lumacore::AppController effectiveBackendController(
@@ -730,14 +802,13 @@ int main(int argc, char* argv[])
                 effectiveDiagnosticBackend.value(QStringLiteral("effectiveId")).toString() == QStringLiteral("auto"),
                 "diagnostics should include the effective daemon backend ID"
             )) {
-            return 1;
+            return false;
         }
     }
 
     {
         auto offlineClient = std::make_shared<lumacore::DaemonClient>(
-            QStringLiteral("lumacore-app-controller-offline-%1")
-                .arg(QCoreApplication::applicationPid())
+            uniqueDaemonEndpoint(QStringLiteral("offline"))
         );
         lumacore::AppController offlineController(&manager, offlineClient);
         if (!require(
@@ -760,16 +831,21 @@ int main(int argc, char* argv[])
                 offlineController.setupStatusSummary() == QStringLiteral("Reconnecting to daemon"),
                 "manual retry should update setup guidance to reconnecting"
             )) {
-            return 1;
+            return false;
         }
         offlineClient->setAutomaticReconnectEnabled(false);
         offlineClient->disconnectFromDaemon();
     }
 
+    return true;
+}
+
+bool testSelectionRestoration(TestContext& context)
+{
     {
         lumacore::DeviceManager selectionManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("selection-profiles"))
+            context.profilePath(QStringLiteral("selection-profiles"))
         );
         selectionManager.setDryRunEnabled(false);
         std::vector<std::unique_ptr<lumacore::RgbDevice>> initialDevices;
@@ -803,14 +879,19 @@ int main(int argc, char* argv[])
                 selectionController.zoneIndexForName(restoredDeviceIndex, selectedZone) == 0,
                 "zone names should restore selection on the reordered device"
             )) {
-            return 1;
+            return false;
         }
     }
 
+    return true;
+}
+
+bool testDeviceGroupsAndGlobalOperations(TestContext& context, lumacore::AppController& controller)
+{
     {
         lumacore::DeviceManager groupManager(
             nullptr,
-            profileDirectory.filePath(QStringLiteral("group-profiles"))
+            context.profilePath(QStringLiteral("group-profiles"))
         );
         groupManager.setDryRunEnabled(false);
         std::vector<std::unique_ptr<lumacore::RgbDevice>> groupDevices;
@@ -907,12 +988,12 @@ int main(int argc, char* argv[])
                 groupController.deviceGroupNames().isEmpty(),
                 "deleted device groups should be removed from the list"
             )) {
-            return 1;
+            return false;
         }
     }
 
     QVariantMap globalResult;
-    QObject::connect(
+    const auto globalConnection = QObject::connect(
         &controller,
         &lumacore::AppController::globalOperationFinished,
         &controller,
@@ -928,7 +1009,7 @@ int main(int argc, char* argv[])
             globalResult.value(QStringLiteral("applied")).toInt() == controller.zoneCount(0),
             "global effect result should report every applied zone"
         )) {
-        return 1;
+        return false;
     }
     for (int zoneIndex = 0; zoneIndex < controller.zoneCount(0); ++zoneIndex) {
         if (!require(
@@ -939,7 +1020,7 @@ int main(int argc, char* argv[])
                 controller.zoneEffectBrightness(0, zoneIndex) == 60,
                 "global effects should apply the selected brightness"
             )) {
-            return 1;
+            return false;
         }
     }
     if (!require(controller.setZoneBrightness(0, 0, 35), "selected-zone brightness should start")
@@ -951,7 +1032,7 @@ int main(int argc, char* argv[])
             controller.zoneEffectBrightness(0, 0) == 35,
             "selected-zone brightness should update the selected zone brightness"
         )) {
-        return 1;
+        return false;
     }
     if (!require(controller.setGlobalBrightness(25), "global brightness should start")
         || !require(
@@ -975,9 +1056,15 @@ int main(int argc, char* argv[])
             controller.zoneEffectBrightness(0, 0) == 0,
             "global All Off should turn zones off"
         )) {
-        return 1;
+        return false;
     }
 
+    QObject::disconnect(globalConnection);
+    return true;
+}
+
+bool testDiagnosticsExport(TestContext& context, lumacore::AppController& controller)
+{
     const QVariantMap diagnostics = controller.diagnosticsReport();
     const QVariantList diagnosticDevices = diagnostics.value(QStringLiteral("devices")).toList();
     const QVariantList diagnosticZones = diagnosticDevices.isEmpty()
@@ -1074,21 +1161,21 @@ int main(int argc, char* argv[])
             diagnosticSummaryText.contains(QStringLiteral("profile contents are not included")),
             "diagnostics summary text should state that profile contents are excluded"
         )) {
-        return 1;
+        return false;
     }
 
-    const QString diagnosticsPath = profileDirectory.filePath(QStringLiteral("diagnostics.json"));
+    const QString diagnosticsPath = context.profilePath(QStringLiteral("diagnostics.json"));
     if (!require(
             controller.exportDiagnostics(QUrl::fromLocalFile(diagnosticsPath)),
             "controller should export diagnostics"
         )
         || !require(QFile::exists(diagnosticsPath), "diagnostics export should create a file")) {
-        return 1;
+        return false;
     }
 
     QFile diagnosticsFile(diagnosticsPath);
     if (!require(diagnosticsFile.open(QIODevice::ReadOnly), "diagnostics export should be readable")) {
-        return 1;
+        return false;
     }
     const QJsonDocument diagnosticsDocument = QJsonDocument::fromJson(diagnosticsFile.readAll());
     if (!require(diagnosticsDocument.isObject(), "diagnostics export should contain JSON object data")
@@ -1099,9 +1186,14 @@ int main(int argc, char* argv[])
                 .size() == controller.backendDeviceCount(),
             "diagnostics export should preserve the device count"
         )) {
-        return 1;
+        return false;
     }
 
+    return true;
+}
+
+bool testProfileLifecycleAndAsyncApply(TestContext& context, lumacore::AppController& controller)
+{
     const QColor savedColor(QStringLiteral("#112233"));
     const QColor changedColor(QStringLiteral("#AABBCC"));
     if (!require(
@@ -1126,7 +1218,7 @@ int main(int argc, char* argv[])
             !controller.applyProfileOnLaunch(QString()),
             "startup application should reject an empty active profile"
         )) {
-        return 1;
+        return false;
     }
 
     // Without a daemon client, arming the launch apply applies immediately
@@ -1135,7 +1227,7 @@ int main(int argc, char* argv[])
             controller.applyEffect(0, 0, static_cast<int>(lumacore::RgbEffectType::Static), changedColor, 1.0, 100),
             "pre-arm color should apply"
         )) {
-        return 1;
+        return false;
     }
     controller.armLaunchProfileApply(QStringLiteral("Evening"));
     if (!require(
@@ -1146,10 +1238,10 @@ int main(int argc, char* argv[])
             controller.statusMessage() == QStringLiteral("Applied active profile 'Evening' on launch."),
             "immediate armed applies should set the launch status message"
         )) {
-        return 1;
+        return false;
     }
 
-    const QString exportPath = profileDirectory.filePath(QStringLiteral("Evening-export.json"));
+    const QString exportPath = context.profilePath(QStringLiteral("Evening-export.json"));
     if (!require(
             controller.exportProfile(QStringLiteral("Evening"), QUrl::fromLocalFile(exportPath)),
             "controller should export a profile"
@@ -1166,7 +1258,7 @@ int main(int argc, char* argv[])
             "profile existence checks should normalize names"
         )
         || !require(!controller.profileExists(QStringLiteral("Missing")), "missing profile should not exist")) {
-        return 1;
+        return false;
     }
 
     const QVariantMap eveningPreview = controller.profileCompatibility(QStringLiteral("Evening"));
@@ -1180,7 +1272,7 @@ int main(int argc, char* argv[])
             eveningPreviewItems.first().toMap().contains(QStringLiteral("targetEffect")),
             "profile apply preview rows should expose target effects"
         )) {
-        return 1;
+        return false;
     }
 
     if (!require(
@@ -1189,11 +1281,11 @@ int main(int argc, char* argv[])
                  .toBool(),
             "fully compatible profiles should not report a partial result"
         )) {
-        return 1;
+        return false;
     }
 
     QVariantMap asyncProfileResult;
-    QObject::connect(
+    const auto asyncProfileConnection = QObject::connect(
         &controller,
         &lumacore::AppController::profileApplyFinished,
         &controller,
@@ -1223,11 +1315,12 @@ int main(int argc, char* argv[])
             controller.zoneEffectColor(0, 0) == savedColor,
             "async profile apply should restore the saved zone color"
         )) {
-        return 1;
+        return false;
     }
+    QObject::disconnect(asyncProfileConnection);
 
     {
-        const QString profilePath = profileDirectory.filePath(QStringLiteral("async-partial-profiles"));
+        const QString profilePath = context.profilePath(QStringLiteral("async-partial-profiles"));
         lumacore::DeviceManager asyncManager(nullptr, profilePath);
         asyncManager.setDryRunEnabled(false);
         std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
@@ -1312,7 +1405,7 @@ int main(int argc, char* argv[])
                 asyncController.zoneEffectColor(0, 0) == QColor(QStringLiteral("#102030")),
                 "partial async profile should apply the compatible zone"
             )) {
-            return 1;
+            return false;
         }
 
         QVariantMap noMatchResult;
@@ -1350,16 +1443,16 @@ int main(int argc, char* argv[])
                 noMatchResult.value(QStringLiteral("missingDeviceZones")).toInt() == 1,
                 "no-match async profile should count missing-device zones"
             )) {
-            return 1;
+            return false;
         }
     }
 
     {
-        const QString daemonProfilePath = profileDirectory.filePath(QStringLiteral("async-daemon-profiles"));
+        const QString daemonProfilePath = context.profilePath(QStringLiteral("async-daemon-profiles"));
         lumacore::DeviceManager daemonManager(nullptr, daemonProfilePath);
         daemonManager.setDryRunEnabled(false);
         auto daemonClient = std::make_shared<lumacore::DaemonClient>(
-            QStringLiteral("lumacore-app-controller-async-profile-%1").arg(QCoreApplication::applicationPid())
+            uniqueDaemonEndpoint(QStringLiteral("async-profile"))
         );
         QJsonObject daemonSnapshot {
             {QStringLiteral("index"), 0},
@@ -1424,7 +1517,7 @@ int main(int argc, char* argv[])
                 ),
                 "daemon async profile fixture should save"
             )) {
-            return 1;
+            return false;
         }
 
         QElapsedTimer elapsed;
@@ -1445,20 +1538,25 @@ int main(int argc, char* argv[])
                 !daemonController.applyProfileAsync(QStringLiteral("daemon-pending")),
                 "duplicate async profile applies should be rejected while one is pending"
             )) {
-            return 1;
+            return false;
         }
         daemonClient->disconnectFromDaemon();
     }
 
+    return true;
+}
+
+bool testPendingDaemonProfileApply()
+{
     // A daemon-backed controller with no device snapshot yet parks a scheduled
     // apply instead of burning the day's attempt against an empty device set.
     {
         QTemporaryDir pendingProfilesDirectory;
         if (!require(pendingProfilesDirectory.isValid(), "pending schedule profile directory should be available")) {
-            return 1;
+            return false;
         }
         auto pendingClient = std::make_shared<lumacore::DaemonClient>(
-            QStringLiteral("lumacore-app-controller-pending-%1").arg(QCoreApplication::applicationPid())
+            uniqueDaemonEndpoint(QStringLiteral("pending"))
         );
         lumacore::DeviceManager pendingManager(
             nullptr,
@@ -1477,7 +1575,7 @@ int main(int argc, char* argv[])
                 !pendingController.profileApplyInProgress(),
                 "parked scheduled applies should not start a profile apply"
             )) {
-            return 1;
+            return false;
         }
 
         // Arming the launch apply parks it the same way while no snapshot has
@@ -1487,17 +1585,22 @@ int main(int argc, char* argv[])
                 !pendingController.profileApplyInProgress(),
                 "armed launch applies should wait for the first daemon snapshot"
             )) {
-            return 1;
+            return false;
         }
         pendingController.armLaunchProfileApply(QStringLiteral("   "));
         if (!require(
                 pendingController.statusMessage() == QStringLiteral("No active profile is selected for launch."),
                 "arming with an empty profile should keep the launch status message"
             )) {
-            return 1;
+            return false;
         }
     }
 
+    return true;
+}
+
+bool testDryRunAnimatedDaemonPreview()
+{
     // Dry-run applies must keep animated effects visible: the effects engine
     // streams frames into the local zone model without daemon writes, so the
     // zone preview color keeps changing while dry-run is enabled.
@@ -1508,11 +1611,10 @@ int main(int argc, char* argv[])
         animServerDevices.push_back(std::make_unique<AnimPreviewDevice>());
         animServerManager.replaceDevices(std::move(animServerDevices));
         lumacore::DaemonServer animServer(&animServerManager);
-        const QString animServerName =
-            QStringLiteral("lumacore-app-controller-anim-%1").arg(QCoreApplication::applicationPid());
+        const QString animServerName = uniqueDaemonEndpoint(QStringLiteral("anim"));
         QString animListenError;
         if (!require(animServer.listen(animServerName, &animListenError), "anim preview server should listen")) {
-            return 1;
+            return false;
         }
 
         QTemporaryDir animProfilesDirectory;
@@ -1527,16 +1629,6 @@ int main(int argc, char* argv[])
         animManager.replaceDevices(std::move(animProxies));
         lumacore::AppController animController(&animManager, animClient);
 
-        const auto waitUntilAnim = [](const std::function<bool()>& condition, int timeoutMs) {
-            QElapsedTimer waitTimer;
-            waitTimer.start();
-            while (!condition() && waitTimer.elapsed() < timeoutMs) {
-                QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
-                QThread::msleep(1);
-            }
-            return condition();
-        };
-
         if (!require(
                 animController.applyEffect(
                     0,
@@ -1549,7 +1641,7 @@ int main(int argc, char* argv[])
                 "dry-run rainbow apply should start"
             )
             || !require(
-                waitUntilAnim(
+                waitUntil(
                     [&animController] {
                         return animController.zoneEffectType(0, 0)
                             == static_cast<int>(lumacore::RgbEffectType::Rainbow);
@@ -1558,22 +1650,27 @@ int main(int argc, char* argv[])
                 ),
                 "dry-run rainbow apply should complete against the in-process daemon"
             )) {
-            return 1;
+            return false;
         }
 
         const lumacore::RgbColor firstSample = animManager.deviceAt(0)->zones().at(0).currentColor();
-        const bool animated = waitUntilAnim(
+        const bool animated = waitUntil(
             [&animManager, firstSample] {
                 return !(animManager.deviceAt(0)->zones().at(0).currentColor() == firstSample);
             },
             3000
         );
         if (!require(animated, "dry-run animated effects should keep updating the local zone preview")) {
-            return 1;
+            return false;
         }
         animClient->disconnectFromDaemon();
     }
 
+    return true;
+}
+
+bool testLiveConfirmationBannerRefresh()
+{
     // The setup-status banner must track per-session hardware-write confirmation
     // live: confirming a write-gated device clears "Hardware confirmation
     // required" and revoking brings it back, both without waiting for a device
@@ -1585,17 +1682,16 @@ int main(int argc, char* argv[])
         confirmServerDevices.push_back(std::make_unique<EffectOnlyConfirmationTestDevice>());
         confirmServerManager.replaceDevices(std::move(confirmServerDevices));
         lumacore::DaemonServer confirmServer(&confirmServerManager);
-        const QString confirmServerName =
-            QStringLiteral("lumacore-app-controller-confirm-%1").arg(QCoreApplication::applicationPid());
+        const QString confirmServerName = uniqueDaemonEndpoint(QStringLiteral("confirm"));
         QString confirmListenError;
         if (!require(confirmServer.listen(confirmServerName, &confirmListenError), "confirm banner server should listen")) {
-            return 1;
+            return false;
         }
 
         QTemporaryDir confirmProfilesDirectory;
         auto confirmClient = std::make_shared<lumacore::DaemonClient>(confirmServerName);
         if (!require(confirmClient->connectToDaemon(3000), "confirm banner client should connect")) {
-            return 1;
+            return false;
         }
         lumacore::DeviceManager confirmManager(nullptr, confirmProfilesDirectory.filePath(QStringLiteral("profiles")));
         confirmManager.setDryRunEnabled(false);
@@ -1604,24 +1700,15 @@ int main(int argc, char* argv[])
                 confirmManager.activateBackend(QStringLiteral("daemon")),
                 "confirm banner fixture should activate the daemon proxy backend"
             )) {
-            return 1;
+            return false;
         }
         lumacore::AppController confirmController(&confirmManager, confirmClient);
 
-        const auto pumpUntil = [](const std::function<bool()>& condition, int timeoutMs) {
-            QElapsedTimer timer;
-            timer.start();
-            while (!condition() && timer.elapsed() < timeoutMs) {
-                QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
-                QThread::msleep(1);
-            }
-            return condition();
-        };
-        const auto rescanAndWait = [&confirmController, &pumpUntil] {
+        const auto rescanAndWait = [&confirmController] {
             if (!confirmController.rescanDaemonDevices()) {
                 return false;
             }
-            return pumpUntil(
+            return waitUntil(
                 [&confirmController] {
                     return confirmController.daemonState() == QStringLiteral("Connected");
                 },
@@ -1638,11 +1725,11 @@ int main(int argc, char* argv[])
                 confirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
                 "setup banner should report confirmation required before confirming"
             )) {
-            return 1;
+            return false;
         }
 
         confirmController.confirmDeviceWrites(0);
-        const bool confirmedLive = pumpUntil(
+        const bool confirmedLive = waitUntil(
             [&confirmController] { return confirmController.deviceWriteConfirmed(0); },
             3000
         );
@@ -1651,7 +1738,7 @@ int main(int argc, char* argv[])
                 confirmController.setupStatusSummary() == QStringLiteral("Ready"),
                 "setup banner should clear to Ready as soon as writes are confirmed, without a rescan"
             )) {
-            return 1;
+            return false;
         }
 
         // Reload proxies from a snapshot taken while confirmed, then revoke.
@@ -1666,11 +1753,11 @@ int main(int argc, char* argv[])
                 confirmController.setupStatusSummary() == QStringLiteral("Ready"),
                 "setup banner should stay Ready across a rescan while confirmed"
             )) {
-            return 1;
+            return false;
         }
 
         confirmController.revokeDeviceWrites(0);
-        const bool revokedLive = pumpUntil(
+        const bool revokedLive = waitUntil(
             [&confirmController] { return !confirmController.deviceWriteConfirmed(0); },
             3000
         );
@@ -1683,7 +1770,7 @@ int main(int argc, char* argv[])
                 confirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
                 "setup banner should return to confirmation required as soon as writes are revoked, without a rescan"
             )) {
-            return 1;
+            return false;
         }
 
         // A rescan in the revoked state must agree with the live update.
@@ -1692,12 +1779,39 @@ int main(int argc, char* argv[])
                 confirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
                 "setup banner should keep requiring confirmation after a rescan in the revoked state"
             )) {
-            return 1;
+            return false;
         }
 
         confirmClient->disconnectFromDaemon();
         confirmServer.close();
     }
 
-    return 0;
+    return true;
+}
+
+} // namespace
+
+int main(int argc, char* argv[])
+{
+    QCoreApplication application(argc, argv);
+    Q_UNUSED(application)
+
+    TestContext context;
+    if (!context.initialize()) {
+        return 1;
+    }
+
+    MockControllerFixture fixture(context.profilePath(QStringLiteral("profiles")));
+    return testControllerBasicsAndSetupStatus(context, *fixture.manager, fixture.controller)
+            && testMockScenarioWriteStates(context)
+            && testDaemonBackendStatus(context, *fixture.manager)
+            && testSelectionRestoration(context)
+            && testDeviceGroupsAndGlobalOperations(context, fixture.controller)
+            && testDiagnosticsExport(context, fixture.controller)
+            && testProfileLifecycleAndAsyncApply(context, fixture.controller)
+            && testPendingDaemonProfileApply()
+            && testDryRunAnimatedDaemonPreview()
+            && testLiveConfirmationBannerRefresh()
+        ? 0
+        : 1;
 }
