@@ -55,10 +55,26 @@ bool validateEnvironment(const lumacore::DaemonOptions& options)
     return true;
 }
 
-void registerBackends(lumacore::DeviceManager& deviceManager)
+bool validateMockScenario(const QString& scenarioId)
 {
-    deviceManager.registerBackend(std::make_unique<lumacore::AutoBackend>());
-    deviceManager.registerBackend(std::make_unique<lumacore::MockBackend>());
+    if (lumacore::MockBackend::isKnownScenarioId(scenarioId)) {
+        return true;
+    }
+
+    const QString message = QStringLiteral("Unknown mock scenario '%1'. Available scenarios: %2")
+                                .arg(
+                                    scenarioId,
+                                    lumacore::MockBackend::scenarioIds().join(QStringLiteral(", "))
+                                );
+    qCritical().noquote() << message;
+    std::fprintf(stderr, "%s\n", qPrintable(message));
+    return false;
+}
+
+void registerBackends(lumacore::DeviceManager& deviceManager, const QString& mockScenarioId)
+{
+    deviceManager.registerBackend(std::make_unique<lumacore::AutoBackend>(mockScenarioId));
+    deviceManager.registerBackend(std::make_unique<lumacore::MockBackend>(mockScenarioId));
 #ifdef LUMACORE_HAS_LINUX_DISCOVERY
     deviceManager.registerBackend(std::make_unique<lumacore::LinuxDiscoveryBackend>());
 #endif
@@ -111,7 +127,10 @@ int runDaemon(const lumacore::DaemonOptions& options)
     if (options.dryRunEnabled.has_value()) {
         deviceManager.setDryRunEnabled(*options.dryRunEnabled);
     }
-    registerBackends(deviceManager);
+    if (!validateMockScenario(options.mockScenarioId)) {
+        return 1;
+    }
+    registerBackends(deviceManager, options.mockScenarioId);
     if (!initializeRequestedBackend(deviceManager, options.backendId)) {
         return 1;
     }

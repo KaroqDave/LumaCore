@@ -79,13 +79,14 @@ void startDaemon(QProcess& process, const QString& daemonPath, const QString& en
 int main(int argc, char* argv[])
 {
     QCoreApplication application(argc, argv);
-    if (!require(argc == 4, "launcher test expects daemon, exit fixture, and sleep fixture paths")) {
+    if (!require(argc == 5, "launcher test expects daemon, exit fixture, sleep fixture, and scenario fixture paths")) {
         return 1;
     }
 
     const QString daemonPath = QFileInfo(QString::fromLocal8Bit(argv[1])).absoluteFilePath();
     const QString exitFixturePath = QFileInfo(QString::fromLocal8Bit(argv[2])).absoluteFilePath();
     const QString sleepFixturePath = QFileInfo(QString::fromLocal8Bit(argv[3])).absoluteFilePath();
+    const QString scenarioFixturePath = QFileInfo(QString::fromLocal8Bit(argv[4])).absoluteFilePath();
 
     {
         auto client = std::make_shared<lumacore::DaemonClient>(uniqueEndpoint(QStringLiteral("missing")));
@@ -205,18 +206,37 @@ int main(int argc, char* argv[])
         const QString endpoint = uniqueEndpoint(QStringLiteral("owned"));
         auto client = std::make_shared<lumacore::DaemonClient>(endpoint);
         lumacore::DaemonLauncher launcher(client);
-        if (!require(launcher.ensureAvailable(true, daemonPath), "launcher should start the bundled daemon")
+        if (!require(
+                launcher.ensureAvailable(true, daemonPath, 3000),
+                "launcher should start the bundled daemon"
+            )
             || !require(launcher.startedDaemon(), "started daemon should be marked as launcher-owned")) {
             return 1;
         }
 
         const lumacore::DaemonCallResult devices = client->call(QStringLiteral("listDevices"));
+        const QJsonArray deviceArray = devices.result.value(QStringLiteral("devices")).toArray();
         if (!require(devices.ok, "launcher-owned daemon should answer listDevices")
-            || !require(!devices.result.value(QStringLiteral("devices")).toArray().isEmpty(), "launcher-owned auto daemon should expose inventory or mock fallback")) {
+            || !require(!deviceArray.isEmpty(), "launcher-owned auto daemon should expose devices")) {
             return 1;
         }
         client->disconnectFromDaemon();
         if (!require(launcher.waitForStartedDaemonExit(3000), "launcher-owned daemon should exit when its client disconnects")) {
+            return 1;
+        }
+    }
+
+    {
+        auto client = std::make_shared<lumacore::DaemonClient>(uniqueEndpoint(QStringLiteral("scenario-args")));
+        lumacore::DaemonLauncher launcher(client);
+        if (!require(
+                !launcher.ensureAvailable(true, scenarioFixturePath, 250, std::nullopt, QStringLiteral("many-zones")),
+                "scenario fixture should exit after validating launcher arguments"
+            )
+            || !require(
+                launcher.lastError().contains(QStringLiteral("exit code 42")),
+                "launcher should pass the selected mock scenario to the daemon process"
+            )) {
             return 1;
         }
     }

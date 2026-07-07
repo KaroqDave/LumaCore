@@ -39,7 +39,8 @@ bool DaemonLauncher::ensureAvailable(
     bool autoStart,
     const QString& daemonExecutable,
     int startupTimeoutMs,
-    std::optional<bool> initialDryRun
+    std::optional<bool> initialDryRun,
+    const QString& mockScenarioId
 )
 {
     m_lastError.clear();
@@ -69,19 +70,8 @@ bool DaemonLauncher::ensureAvailable(
         return false;
     }
 
-    QStringList arguments {
-        QStringLiteral("--backend"),
-        QStringLiteral("auto"),
-        QStringLiteral("--socket"),
-        m_client->socketPath(),
-        QStringLiteral("--exit-on-disconnect"),
-    };
-    if (initialDryRun.has_value()) {
-        arguments << QStringLiteral("--dry-run")
-                  << (*initialDryRun ? QStringLiteral("true") : QStringLiteral("false"));
-    }
     m_process.setProgram(executable);
-    m_process.setArguments(arguments);
+    m_process.setArguments(daemonArguments(initialDryRun, mockScenarioId));
     m_process.start();
     if (!m_process.waitForStarted(1000)) {
         m_lastError = QStringLiteral("Could not start the bundled LumaCore daemon: %1")
@@ -126,7 +116,8 @@ bool DaemonLauncher::ensureAvailable(
 void DaemonLauncher::ensureAvailableAsync(
     bool autoStart,
     const QString& daemonExecutable,
-    std::optional<bool> initialDryRun
+    std::optional<bool> initialDryRun,
+    const QString& mockScenarioId
 )
 {
     m_lastError.clear();
@@ -151,19 +142,8 @@ void DaemonLauncher::ensureAvailableAsync(
         return;
     }
 
-    QStringList arguments {
-        QStringLiteral("--backend"),
-        QStringLiteral("auto"),
-        QStringLiteral("--socket"),
-        m_client->socketPath(),
-        QStringLiteral("--exit-on-disconnect"),
-    };
-    if (initialDryRun.has_value()) {
-        arguments << QStringLiteral("--dry-run")
-                  << (*initialDryRun ? QStringLiteral("true") : QStringLiteral("false"));
-    }
     m_process.setProgram(executable);
-    m_process.setArguments(arguments);
+    m_process.setArguments(daemonArguments(initialDryRun, mockScenarioId));
     m_process.start();
     if (!m_process.waitForStarted(1000)) {
         m_lastError = QStringLiteral("Could not start the bundled LumaCore daemon: %1")
@@ -233,6 +213,29 @@ QString DaemonLauncher::resolvedDaemonExecutable(const QString& overridePath) co
     constexpr auto executableName = "lumacore-daemon";
 #endif
     return QCoreApplication::applicationDirPath() + QLatin1Char('/') + QString::fromLatin1(executableName);
+}
+
+QStringList DaemonLauncher::daemonArguments(
+    std::optional<bool> initialDryRun,
+    const QString& mockScenarioId
+) const
+{
+    QStringList arguments {
+        QStringLiteral("--backend"),
+        QStringLiteral("auto"),
+        QStringLiteral("--socket"),
+        m_client->socketPath(),
+        QStringLiteral("--exit-on-disconnect"),
+    };
+    if (initialDryRun.has_value()) {
+        arguments << QStringLiteral("--dry-run")
+                  << (*initialDryRun ? QStringLiteral("true") : QStringLiteral("false"));
+    }
+    const QString scenario = mockScenarioId.trimmed();
+    if (!scenario.isEmpty()) {
+        arguments << QStringLiteral("--mock-scenario") << scenario;
+    }
+    return arguments;
 }
 
 void DaemonLauncher::stopStartedProcess()

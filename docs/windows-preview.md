@@ -21,6 +21,8 @@ Terminal 1:
 .\lumacore-daemon.exe --backend mock
 ```
 
+Use `--mock-scenario read-only`, `confirmation-required`, `failing-writes`, or `many-zones` to exercise specific UI and daemon paths without hardware. The default scenario is `asus-board`. The same option can be passed to `lumacore.exe` when using the GUI's bundled daemon auto-start path.
+
 Terminal 2:
 
 ```powershell

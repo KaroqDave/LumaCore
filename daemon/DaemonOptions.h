@@ -14,6 +14,7 @@ namespace lumacore {
 struct DaemonOptions {
     QString socketPath;
     QString backendId;
+    QString mockScenarioId;
     bool allowUnprivileged {false};
     bool exitOnDisconnect {false};
     // When set, overrides the platform default dry-run state at startup. The GUI

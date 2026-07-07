@@ -7,6 +7,7 @@
 // speed, and brightness capability gating, and partial-result reporting when
 // some zones do not support the effect or a device's writes are unconfirmed.
 
+#include "backends/mock/MockBackend.h"
 #include "core/DeviceManager.h"
 #include "core/RgbDevice.h"
 #include "ui/AppController.h"
@@ -319,6 +320,58 @@ int main(int argc, char* argv[])
         if (!require(controller.allOffAllDevices(), "a confirmed All Off should start")
             || !require(allOffConfirmed.value(QStringLiteral("applied")).toInt() == 2, "both devices should turn off once confirmed")
             || !require(!allOffConfirmed.value(QStringLiteral("partial")).toBool(), "a full All Off should not be partial")) {
+            return 1;
+        }
+    }
+
+    // Simulated transport/write failures should be counted as failed rather
+    // than skipped, so operation result dialogs can distinguish them from
+    // capability and confirmation gates.
+    {
+        DeviceManager manager(nullptr, profileDirectory.filePath(QStringLiteral("failing-write-profiles")));
+        manager.setDryRunEnabled(false);
+        manager.registerBackend(std::make_unique<MockBackend>(QStringLiteral("failing-writes")));
+        manager.initializeBackends(QStringLiteral("mock"));
+        AppController controller(&manager);
+
+        QVariantMap effectResult;
+        QObject::connect(&controller, &AppController::globalOperationFinished, &controller,
+            [&effectResult](const QVariantMap& result) { effectResult = result; });
+        if (!require(
+                controller.applyEffectGlobally(kStatic, QColor(QStringLiteral("#AA4400")), 1.0, 75),
+                "a failing global effect should still produce a report"
+            )
+            || !require(effectResult.value(QStringLiteral("total")).toInt() == 1, "the failing zone should be counted")
+            || !require(effectResult.value(QStringLiteral("applied")).toInt() == 0, "the failing zone should not apply")
+            || !require(effectResult.value(QStringLiteral("skipped")).toInt() == 0, "the failing zone should not be skipped")
+            || !require(effectResult.value(QStringLiteral("failed")).toInt() == 1, "the failing zone should be counted as failed")
+            || !require(
+                firstDetailContains(effectResult, QStringLiteral("write failed")),
+                "the failing global effect should include a write-failed detail"
+            )
+            || !require(
+                controller.statusMessage().contains(QStringLiteral("0 applied, 0 skipped, 1 failed")),
+                "the failing global effect should summarize the failed write"
+            )) {
+            return 1;
+        }
+
+        QVariantMap allOffResult;
+        QObject::connect(&controller, &AppController::globalOperationFinished, &controller,
+            [&allOffResult](const QVariantMap& result) { allOffResult = result; });
+        if (!require(controller.allOffAllDevices(), "a failing global All Off should still produce a report")
+            || !require(allOffResult.value(QStringLiteral("total")).toInt() == 1, "the failing device should be counted")
+            || !require(allOffResult.value(QStringLiteral("applied")).toInt() == 0, "the failing device should not apply")
+            || !require(allOffResult.value(QStringLiteral("skipped")).toInt() == 0, "the failing device should not be skipped")
+            || !require(allOffResult.value(QStringLiteral("failed")).toInt() == 1, "the failing device should be counted as failed")
+            || !require(
+                firstDetailContains(allOffResult, QStringLiteral("failing-writes")),
+                "the failing global All Off should include the mock hardware status"
+            )
+            || !require(
+                controller.statusMessage().contains(QStringLiteral("0 applied, 0 skipped, 1 failed")),
+                "the failing global All Off should summarize the failed write"
+            )) {
             return 1;
         }
     }

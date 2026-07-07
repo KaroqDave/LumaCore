@@ -29,11 +29,14 @@ int main(int argc, char* argv[])
         QStringLiteral("lumacore"),
         QStringLiteral("--socket"),
         QStringLiteral("custom-endpoint"),
+        QStringLiteral("--mock-scenario"),
+        QStringLiteral("read-only"),
         QStringLiteral("--no-auto-start-daemon"),
         QStringLiteral("--self-test"),
     }, &error);
     if (!require(error.isEmpty(), "GUI options should parse without errors")
         || !require(guiOptions.daemonSocketPath == QStringLiteral("custom-endpoint"), "GUI socket option should be retained")
+        || !require(guiOptions.mockScenarioId == QStringLiteral("read-only"), "GUI mock scenario option should be retained")
         || !require(!guiOptions.autoStartDaemon, "GUI no-auto-start option should disable daemon startup")
         || !require(guiOptions.selfTest, "GUI self-test option should be retained")) {
         return 1;
@@ -60,12 +63,15 @@ int main(int argc, char* argv[])
         QStringLiteral("custom-endpoint"),
         QStringLiteral("--backend"),
         QStringLiteral("mock"),
+        QStringLiteral("--mock-scenario"),
+        QStringLiteral("many-zones"),
         QStringLiteral("--allow-unprivileged"),
         QStringLiteral("--exit-on-disconnect"),
     }, &error);
     if (!require(error.isEmpty(), "daemon options should parse without errors")
         || !require(daemonOptions.socketPath == QStringLiteral("custom-endpoint"), "daemon socket option should be retained")
         || !require(daemonOptions.backendId == QStringLiteral("mock"), "daemon backend option should be retained")
+        || !require(daemonOptions.mockScenarioId == QStringLiteral("many-zones"), "daemon mock scenario option should be retained")
         || !require(daemonOptions.allowUnprivileged, "daemon development privilege option should be retained")
         || !require(daemonOptions.exitOnDisconnect, "daemon idle exit option should be retained")) {
         return 1;

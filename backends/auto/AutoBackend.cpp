@@ -19,6 +19,11 @@
 
 namespace lumacore {
 
+AutoBackend::AutoBackend(QString mockScenarioId)
+    : m_mockScenarioId(std::move(mockScenarioId))
+{
+}
+
 QString AutoBackend::backendId()
 {
     return QStringLiteral("auto");
@@ -96,7 +101,7 @@ std::vector<std::unique_ptr<RgbDevice>> AutoBackend::discoverDevices() const
 #endif
 
     if (devices.empty()) {
-        MockBackend mockBackend;
+        MockBackend mockBackend(m_mockScenarioId);
         for (std::unique_ptr<RgbDevice>& device : mockBackend.discoverDevices()) {
             if (device) {
                 device->setBackendId(QStringLiteral("mock"));

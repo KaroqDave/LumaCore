@@ -43,6 +43,12 @@ void configureParser(QCommandLineParser& parser)
         QStringLiteral("exit-on-disconnect"),
         QStringLiteral("Exit after the last client disconnects, once at least one client has connected.")
     );
+    const QCommandLineOption mockScenarioOption(
+        QStringLiteral("mock-scenario"),
+        QStringLiteral("Mock device scenario to expose when the mock backend or auto fallback is active."),
+        QStringLiteral("id"),
+        QStringLiteral("asus-board")
+    );
     const QCommandLineOption dryRunOption(
         QStringLiteral("dry-run"),
         QStringLiteral("Override the startup dry-run state ('true' logs write intent only, 'false' arms writes). Defaults to the platform default."),
@@ -53,6 +59,7 @@ void configureParser(QCommandLineParser& parser)
     parser.addOption(allowUnprivilegedOption);
     parser.addOption(backendOption);
     parser.addOption(exitOnDisconnectOption);
+    parser.addOption(mockScenarioOption);
     parser.addOption(dryRunOption);
 }
 
@@ -85,6 +92,7 @@ DaemonOptions optionsFromParser(const QCommandLineParser& parser, QString* error
     return {
         .socketPath = parser.value(QStringLiteral("socket")),
         .backendId = parser.value(QStringLiteral("backend")).trimmed(),
+        .mockScenarioId = parser.value(QStringLiteral("mock-scenario")).trimmed(),
         .allowUnprivileged = parser.isSet(QStringLiteral("allow-unprivileged")),
         .exitOnDisconnect = parser.isSet(QStringLiteral("exit-on-disconnect")),
         .dryRunEnabled = dryRunEnabled,

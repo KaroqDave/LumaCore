@@ -522,6 +522,162 @@ int main(int argc, char* argv[])
     }
 
     {
+        lumacore::DeviceManager scenarioReadOnlyManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("scenario-read-only-profiles"))
+        );
+        scenarioReadOnlyManager.setDryRunEnabled(false);
+        scenarioReadOnlyManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("read-only")));
+        scenarioReadOnlyManager.initializeBackends(QStringLiteral("mock"));
+        lumacore::AppController scenarioReadOnlyController(&scenarioReadOnlyManager);
+        if (!require(
+                scenarioReadOnlyManager.deviceCount() == 1,
+                "read-only mock scenario should load one device"
+            )
+            || !require(
+                scenarioReadOnlyController.deviceId(0) == QStringLiteral("mock-read-only-inventory"),
+                "read-only mock scenario should reach the AppController"
+            )
+            || !require(
+                !scenarioReadOnlyController.deviceWritable(0),
+                "read-only mock scenario should not be writable in the AppController"
+            )
+            || !require(
+                scenarioReadOnlyController.setupStatusSummary() == QStringLiteral("Read-only inventory"),
+                "read-only mock scenario should drive the inventory-only setup state"
+            )
+            || !require(
+                scenarioReadOnlyController.setupStatusDetail().contains(QStringLiteral("Mock backend does not support")),
+                "read-only mock scenario should expose the blocked write reason"
+            )
+            || !require(
+                scenarioReadOnlyController.zoneCount(0) == 2,
+                "read-only mock scenario should expose its inventory zones"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        lumacore::DeviceManager scenarioConfirmManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("scenario-confirm-profiles"))
+        );
+        scenarioConfirmManager.setDryRunEnabled(false);
+        scenarioConfirmManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("confirmation-required")));
+        scenarioConfirmManager.initializeBackends(QStringLiteral("mock"));
+        lumacore::AppController scenarioConfirmController(&scenarioConfirmManager);
+        if (!require(
+                scenarioConfirmController.deviceId(0) == QStringLiteral("mock-confirmation-required-controller"),
+                "confirmation-required mock scenario should reach the AppController"
+            )
+            || !require(
+                scenarioConfirmController.deviceWritable(0),
+                "confirmation-required mock scenario should count as writable or confirmable"
+            )
+            || !require(
+                scenarioConfirmController.deviceRequiresConfirmation(0),
+                "confirmation-required mock scenario should require confirmation"
+            )
+            || !require(
+                scenarioConfirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
+                "confirmation-required mock scenario should drive the setup warning"
+            )
+            || !require(
+                scenarioConfirmController.devicePermissionReason(0).contains(QStringLiteral("requires per-session confirmation")),
+                "confirmation-required mock scenario should expose the confirmation reason"
+            )) {
+            return 1;
+        }
+
+        if (!require(
+                scenarioConfirmManager.confirmDeviceWrites(0),
+                "confirmation-required mock scenario should be confirmable through the manager"
+            )
+            || !require(
+                scenarioConfirmController.deviceWriteConfirmed(0),
+                "confirmation-required mock scenario should report confirmed after manager confirmation"
+            )
+            || !require(
+                scenarioConfirmController.setupStatusSummary() == QStringLiteral("Ready"),
+                "confirmed mock scenario should clear the setup warning"
+            )
+            || !require(
+                scenarioConfirmManager.revokeDeviceWrites(0),
+                "confirmation-required mock scenario should allow revocation"
+            )
+            || !require(
+                !scenarioConfirmController.deviceWriteConfirmed(0),
+                "confirmation-required mock scenario should report unconfirmed after revocation"
+            )
+            || !require(
+                scenarioConfirmController.setupStatusSummary() == QStringLiteral("Hardware confirmation required"),
+                "revoked mock scenario should restore the setup warning"
+            )) {
+            return 1;
+        }
+    }
+
+    {
+        lumacore::DeviceManager scenarioFailManager(
+            nullptr,
+            profileDirectory.filePath(QStringLiteral("scenario-fail-profiles"))
+        );
+        scenarioFailManager.setDryRunEnabled(false);
+        scenarioFailManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("failing-writes")));
+        scenarioFailManager.initializeBackends(QStringLiteral("mock"));
+        lumacore::AppController scenarioFailController(&scenarioFailManager);
+        if (!require(
+                scenarioFailController.deviceId(0) == QStringLiteral("mock-failing-writes-controller"),
+                "failing-writes mock scenario should reach the AppController"
+            )
+            || !require(
+                scenarioFailController.deviceWritable(0),
+                "failing-writes mock scenario should remain write-capable"
+            )
+            || !require(
+                scenarioFailController.setupStatusSummary() == QStringLiteral("Ready"),
+                "failing-writes mock scenario should look ready before a simulated transport failure"
+            )) {
+            return 1;
+        }
+
+        if (!require(
+                !scenarioFailController.applyEffect(
+                    0,
+                    0,
+                    static_cast<int>(lumacore::RgbEffectType::Static),
+                    QColor(QStringLiteral("#123456")),
+                    1.0,
+                    80
+                ),
+                "failing-writes mock scenario should reject selected-zone effects"
+            )
+            || !require(
+                scenarioFailController.statusMessage().contains(QStringLiteral("failing-writes")),
+                "selected-zone failure should surface the mock hardware status"
+            )
+            || !require(
+                scenarioFailController.deviceLastHardwareWriteStatus(0).contains(QStringLiteral("effect")),
+                "selected-zone failure should persist the effect failure status"
+            )
+            || !require(
+                !scenarioFailController.allOffDevice(0),
+                "failing-writes mock scenario should reject selected-device All Off"
+            )
+            || !require(
+                scenarioFailController.statusMessage().contains(QStringLiteral("failing-writes")),
+                "selected-device All Off failure should surface the mock hardware status"
+            )
+            || !require(
+                scenarioFailController.deviceLastHardwareWriteStatus(0).contains(QStringLiteral("all-off")),
+                "selected-device All Off failure should persist the all-off failure status"
+            )) {
+            return 1;
+        }
+    }
+
+    {
         auto effectiveBackendClient = std::make_shared<lumacore::DaemonClient>(
             QStringLiteral("lumacore-app-controller-effective-backend-%1")
                 .arg(QCoreApplication::applicationPid())
