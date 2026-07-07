@@ -162,6 +162,13 @@ qt_add_executable(lumacore_daemon_launch_sleep_fixture DaemonLaunchFixture.cpp)
 target_compile_definitions(lumacore_daemon_launch_sleep_fixture PRIVATE LUMACORE_FIXTURE_SLEEP)
 target_link_libraries(lumacore_daemon_launch_sleep_fixture PRIVATE Qt6::Core)
 
+qt_add_executable(lumacore_daemon_launch_many_zones_fixture DaemonLaunchFixture.cpp)
+target_compile_definitions(
+    lumacore_daemon_launch_many_zones_fixture
+    PRIVATE LUMACORE_FIXTURE_REQUIRE_MANY_ZONES
+)
+target_link_libraries(lumacore_daemon_launch_many_zones_fixture PRIVATE Qt6::Core)
+
 qt_add_executable(lumacore_daemon_launcher_test
     DaemonLauncherTest.cpp
     ${PROJECT_SOURCE_DIR}/app/DaemonLauncher.cpp
@@ -174,6 +181,7 @@ add_dependencies(
     lumacore-daemon
     lumacore_daemon_launch_exit_fixture
     lumacore_daemon_launch_sleep_fixture
+    lumacore_daemon_launch_many_zones_fixture
 )
 add_test(
     NAME daemon_launcher
@@ -181,6 +189,7 @@ add_test(
         $<TARGET_FILE:lumacore-daemon>
         $<TARGET_FILE:lumacore_daemon_launch_exit_fixture>
         $<TARGET_FILE:lumacore_daemon_launch_sleep_fixture>
+        $<TARGET_FILE:lumacore_daemon_launch_many_zones_fixture>
 )
 lumacore_set_windows_test_runtime_path(daemon_launcher)
 
