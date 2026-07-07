@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+The contracts in `docs/` are the source of truth for how this project behaves. Before touching a compatibility-sensitive surface — protocol fields, profile formats and paths, IDs, AppController/QML invokables, backend ordering, ASUS packet bytes, or Windows discovery and packaging — read the matching doc (`docs/architecture.md`, `docs/daemon/protocol.md`, `docs/refactor-parity.md`, `docs/release-verification.md`, `docs/hardware/asus-aura-hid.md`, `docs/windows-preview.md`) first, and let it, not the code's current shape, tell you what must stay stable.
+
 ## Project Structure & Module Organization
 
 LumaCore is a C++23/Qt 6.5+ RGB controller split between an unprivileged Qt Quick GUI and hardware-facing daemon.
@@ -59,8 +61,11 @@ Tests are standalone C++ executables in `tests/CMakeLists.txt`. Name files `<Sub
 
 ## Working Style
 
+Work inductively: reason from the specific code, tests, and captures in front of you, not from what the codebase "probably" does or what vendor docs claim. Before editing, read the file and trace the real call path; when a fact is checkable, check it rather than assuming. Prefer the evidence you can produce over the answer you can guess.
+
+- Explore before you edit. Locate the code that actually runs, read the neighbours, and confirm your mental model against the source before changing anything. When a task spans several files or naming conventions, fan out and gather the evidence first, then act on the whole picture. A wrong assumption caught by reading is cheaper than one caught by a failing build.
 - Act with stated assumptions instead of stalling. Ask before implementing only when the answer changes direction: compatibility-sensitive surfaces, safety gates, or genuine scope ambiguity. Otherwise pick the most reasonable interpretation, name it in your summary, and proceed.
-- Prove behavior, don't assert it. Bug fixes start from a failing test where the code is unit-testable — and most of this repo is (frame codec, profile planner, write gates, option parsing, serializers, schedule logic). For UI or timing behavior that isn't, run a mock-daemon session or the `--self-test` QML smoke path and report what you observed. Always say which form of verification you performed.
+- Prove behavior, don't assert it. Bug fixes start from a failing test where the code is unit-testable — and most of this repo is (frame codec, profile planner, write gates, option parsing, serializers, schedule logic). For UI or timing behavior that isn't, run a mock-daemon session or the `--self-test` QML smoke path and report what you observed. Always say which form of verification you performed — and report outcomes faithfully, including tests that still fail or legs you skipped.
 - Keep diffs minimal and surgical: no drive-by refactors, no speculative abstraction or configurability, no error handling for impossible states. Match the idiom already in the file being edited. Mention unrelated dead code; don't remove it. Every changed line should trace to the request.
 - Before finishing, apply the simplicity check: if a senior engineer would call the diff overbuilt, rewrite it smaller.
 - Changes to compatibility-sensitive surfaces (listed under Pull Requests below) require reading the matching doc first and stating the compatibility impact — or "none, additive" — in the summary. An old GUI against a new daemon, and old profiles against new code, must keep working.

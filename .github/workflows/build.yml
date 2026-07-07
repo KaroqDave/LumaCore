@@ -58,6 +58,26 @@ jobs:
           test -f dist/linux-stage/usr/share/icons/hicolor/scalable/apps/lumacore.svg
           test -f dist/linux-stage/usr/lib/systemd/system/lumacore-daemon.service
 
+      - name: Create Linux staged archive
+        run: |
+          mkdir -p dist/LumaCore-Linux-x64
+          cp -a dist/linux-stage/usr dist/LumaCore-Linux-x64/
+          cp LICENSE dist/LumaCore-Linux-x64/
+          cp docs/linux-package.md dist/LumaCore-Linux-x64/README-Linux.md
+          tar -C dist -czf dist/LumaCore-Linux-x64.tar.gz LumaCore-Linux-x64
+
+      - name: Smoke Linux package runtime
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          mkdir -p dist/linux-smoke
+          tar -C dist/linux-smoke -xzf dist/LumaCore-Linux-x64.tar.gz
+          package_dir="dist/linux-smoke/LumaCore-Linux-x64"
+          "$package_dir/usr/bin/lumacore" --version
+          "$package_dir/usr/bin/lumacore-daemon" --version
+          "$package_dir/usr/bin/lumacore" --self-test
+
   windows-preview:
     name: Windows preview package
     runs-on: windows-latest
@@ -88,6 +108,44 @@ jobs:
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
           .\packaging\windows\package.ps1 -BuildDir .\build-windows
+
+      - name: Smoke portable ZIP runtime
+        shell: pwsh
+        run: |
+          $smokeDir = Join-Path $PWD "dist\windows-smoke"
+          if (Test-Path -LiteralPath $smokeDir) {
+              Remove-Item -LiteralPath $smokeDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $smokeDir | Out-Null
+          Expand-Archive -LiteralPath "dist\LumaCore-Windows-x64.zip" -DestinationPath $smokeDir
+          $packageDir = Join-Path $smokeDir "LumaCore-Windows-x64"
+          function Invoke-PackagedTool {
+              param(
+                  [Parameter(Mandatory = $true)][string]$FilePath,
+                  [string[]]$Arguments = @()
+              )
+
+              $process = Start-Process `
+                  -FilePath $FilePath `
+                  -ArgumentList $Arguments `
+                  -WorkingDirectory $packageDir `
+                  -NoNewWindow `
+                  -Wait `
+                  -PassThru
+              if ($process.ExitCode -ne 0) {
+                  throw "$FilePath $($Arguments -join ' ') failed with exit code $($process.ExitCode)."
+              }
+          }
+
+          Push-Location $packageDir
+          try {
+              Invoke-PackagedTool -FilePath (Join-Path $packageDir "lumacore.exe") -Arguments @("--version")
+              Invoke-PackagedTool -FilePath (Join-Path $packageDir "lumacore-daemon.exe") -Arguments @("--version")
+              $env:QT_QUICK_BACKEND = "software"
+              Invoke-PackagedTool -FilePath (Join-Path $packageDir "lumacore.exe") -Arguments @("--self-test")
+          } finally {
+              Pop-Location
+          }
 
       - name: Upload portable ZIP
         uses: actions/upload-artifact@v4

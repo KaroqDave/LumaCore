@@ -27,9 +27,20 @@
 #endif
 
 #include <cstdio>
+#include <cstring>
 #include <memory>
 
 namespace {
+
+bool isVersionRequest(int argc, char* argv[])
+{
+    for (int index = 1; index < argc; ++index) {
+        if (std::strcmp(argv[index], "--version") == 0 || std::strcmp(argv[index], "-v") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
 
 void configureQtApplication(QCoreApplication& application)
 {
@@ -166,6 +177,11 @@ int runDaemon(const lumacore::DaemonOptions& options)
 
 int main(int argc, char* argv[])
 {
+    if (isVersionRequest(argc, argv)) {
+        std::fprintf(stdout, "lumacore-daemon %s\n", qPrintable(lumacore::applicationVersion()));
+        return 0;
+    }
+
     QCoreApplication application(argc, argv);
     configureQtApplication(application);
     return runDaemon(lumacore::parseDaemonOptions(application));

@@ -53,6 +53,7 @@ Verify the packaged binaries report the release version:
 ```sh
 ./dist/LumaCore-Linux-x64/usr/bin/lumacore --version
 ./dist/LumaCore-Linux-x64/usr/bin/lumacore-daemon --version
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./dist/LumaCore-Linux-x64/usr/bin/lumacore --self-test
 ```
 
 ## Windows package
@@ -64,6 +65,18 @@ cmake --preset windows-local-release
 cmake --build --preset windows-local-release
 ctest --preset windows-local-release
 .\packaging\windows\package.ps1 -BuildDir .\build-windows-release
+```
+
+Extract the ZIP and smoke the packaged runtime:
+
+```powershell
+Expand-Archive .\dist\LumaCore-Windows-x64.zip .\dist\windows-smoke -Force
+Push-Location .\dist\windows-smoke\LumaCore-Windows-x64
+.\lumacore.exe --version
+.\lumacore-daemon.exe --version
+$env:QT_QUICK_BACKEND = "software"
+.\lumacore.exe --self-test
+Pop-Location
 ```
 
 Extract the ZIP, start `lumacore.exe`, and confirm the bundled daemon starts with the `auto` backend. In Settings -> Windows diagnostics, confirm the bundled daemon is present, the daemon endpoint is populated, dry-run is enabled on fresh settings, Export creates a JSON diagnostics report, and Copy Summary updates the status message. Confirm CMake reported a hidapi provider, either system or bundled. If HID devices are reported, confirm non-ASUS devices appear as read-only `windows-discovery` inventory. For an owned validated `0B05:19AF` ASUS Aura controller, first verify dry-run previews and confirmation prompts; only then disable dry-run and confirm one controlled static color write. If no devices are reported, confirm mock fallback still loads. Windows services, signing, and installer checks belong to later phases.

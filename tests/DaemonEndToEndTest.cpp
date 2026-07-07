@@ -7,6 +7,7 @@
 // dry-run effect and frame writes through the streaming path, All Off, activity
 // log snapshot, the dry-run synchronization guard, and idle shutdown.
 
+#include "app/Version.h"
 #include "core/RgbColor.h"
 #include "core/RgbEffect.h"
 #include "ipc/DaemonClient.h"
@@ -118,6 +119,51 @@ bool manyZonesScenarioMatches(const QJsonObject& device, const QJsonArray& zones
         );
 }
 
+bool failingWritesScenarioMatches(const QJsonObject& device, const QJsonArray& zones)
+{
+    return require(zones.size() == 1, "failing-writes scenario should expose one guarded zone")
+        && require(
+            !device.value(QStringLiteral("readOnly")).toBool(true),
+            "failing-writes scenario should remain write-capable"
+        )
+        && require(
+            !device.value(QStringLiteral("writeRequiresConfirmation")).toBool(true),
+            "failing-writes scenario should not require confirmation before the simulated failure"
+        )
+        && require(
+            device.value(QStringLiteral("permission")).toObject().value(QStringLiteral("status")).toString()
+                == QStringLiteral("granted"),
+            "failing-writes scenario should serialize granted aggregate permission"
+        );
+}
+
+bool runDaemonVersionSmoke(const QString& daemonPath)
+{
+    QProcess daemon;
+    daemon.setProgram(daemonPath);
+    daemon.setArguments({QStringLiteral("--version")});
+    daemon.start();
+    if (!require(daemon.waitForFinished(3000), "daemon --version should exit promptly")) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+        return false;
+    }
+
+    const QString standardOutput = QString::fromLocal8Bit(daemon.readAllStandardOutput());
+    return require(
+        daemon.exitStatus() == QProcess::NormalExit && daemon.exitCode() == 0,
+        "daemon --version should exit cleanly"
+    )
+        && require(
+            standardOutput.contains(QStringLiteral("lumacore-daemon")),
+            "daemon --version should identify the daemon binary"
+        )
+        && require(
+            standardOutput.contains(lumacore::applicationVersion()),
+            "daemon --version should report the application version"
+        );
+}
+
 bool runMockScenarioInventorySmoke(
     const QString& daemonPath,
     const QString& scenarioId,
@@ -221,7 +267,8 @@ int main(int argc, char* argv[])
     }
 
     const QString daemonPath = QFileInfo(QString::fromLocal8Bit(argv[1])).absoluteFilePath();
-    if (!runMockScenarioInventorySmoke(
+    if (!runDaemonVersionSmoke(daemonPath)
+        || !runMockScenarioInventorySmoke(
             daemonPath,
             QStringLiteral("read-only"),
             QStringLiteral("mock-read-only-inventory"),
@@ -238,6 +285,12 @@ int main(int argc, char* argv[])
             QStringLiteral("many-zones"),
             QStringLiteral("mock-many-zone-controller"),
             manyZonesScenarioMatches
+        )
+        || !runMockScenarioInventorySmoke(
+            daemonPath,
+            QStringLiteral("failing-writes"),
+            QStringLiteral("mock-failing-writes-controller"),
+            failingWritesScenarioMatches
         )
         || !runInvalidMockScenarioSmoke(daemonPath)) {
         return 1;
