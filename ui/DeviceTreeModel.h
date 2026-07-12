@@ -67,6 +67,8 @@ public:
     void setDeviceFilter(int deviceFilter);
     void setWriteConfirmationSource(AppController* controller);
     [[nodiscard]] Q_INVOKABLE bool isDeviceVisible(int deviceIndex) const;
+    [[nodiscard]] Q_INVOKABLE bool isZoneVisible(int deviceIndex, int zoneIndex) const;
+    [[nodiscard]] Q_INVOKABLE int firstVisibleZoneIndex(int deviceIndex) const;
 
 signals:
     void deviceFilterChanged();

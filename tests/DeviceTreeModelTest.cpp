@@ -35,7 +35,7 @@ public:
         setRgbControllerOverride(rgbController);
         mutableZones().append(lumacore::RgbZone(
             QStringLiteral("Zone"),
-            lumacore::RgbZoneType::Motherboard,
+            lumacore::RgbZoneType::AddressableHeader,
             1
         ));
     }
@@ -140,12 +140,12 @@ int main(int argc, char* argv[])
                 "many-zones device row should expose the mock device name"
             )
             || !require(
-                manyZoneModel.data(deviceIndex, lumacore::DeviceTreeModel::ZoneCountRole).toInt() == 16,
-                "many-zones device row should expose sixteen child zones"
+                manyZoneModel.data(deviceIndex, lumacore::DeviceTreeModel::ZoneCountRole).toInt() == 12,
+                "many-zones device row should expose only its addressable child zones"
             )
             || !require(
-                manyZoneModel.rowCount(deviceIndex) == 16,
-                "many-zones device row should have sixteen child rows"
+                manyZoneModel.rowCount(deviceIndex) == 12,
+                "many-zones motherboard zones should be hidden from the tree"
             )
             || !require(
                 manyZoneModel.data(deviceIndex, lumacore::DeviceTreeModel::DeviceBadgeTextRole).toString()
@@ -155,9 +155,11 @@ int main(int argc, char* argv[])
             return 1;
         }
 
+        // Zone indices 0, 4, 8, and 12 are motherboard-type and hidden, so the
+        // visible rows start at zone index 1 and keep the source indices.
         const QModelIndex firstZone = manyZoneModel.index(0, 0, deviceIndex);
         const QModelIndex tenthZone = manyZoneModel.index(9, 0, deviceIndex);
-        const QModelIndex lastZone = manyZoneModel.index(15, 0, deviceIndex);
+        const QModelIndex lastZone = manyZoneModel.index(11, 0, deviceIndex);
         if (!require(firstZone.isValid(), "first many-zones child should be valid")
             || !require(tenthZone.isValid(), "tenth many-zones child should be valid")
             || !require(lastZone.isValid(), "last many-zones child should be valid")
@@ -167,13 +169,13 @@ int main(int argc, char* argv[])
             )
             || !require(
                 manyZoneModel.data(firstZone, lumacore::DeviceTreeModel::DisplayNameRole).toString()
-                    == QStringLiteral("Zone 01"),
-                "many-zones first child should expose the padded first zone name"
+                    == QStringLiteral("Zone 02"),
+                "many-zones first visible child should be the first addressable zone"
             )
             || !require(
                 manyZoneModel.data(tenthZone, lumacore::DeviceTreeModel::DisplayNameRole).toString()
-                    == QStringLiteral("Zone 10"),
-                "many-zones tenth child should expose a double-digit zone name"
+                    == QStringLiteral("Zone 14"),
+                "many-zones visible children should skip hidden motherboard zones"
             )
             || !require(
                 manyZoneModel.data(lastZone, lumacore::DeviceTreeModel::DisplayNameRole).toString()
@@ -187,6 +189,21 @@ int main(int argc, char* argv[])
             || !require(
                 manyZoneModel.data(lastZone, lumacore::DeviceTreeModel::LedCountRole).toInt() == 36,
                 "many-zones last child should expose the addressable stress LED count"
+            )) {
+            return 1;
+        }
+
+        if (!require(
+                !manyZoneModel.isZoneVisible(0, 0),
+                "motherboard-type zones should not be visible in the tree"
+            )
+            || !require(
+                manyZoneModel.isZoneVisible(0, 1),
+                "addressable zones should stay visible in the tree"
+            )
+            || !require(
+                manyZoneModel.firstVisibleZoneIndex(0) == 1,
+                "the first visible zone should skip hidden motherboard zones"
             )) {
             return 1;
         }

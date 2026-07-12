@@ -199,13 +199,13 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
         case NodeTypeRole:
             return QStringLiteral("device");
         case DescriptionRole:
-            return QStringLiteral("%1 · %2 zone(s)").arg(device->vendor()).arg(device->zones().size());
+            return QStringLiteral("%1 · %2 zone(s)").arg(device->vendor()).arg(node->children.size());
         case DeviceIndexRole:
             return node->deviceIndex;
         case ZoneIndexRole:
             return -1;
         case ZoneCountRole:
-            return device->zones().size();
+            return static_cast<int>(node->children.size());
         case IsDeviceRole:
             return true;
         case IsZoneRole:
@@ -400,6 +400,32 @@ bool DeviceTreeModel::isDeviceVisible(int deviceIndex) const
     return true;
 }
 
+bool DeviceTreeModel::isZoneVisible(int deviceIndex, int zoneIndex) const
+{
+    if (!isDeviceVisible(deviceIndex) || zoneIndex < 0) {
+        return false;
+    }
+
+    const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
+    return zoneIndex < device->zones().size()
+        && device->zones().at(zoneIndex).type() != RgbZoneType::Motherboard;
+}
+
+int DeviceTreeModel::firstVisibleZoneIndex(int deviceIndex) const
+{
+    if (!isDeviceVisible(deviceIndex)) {
+        return -1;
+    }
+
+    const RgbDevice* device = m_deviceManager->deviceAt(deviceIndex);
+    for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+        if (device->zones().at(zoneIndex).type() != RgbZoneType::Motherboard) {
+            return zoneIndex;
+        }
+    }
+    return -1;
+}
+
 void DeviceTreeModel::refreshDeviceBadges(int deviceIndex)
 {
     if (!isDeviceVisible(deviceIndex)) {
@@ -441,6 +467,15 @@ void DeviceTreeModel::rebuild()
         deviceNode->deviceIndex = deviceIndex;
 
         for (int zoneIndex = 0; zoneIndex < device->zones().size(); ++zoneIndex) {
+            // Fixed motherboard zones stay in the device model — zone indices
+            // are a compatibility surface for profiles, the daemon protocol,
+            // and the hardware serializers — but the tree lists only
+            // addressable zones, so device-level actions (All Off, profiles,
+            // global applies) remain the way to reach them.
+            if (!isZoneVisible(deviceIndex, zoneIndex)) {
+                continue;
+            }
+
             auto zoneNode = std::make_unique<TreeNode>();
             zoneNode->kind = NodeKind::Zone;
             zoneNode->parent = deviceNode.get();

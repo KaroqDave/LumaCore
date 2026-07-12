@@ -87,7 +87,7 @@ ApplicationWindow {
 
         selectedDeviceIndex = deviceIndex
         selectedDeviceId = controller.deviceId(deviceIndex)
-        selectedZoneIndex = controller.zoneCount(deviceIndex) > 0 ? 0 : -1
+        selectedZoneIndex = deviceTreeModel ? deviceTreeModel.firstVisibleZoneIndex(deviceIndex) : -1
         selectedZoneFallbackIndex = selectedZoneIndex
         selectedZoneName = selectedZoneIndex >= 0
             ? controller.zoneName(deviceIndex, selectedZoneIndex)
@@ -164,8 +164,13 @@ ApplicationWindow {
                 && selectedZoneFallbackIndex < zoneCount) {
             zoneIndex = selectedZoneFallbackIndex
         }
-        if (zoneIndex < 0 && zoneCount > 0) {
-            zoneIndex = 0
+        // Restored selections can point at a zone the tree hides (for example
+        // a fixed motherboard zone); fall back to the first listed zone.
+        if (deviceTreeModel && !deviceTreeModel.isZoneVisible(deviceIndex, zoneIndex)) {
+            zoneIndex = -1
+        }
+        if (zoneIndex < 0 && deviceTreeModel) {
+            zoneIndex = deviceTreeModel.firstVisibleZoneIndex(deviceIndex)
         }
 
         selectedZoneIndex = zoneIndex
