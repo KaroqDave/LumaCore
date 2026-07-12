@@ -156,5 +156,26 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Fixed mainboard zones are read-only by policy: no advertised static
+    // support and a direct write attempt is refused before any packet is built.
+    if (!require(
+            !device.supportsZoneEffect(0, static_cast<int>(lumacore::RgbEffectType::Static)),
+            "fixed ASUS zones must not advertise static color support"
+        )
+        || !require(
+            device.supportsZoneEffect(1, static_cast<int>(lumacore::RgbEffectType::Static)),
+            "addressable ASUS zones should keep static color support"
+        )
+        || !require(
+            !device.setZoneStaticColor(0, lumacore::RgbColor(255, 0, 0)),
+            "direct static writes to the fixed ASUS zone must be refused"
+        )
+        || !require(
+            device.lastHardwareWriteStatus().contains(QStringLiteral("read-only")),
+            "refused fixed-zone writes should report the read-only policy"
+        )) {
+        return 1;
+    }
+
     return 0;
 }

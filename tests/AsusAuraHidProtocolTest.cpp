@@ -420,13 +420,34 @@ void testAllOffWrite()
     }
     check(approvedOff.packet.hardwareWriteApproved, "approved all-off should be hardware-approved");
     check(approvedOff.packet.kind == AsusAuraHidPacketKind::AllOffWrite, "all-off should be marked separately");
-    if (!check(approvedOff.packet.reports.size() == 4, "all-off should contain gen1 plus one off-mode report per config channel")) {
+    if (!check(
+            approvedOff.packet.reports.size() == 3,
+            "all-off should contain gen1 plus one off-mode report per addressable config channel"
+        )) {
         return;
     }
     const QByteArray allOffModeReport = approvedOff.packet.reports.at(1);
     check(static_cast<unsigned char>(allOffModeReport.at(0)) == 0xEC, "all-off report should use Aura command prefix");
     check(static_cast<unsigned char>(allOffModeReport.at(1)) == 0x35, "all-off report should use set-mode command");
     check(static_cast<unsigned char>(allOffModeReport.at(5)) == 0x00, "all-off report should request off mode");
+
+    // The read-only fixed mainboard channel must never receive an off-mode
+    // report: every emitted report targets an addressable effect channel.
+    int fixedIndex = -1;
+    for (int index = 0; index < parsedConfig.channels.size(); ++index) {
+        if (parsedConfig.channels.at(index).type == AsusAuraChannelType::Fixed) {
+            fixedIndex = index;
+        }
+    }
+    if (check(fixedIndex >= 0, "verified test config should include a fixed channel")) {
+        const quint8 fixedEffectChannel = static_cast<quint8>(parsedConfig.channels.at(fixedIndex).effectChannel);
+        for (int reportIndex = 1; reportIndex < approvedOff.packet.reports.size(); ++reportIndex) {
+            check(
+                static_cast<unsigned char>(approvedOff.packet.reports.at(reportIndex).at(2)) != fixedEffectChannel,
+                "all-off reports must not target the read-only fixed channel"
+            );
+        }
+    }
 }
 
 void testInputValidation()

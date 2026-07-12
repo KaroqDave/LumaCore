@@ -208,6 +208,12 @@ bool AsusAuraHidDevice::applyZoneEffect(int zoneIndex, const RgbEffect& effect)
         return false;
     }
 
+    if (!isAddressableZone(zoneIndex)) {
+        m_lastHardwareWriteStatus =
+            QStringLiteral("ASUS Aura HID write skipped: the fixed mainboard zone is read-only.");
+        return false;
+    }
+
     const hardware::asus::AsusAuraHidProtocolResult protocol = effect.isAnimated()
         ? hardware::asus::buildAsusAuraDirectFrameWrite(
               m_configTable,
@@ -282,7 +288,8 @@ bool AsusAuraHidDevice::applyAllOff()
 void AsusAuraHidDevice::applyLocalAllOff()
 {
     const RgbEffect offEffect(RgbEffectType::Static, RgbColor(0, 0, 0), 1.0, 0);
-    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+    // Fixed zones are never written, so their local model state stays as-is.
+    for (int zoneIndex = fixedZoneCount(); zoneIndex < zones().size(); ++zoneIndex) {
         setZoneEffect(zoneIndex, offEffect);
         mutableZones()[zoneIndex].setColor(RgbColor(0, 0, 0));
         emit zoneChanged(zoneIndex);
@@ -418,7 +425,9 @@ bool AsusAuraHidDevice::supportsZoneEffect(int zoneIndex, int effectType) const
     }
 
     if (effectType == static_cast<int>(RgbEffectType::Static)) {
-        return capabilities().testFlag(BackendCapability::ZoneColorWrite);
+        // Fixed mainboard zones are read-only by policy: they exist for
+        // discovery and config-table verification, never for writes.
+        return isAddressableZone(zoneIndex) && capabilities().testFlag(BackendCapability::ZoneColorWrite);
     }
 
     if (!capabilities().testFlag(BackendCapability::ZoneEffectWrite)) {

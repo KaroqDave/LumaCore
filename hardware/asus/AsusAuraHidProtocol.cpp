@@ -1014,8 +1014,15 @@ AsusAuraHidProtocolResult buildAsusAuraAllOffWrite(const AsusAuraConfigTable& co
     }
 
     QVector<QByteArray> reports {buildAuraGen1Report()};
+    int offChannels = 0;
     for (const AsusAuraConfigChannel& channel : config.channels) {
+        // The fixed mainboard channel is read-only by policy and is never
+        // written, so all-off targets only the addressable channels.
+        if (channel.type == AsusAuraChannelType::Fixed) {
+            continue;
+        }
         reports.append(buildAuraModeReport(static_cast<quint8>(channel.effectChannel), kAuraOffMode));
+        ++offChannels;
     }
 
     AsusAuraHidPacket packet {
@@ -1025,7 +1032,7 @@ AsusAuraHidProtocolResult buildAsusAuraAllOffWrite(const AsusAuraConfigTable& co
             "ASUS Aura HID approved all-off write for %1: synchronized=false channels=%2 reportCount=%3 reportLength=%4 mode=off firstBytes=%5 hardwareWriteApproved=true provenance=%6"
         )
             .arg(asusAuraDeviceKey())
-            .arg(config.channels.size())
+            .arg(offChannels)
             .arg(reports.size())
             .arg(reports.first().size())
             .arg(bytesPreview(reports.first()), kOpenRgbProvenance),
