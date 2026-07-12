@@ -6,6 +6,7 @@
 #include "core/RgbEffect.h"
 
 #include <QElapsedTimer>
+#include <QHash>
 #include <QObject>
 #include <QPair>
 #include <QSet>
@@ -44,6 +45,7 @@ private:
     QTimer m_timer;
     QElapsedTimer m_clock;
     QSet<QPair<int, int>> m_activeZones;
+    QHash<QPair<int, int>, QVector<RgbColor>> m_lastAcceptedFrames;
 };
 
 } // namespace lumacore

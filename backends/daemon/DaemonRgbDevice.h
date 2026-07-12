@@ -70,8 +70,20 @@ public:
     );
 
 private:
+    struct FrameStreamState {
+        quint64 inFlightRequestId {0};
+        QVector<RgbColor> pendingColors;
+        bool hasPendingFrame {false};
+        int suspensionCount {0};
+    };
+
     void applyLocalZoneEffect(int zoneIndex, const RgbEffect& effect);
     void applyLocalAllOff();
+    [[nodiscard]] bool sendZoneFrame(int zoneIndex, const QVector<RgbColor>& colors);
+    void suspendZoneFrames(int zoneIndex);
+    void resumeZoneFrames(int zoneIndex);
+    void suspendAllZoneFrames();
+    void resumeAllZoneFrames();
     [[nodiscard]] bool supportsHostStreamedEffect(int zoneIndex, int effectType) const;
 
     int m_daemonDeviceIndex {-1};
@@ -87,6 +99,7 @@ private:
     QHash<QString, PermissionResult> m_permissions;
     QHash<int, EffectSupport> m_effectSupport;
     QVector<QHash<int, EffectSupport>> m_zoneEffectSupport;
+    QHash<int, FrameStreamState> m_frameStreamStates;
     bool m_writeConfirmed {false};
     QString m_lastHardwareWriteStatus;
     std::shared_ptr<DaemonClient> m_client;

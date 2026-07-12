@@ -97,6 +97,17 @@ target_link_libraries(lumacore_daemon_protocol_test
         Qt6::Core
 )
 
+lumacore_add_test_executable(lumacore_daemon_frame_coalescing_test daemon_frame_coalescing
+    DaemonFrameCoalescingTest.cpp
+)
+target_link_libraries(lumacore_daemon_frame_coalescing_test
+    PRIVATE
+        lumacore_core
+        lumacore_ipc
+        lumacore_daemon_backend
+        Qt6::Core
+)
+
 lumacore_add_test_executable(lumacore_async_discovery_test async_discovery
     AsyncDiscoveryTest.cpp
 )
