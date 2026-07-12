@@ -22,6 +22,13 @@ ScheduleService::ScheduleService(DeviceManager* deviceManager, QObject* parent)
 {
     m_timer.setSingleShot(true);
     connect(&m_timer, &QTimer::timeout, this, &ScheduleService::evaluateNow);
+    if (m_deviceManager != nullptr) {
+        connect(m_deviceManager, &DeviceManager::discoveryStateChanged, this, [this] {
+            if (m_deviceManager != nullptr && m_deviceManager->discoveryComplete()) {
+                QTimer::singleShot(0, this, &ScheduleService::evaluateNow);
+            }
+        });
+    }
 
     loadPersistedConfig();
     QTimer::singleShot(0, this, &ScheduleService::evaluateNow);
@@ -55,6 +62,10 @@ void ScheduleService::evaluateNow()
 
     if (!m_config.enabled || m_config.profileName.isEmpty()) {
         m_timer.stop();
+        return;
+    }
+    if (!m_deviceManager->discoveryComplete()) {
+        scheduleNextCheck();
         return;
     }
 

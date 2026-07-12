@@ -3,6 +3,7 @@
 #pragma once
 
 #include "core/ActivityLog.h"
+#include "core/BackendDiscoveryRunner.h"
 #include "core/BackendRegistry.h"
 #include "core/EffectsEngine.h"
 #include "core/ProfileStore.h"
@@ -31,6 +32,9 @@ public:
     void registerBackend(std::unique_ptr<RgbBackend> backend);
     [[nodiscard]] bool activateBackend(const QString& id);
     void initializeBackends(const QString& backendId = {});
+    [[nodiscard]] bool startBackendDiscovery(const QString& backendId = {});
+    [[nodiscard]] bool discoveryComplete() const;
+    [[nodiscard]] bool discoveryInProgress() const;
 
     [[nodiscard]] bool dryRunEnabled() const;
     void setDryRunEnabled(bool enabled);
@@ -84,8 +88,18 @@ signals:
     void zoneFrameUpdated(int deviceIndex, int zoneIndex);
     void logMessage(QString message);
     void dryRunEnabledChanged();
+    void discoveryStateChanged();
 
 private:
+    [[nodiscard]] RgbBackend* prepareBackendDiscovery(
+        const QString& backendId,
+        BackendDescriptor* descriptor
+    );
+    void finishBackendDiscovery(
+        const BackendDescriptor& descriptor,
+        BackendDiscoveryResult result
+    );
+    void setDiscoveryState(bool complete, bool inProgress);
     [[nodiscard]] RgbDevice* deviceForZone(int deviceIndex, int zoneIndex);
     void registerDevice(std::unique_ptr<RgbDevice> device);
     void applySavedRgbControllerOverride(RgbDevice& device);
@@ -101,6 +115,9 @@ private:
     ProfileStore m_profileStore;
     QSet<QString> m_confirmedWriteDeviceIds;
     bool m_dryRunEnabled {false};
+    bool m_discoveryComplete {true};
+    bool m_discoveryInProgress {false};
+    std::unique_ptr<BackendDiscoveryRunner> m_discoveryRunner;
 };
 
 } // namespace lumacore

@@ -97,6 +97,16 @@ target_link_libraries(lumacore_daemon_protocol_test
         Qt6::Core
 )
 
+lumacore_add_test_executable(lumacore_async_discovery_test async_discovery
+    AsyncDiscoveryTest.cpp
+)
+target_link_libraries(lumacore_async_discovery_test
+    PRIVATE
+        lumacore_core
+        lumacore_ipc
+        Qt6::Core
+)
+
 lumacore_add_test_executable(lumacore_daemon_server_failure_path_test daemon_server_failure_path
     DaemonServerFailurePathTest.cpp
 )

@@ -223,6 +223,14 @@ SetupStatus setupStatusFor(const AppController& controller)
                 QStringLiteral("Wait for the refresh to finish before changing effects."),
             };
         }
+        if (daemonState == QStringLiteral("Discovering devices")) {
+            return {
+                QStringLiteral("info"),
+                QStringLiteral("Discovering devices"),
+                QStringLiteral("The daemon is scanning hardware and building the device inventory."),
+                QStringLiteral("Wait for discovery to finish before changing effects."),
+            };
+        }
         if (daemonState == QStringLiteral("Connecting") || daemonState == QStringLiteral("Reconnecting")) {
             return {
                 QStringLiteral("warning"),
@@ -350,6 +358,25 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
     , m_daemonClient(std::move(daemonClient))
 {
     setStatusMessage(QStringLiteral("Connecting to LumaCore daemon."));
+    m_daemonDiscoveryPollTimer.setSingleShot(true);
+    m_daemonDiscoveryPollTimer.setInterval(250);
+    connect(&m_daemonDiscoveryPollTimer, &QTimer::timeout, this, [this] {
+        if (daemonConnected() && !daemonDiscoveryComplete() && !m_daemonRefreshInProgress) {
+            refreshDaemonDevices(false);
+        }
+    });
+    connect(this, &AppController::profileApplyInProgressChanged, this, [this] {
+        if (!m_daemonDevicesLoaded
+            || m_profileApplyInProgress
+            || m_pendingScheduledProfile.isEmpty()) {
+            return;
+        }
+
+        const QString pendingProfile = m_pendingScheduledProfile;
+        m_pendingScheduledProfile.clear();
+        const bool applied = applyScheduledProfile(pendingProfile);
+        Q_UNUSED(applied)
+    });
 
     // Connected first so the cache is invalidated before any later-connected
     // consumer (QML bindings, diagnostics) re-reads the setup status.
@@ -398,11 +425,11 @@ AppController::AppController(DeviceManager* deviceManager, std::shared_ptr<Daemo
             emit daemonInfoChanged();
             emit setupStatusChanged();
             if (m_daemonClient->isConnected()) {
-                syncDaemonDryRun();
                 if (m_daemonRecoveryEnabled && !m_daemonDevicesLoaded && !m_daemonRefreshInProgress) {
                     QTimer::singleShot(0, this, [this] { refreshDaemonDevices(false); });
                 }
             } else {
+                m_daemonDiscoveryPollTimer.stop();
                 m_daemonDevicesLoaded = false;
                 if (m_deviceManager != nullptr) {
                     m_deviceManager->stopAllFrameStreaming();
@@ -596,6 +623,10 @@ QString AppController::daemonState() const
     if (!m_daemonClient->protocolCompatible()) {
         return QStringLiteral("Incompatible daemon");
     }
+    if (m_daemonClient->daemonDiscoveryKnown()
+        && !m_daemonClient->daemonDiscoveryComplete()) {
+        return QStringLiteral("Discovering devices");
+    }
     return QStringLiteral("Connected");
 }
 
@@ -617,6 +648,7 @@ QString AppController::daemonLastError() const
 bool AppController::daemonRecoveryBusy() const
 {
     return m_daemonRefreshInProgress
+        || (daemonConnected() && daemonDiscoveryKnown() && !daemonDiscoveryComplete())
         || (m_daemonClient != nullptr
             && (m_daemonClient->isConnecting() || m_daemonClient->isReconnectScheduled()));
 }
@@ -629,6 +661,16 @@ bool AppController::daemonDryRunKnown() const
 bool AppController::daemonDryRunEnabled() const
 {
     return m_daemonClient != nullptr && m_daemonClient->daemonDryRunEnabled();
+}
+
+bool AppController::daemonDiscoveryKnown() const
+{
+    return m_daemonClient != nullptr && m_daemonClient->daemonDiscoveryKnown();
+}
+
+bool AppController::daemonDiscoveryComplete() const
+{
+    return m_daemonClient == nullptr || m_daemonClient->daemonDiscoveryComplete();
 }
 
 bool AppController::daemonScheduleSupported() const
@@ -2442,6 +2484,8 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("dryRunEnabled"), dryRunEnabled()},
                 {QStringLiteral("daemonDryRunKnown"), daemonDryRunKnown()},
                 {QStringLiteral("daemonDryRunEnabled"), daemonDryRunEnabled()},
+                {QStringLiteral("daemonDiscoveryKnown"), daemonDiscoveryKnown()},
+                {QStringLiteral("daemonDiscoveryComplete"), daemonDiscoveryComplete()},
                 {QStringLiteral("dryRunSynchronized"), !daemonDryRunMismatch()},
                 {QStringLiteral("daemonState"), daemonState()},
                 {QStringLiteral("daemonConnected"), daemonConnected()},
@@ -2534,6 +2578,8 @@ QVariantMap AppController::diagnosticsReport() const
                 {QStringLiteral("version"), daemonVersion()},
                 {QStringLiteral("lastError"), sanitize(daemonLastError())},
                 {QStringLiteral("pendingOperations"), pendingDaemonOperations()},
+                {QStringLiteral("discoveryKnown"), daemonDiscoveryKnown()},
+                {QStringLiteral("discoveryComplete"), daemonDiscoveryComplete()},
             },
         },
         {
@@ -2899,7 +2945,9 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
     emit daemonInfoChanged();
     emit setupStatusChanged();
     setStatusMessage(
-        recoveredConnection
+        daemonDiscoveryKnown() && !daemonDiscoveryComplete()
+            ? QStringLiteral("Daemon is discovering devices.")
+            : recoveredConnection
             ? QStringLiteral("Reconnected to daemon. Refreshing devices.")
             : QStringLiteral("Rescanning daemon devices.")
     );
@@ -2922,10 +2970,23 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
                             : QStringLiteral("Device rescan failed."))
                         : response.error
                 );
+                self->scheduleDaemonDiscoveryPoll();
                 return;
             }
 
             self->m_deviceManager->replaceDevices(daemonBackend->devicesFromPayload(response.result));
+            if (!self->daemonDiscoveryComplete()) {
+                self->m_daemonDevicesLoaded = false;
+                self->setStatusMessage(QStringLiteral("Daemon is discovering devices."));
+                if (!self->daemonDryRunKnown() || self->daemonDryRunMismatch()) {
+                    self->syncDaemonDryRun();
+                }
+                self->refreshBackendInfo();
+                self->scheduleDaemonDiscoveryPoll();
+                return;
+            }
+
+            self->m_daemonDiscoveryPollTimer.stop();
             self->m_daemonDevicesLoaded = true;
             self->setStatusMessage(
                 recoveredConnection
@@ -2934,7 +2995,9 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
                     : QStringLiteral("Rescan loaded %1 device(s).")
                           .arg(self->m_deviceManager->deviceCount())
             );
-            self->syncDaemonDryRun();
+            if (!self->daemonDryRunKnown() || self->daemonDryRunMismatch()) {
+                self->syncDaemonDryRun();
+            }
             self->refreshBackendInfo();
             emit self->daemonDevicesRefreshed();
             if (!self->m_pendingLaunchProfile.isEmpty()) {
@@ -2943,7 +3006,8 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
                 const bool launchApplied = self->applyProfileOnLaunch(pendingLaunch);
                 Q_UNUSED(launchApplied)
             }
-            if (!self->m_pendingScheduledProfile.isEmpty()) {
+            if (!self->m_profileApplyInProgress
+                && !self->m_pendingScheduledProfile.isEmpty()) {
                 const QString pendingProfile = self->m_pendingScheduledProfile;
                 self->m_pendingScheduledProfile.clear();
                 const bool applied = self->applyScheduledProfile(pendingProfile);
@@ -2954,6 +3018,16 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
     );
     Q_UNUSED(requestId)
     return true;
+}
+
+void AppController::scheduleDaemonDiscoveryPoll()
+{
+    if (daemonConnected()
+        && daemonDiscoveryKnown()
+        && !daemonDiscoveryComplete()
+        && !m_daemonDiscoveryPollTimer.isActive()) {
+        m_daemonDiscoveryPollTimer.start();
+    }
 }
 
 void AppController::syncDaemonDryRun()

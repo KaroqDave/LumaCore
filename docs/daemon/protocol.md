@@ -27,8 +27,8 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 
 ## Methods
 
-- `hello` / `status` returns daemon version, protocol version, socket path, active backend descriptor, device count, dry-run state, and the additive `scheduleSupported` flag that advertises the daemon-side schedule methods. The daemon answers this handshake regardless of the request's protocol version so the client can detect a version mismatch and surface it instead of failing opaquely; all other methods still require a matching `version`.
-- `listDevices` returns the status payload plus device and zone data.
+- `hello` / `status` returns daemon version, protocol version, socket path, active backend descriptor, device count, dry-run state, the additive `discoveryComplete` readiness flag, and the additive `scheduleSupported` flag that advertises the daemon-side schedule methods. The daemon answers this handshake regardless of the request's protocol version so the client can detect a version mismatch and surface it instead of failing opaquely; all other methods still require a matching `version`.
+- `listDevices` returns the status payload plus device and zone data. While discovery is in progress it succeeds with `discoveryComplete: false`, `deviceCount: 0`, and an empty `devices` array.
 - `previewEffect` returns backend-specific dry-run preview text for one zone/effect.
 - `applyEffect` applies a static color or effect through `DeviceManager`, `WriteGate`, and the active backend.
 - `updateZone` updates zone metadata such as name and LED count without hardware-write confirmation.
@@ -44,6 +44,8 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 The GUI mirrors its schedule to the daemon when support is advertised: it pushes the scheduled profile via `putProfile` followed by `setSchedule`, and re-pushes when the schedule settings or the scheduled profile's content change. Scheduled applies run inside the daemon through the same permission, confirmation, and dry-run gates as interactive writes; unconfirmed hardware zones are skipped with a logged reason.
 
 Hardware writes are not exposed as raw packet methods. Backends must build approved packets internally and pass the existing permission/write gates.
+
+Device-specific preview, metadata, confirmation, and write methods are rejected with `Device discovery is still in progress.` until `discoveryComplete` becomes true. Status, inventory, dry-run synchronization, activity-log, profile-storage, and schedule-configuration methods remain available during discovery. Clients that connect to an older daemon where `discoveryComplete` is absent treat discovery as complete.
 
 ## Device Snapshots
 

@@ -40,6 +40,8 @@ public:
     [[nodiscard]] int daemonProtocolVersion() const;
     [[nodiscard]] bool daemonDryRunKnown() const;
     [[nodiscard]] bool daemonDryRunEnabled() const;
+    [[nodiscard]] bool daemonDiscoveryKnown() const;
+    [[nodiscard]] bool daemonDiscoveryComplete() const;
     [[nodiscard]] bool daemonScheduleSupported() const;
     [[nodiscard]] bool protocolCompatible() const;
     [[nodiscard]] QString lastError() const;
@@ -85,6 +87,8 @@ private:
     void setDaemonProtocolVersion(int version);
     void setDaemonDryRunEnabled(bool enabled);
     void clearDaemonDryRunState();
+    void setDaemonDiscoveryComplete(bool complete);
+    void clearDaemonDiscoveryState();
     void setDaemonScheduleSupported(bool supported);
     void updateDaemonInfo(const DaemonCallResult& result);
     [[nodiscard]] bool ensureConnected(int timeoutMs);
@@ -107,6 +111,8 @@ private:
     int m_daemonProtocolVersion {0};
     bool m_daemonDryRunKnown {false};
     bool m_daemonDryRunEnabled {false};
+    bool m_daemonDiscoveryKnown {false};
+    bool m_daemonDiscoveryComplete {true};
     bool m_daemonScheduleSupported {false};
     QString m_lastError;
     QTimer m_reconnectTimer;

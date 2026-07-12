@@ -66,6 +66,31 @@ bool dryRunMatchesClientExpectation(
     return false;
 }
 
+bool requiresCompletedDiscovery(lumacore::DaemonMethod method)
+{
+    switch (method) {
+    case lumacore::DaemonMethod::PreviewEffect:
+    case lumacore::DaemonMethod::ApplyEffect:
+    case lumacore::DaemonMethod::UpdateZone:
+    case lumacore::DaemonMethod::ConfirmWrites:
+    case lumacore::DaemonMethod::RevokeWrites:
+    case lumacore::DaemonMethod::AllOff:
+    case lumacore::DaemonMethod::PaintZoneFrame:
+        return true;
+    case lumacore::DaemonMethod::Unknown:
+    case lumacore::DaemonMethod::Hello:
+    case lumacore::DaemonMethod::Status:
+    case lumacore::DaemonMethod::ListDevices:
+    case lumacore::DaemonMethod::SetDryRun:
+    case lumacore::DaemonMethod::ActivityLogSnapshot:
+    case lumacore::DaemonMethod::GetSchedule:
+    case lumacore::DaemonMethod::SetSchedule:
+    case lumacore::DaemonMethod::PutProfile:
+        return false;
+    }
+    return false;
+}
+
 } // namespace
 
 namespace lumacore {
@@ -304,6 +329,11 @@ QJsonObject DaemonServer::handleRequest(const QJsonObject& request)
     if (request.value(QStringLiteral("version")).toInt() != kDaemonProtocolVersion) {
         return makeDaemonError(requestId, QStringLiteral("Unsupported daemon protocol version."));
     }
+    if (m_deviceManager != nullptr
+        && !m_deviceManager->discoveryComplete()
+        && requiresCompletedDiscovery(method)) {
+        return makeDaemonError(requestId, QStringLiteral("Device discovery is still in progress."));
+    }
     switch (method) {
     case DaemonMethod::ListDevices:
         return makeDaemonResult(requestId, listDevicesPayload());
@@ -350,6 +380,7 @@ QJsonObject DaemonServer::statusPayload() const
         {QStringLiteral("backend"), backendDescriptorToJson(descriptor)},
         {QStringLiteral("deviceCount"), m_deviceManager == nullptr ? 0 : m_deviceManager->deviceCount()},
         {QStringLiteral("dryRunEnabled"), m_deviceManager != nullptr && m_deviceManager->dryRunEnabled()},
+        {QStringLiteral("discoveryComplete"), m_deviceManager == nullptr || m_deviceManager->discoveryComplete()},
         {QStringLiteral("scheduleSupported"), m_scheduleService != nullptr},
     };
 }

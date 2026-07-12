@@ -64,6 +64,8 @@ struct ClientExchange {
     bool listening {false};
     bool connectedAfterCall {false};
     bool protocolCompatibleAfterCall {true};
+    bool discoveryKnownAfterCall {false};
+    bool discoveryCompleteAfterCall {true};
     int daemonProtocolVersionAfterCall {0};
     QByteArray request;
     lumacore::DaemonCallResult result;
@@ -119,6 +121,8 @@ ClientExchange runClientExchange(
     exchange.result = client.call(method, params, 3000);
     exchange.connectedAfterCall = client.isConnected();
     exchange.protocolCompatibleAfterCall = client.protocolCompatible();
+    exchange.discoveryKnownAfterCall = client.daemonDiscoveryKnown();
+    exchange.discoveryCompleteAfterCall = client.daemonDiscoveryComplete();
     exchange.daemonProtocolVersionAfterCall = client.daemonProtocolVersion();
     client.disconnectFromDaemon();
     serverThread.join();
@@ -1035,6 +1039,48 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    const ClientExchange legacyDiscoveryExchange = runClientExchange(
+        QStringLiteral("legacy-discovery-readiness"),
+        QStringLiteral("status"),
+        {},
+        [](const QJsonObject& request) {
+            return encodeDaemonMessage(makeDaemonResult(
+                request.value(QStringLiteral("id")).toString().toULongLong(),
+                {
+                    {QStringLiteral("daemonVersion"), QStringLiteral("legacy")},
+                    {QStringLiteral("protocolVersion"), kDaemonProtocolVersion},
+                }
+            ));
+        }
+    );
+    const ClientExchange incompleteDiscoveryExchange = runClientExchange(
+        QStringLiteral("incomplete-discovery-readiness"),
+        QStringLiteral("status"),
+        {},
+        [](const QJsonObject& request) {
+            return encodeDaemonMessage(makeDaemonResult(
+                request.value(QStringLiteral("id")).toString().toULongLong(),
+                {
+                    {QStringLiteral("daemonVersion"), QStringLiteral("current")},
+                    {QStringLiteral("protocolVersion"), kDaemonProtocolVersion},
+                    {QStringLiteral("discoveryComplete"), false},
+                }
+            ));
+        }
+    );
+    if (!require(
+            legacyDiscoveryExchange.discoveryKnownAfterCall
+                && legacyDiscoveryExchange.discoveryCompleteAfterCall,
+            "clients should treat an omitted discovery field from an old daemon as complete"
+        )
+        || !require(
+            incompleteDiscoveryExchange.discoveryKnownAfterCall
+                && !incompleteDiscoveryExchange.discoveryCompleteAfterCall,
+            "clients should cache an explicit incomplete discovery state"
+        )) {
+        return 1;
+    }
+
     const ClientExchange mismatchedProtocolExchange = runClientExchange(
         QStringLiteral("mismatched-protocol"),
         QStringLiteral("status"),
@@ -1390,8 +1436,12 @@ int main(int argc, char* argv[])
             )
             || !require(reconnectServerListened, "automatic reconnect fixture server should listen")
             || !require(
-                !reconnectDelays.isEmpty() && reconnectDelays.constFirst() == 250,
-                "automatic reconnect should start with a short bounded delay"
+                !reconnectDelays.isEmpty() && reconnectDelays.constFirst() == 0,
+                "automatic reconnect should make its first attempt immediately"
+            )
+            || !require(
+                reconnectDelays.size() >= 2 && reconnectDelays.at(1) == 250,
+                "a failed immediate reconnect should fall back to the initial bounded delay"
             )
             || !require(
                 std::all_of(

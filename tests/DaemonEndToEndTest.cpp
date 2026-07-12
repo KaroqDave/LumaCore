@@ -55,6 +55,29 @@ bool waitForConnection(const std::shared_ptr<lumacore::DaemonClient>& client, in
     return false;
 }
 
+bool waitForCompleteInventory(
+    const std::shared_ptr<lumacore::DaemonClient>& client,
+    lumacore::DaemonCallResult* result,
+    int timeoutMs = 5000
+)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs) {
+        const lumacore::DaemonCallResult response =
+            client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices), {}, 3000);
+        if (response.ok
+            && response.result.value(QStringLiteral("discoveryComplete")).toBool(true)) {
+            if (result != nullptr) {
+                *result = response;
+            }
+            return true;
+        }
+        QThread::msleep(25);
+    }
+    return false;
+}
+
 void startMockDaemon(
     QProcess& process,
     const QString& daemonPath,
@@ -187,8 +210,8 @@ bool runMockScenarioInventorySmoke(
 
     const lumacore::DaemonCallResult status =
         client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::Status), {}, 3000);
-    const lumacore::DaemonCallResult devices =
-        client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices), {}, 3000);
+    lumacore::DaemonCallResult devices;
+    const bool inventoryReady = waitForCompleteInventory(client, &devices);
     const QJsonArray deviceArray = devices.result.value(QStringLiteral("devices")).toArray();
     if (!require(status.ok, "scenario status should succeed")
         || !require(
@@ -196,6 +219,7 @@ bool runMockScenarioInventorySmoke(
                 == QStringLiteral("mock"),
             "scenario status should report the mock backend"
         )
+        || !require(inventoryReady, "scenario discovery should complete")
         || !require(devices.ok, "scenario listDevices should succeed")
         || !require(deviceArray.size() == 1, "scenario listDevices should report one mock device")) {
         daemon.kill();
@@ -338,9 +362,11 @@ int main(int argc, char* argv[])
     }
 
     // Inventory: the mock ASUS board and its three zones should round-trip.
-    const DaemonCallResult devices = client->call(daemonMethodName(DaemonMethod::ListDevices), {}, 3000);
+    DaemonCallResult devices;
+    const bool inventoryReady = waitForCompleteInventory(client, &devices);
     const QJsonArray deviceArray = devices.result.value(QStringLiteral("devices")).toArray();
-    if (!require(devices.ok, "listDevices should succeed")
+    if (!require(inventoryReady, "device discovery should complete")
+        || !require(devices.ok, "listDevices should succeed")
         || !require(deviceArray.size() == 1, "listDevices should report the single mock device")) {
         daemon.kill();
         daemon.waitForFinished(2000);

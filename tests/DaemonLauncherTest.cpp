@@ -59,6 +59,35 @@ bool waitUntil(const std::function<bool()>& condition, int timeoutMs = 5000)
     return condition();
 }
 
+bool waitForCompleteInventory(
+    const std::shared_ptr<lumacore::DaemonClient>& client,
+    lumacore::DaemonCallResult* result,
+    int timeoutMs = 5000,
+    bool* sawIncomplete = nullptr
+)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs) {
+        const lumacore::DaemonCallResult response = client->call(QStringLiteral("listDevices"));
+        if (sawIncomplete != nullptr
+            && response.ok
+            && !response.result.value(QStringLiteral("discoveryComplete")).toBool(true)) {
+            *sawIncomplete = true;
+        }
+        if (response.ok
+            && response.result.value(QStringLiteral("discoveryComplete")).toBool(true)) {
+            if (result != nullptr) {
+                *result = response;
+            }
+            return true;
+        }
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(25);
+    }
+    return false;
+}
+
 void startDaemon(QProcess& process, const QString& daemonPath, const QString& endpoint)
 {
     process.setProgram(daemonPath);
@@ -119,12 +148,15 @@ int main(int argc, char* argv[])
     {
         const QString endpoint = uniqueEndpoint(QStringLiteral("reuse"));
         QProcess externalDaemon;
+        QElapsedTimer externalStartupTimer;
+        externalStartupTimer.start();
         startDaemon(externalDaemon, daemonPath, endpoint);
         auto client = std::make_shared<lumacore::DaemonClient>(endpoint);
         if (!require(externalDaemon.state() != QProcess::NotRunning, "external daemon should start")
             || !require(waitForConnection(client), "external daemon should accept a connection")) {
             return 1;
         }
+        const qint64 launchToConnectMs = externalStartupTimer.elapsed();
 
         lumacore::DaemonLauncher launcher(client);
         if (!require(
@@ -135,11 +167,26 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        const lumacore::DaemonCallResult devices = client->call(QStringLiteral("listDevices"));
-        if (!require(devices.ok, "reused daemon should answer listDevices")
+        QElapsedTimer inventoryTimer;
+        inventoryTimer.start();
+        lumacore::DaemonCallResult devices;
+        bool sawIncomplete = false;
+        const bool inventoryReady = waitForCompleteInventory(client, &devices, 5000, &sawIncomplete);
+        const qint64 connectionToInventoryMs = inventoryTimer.elapsed();
+        if (!require(inventoryReady, "reused daemon should finish device discovery")
+            || !require(devices.ok, "reused daemon should answer listDevices")
             || !require(!devices.result.value(QStringLiteral("devices")).toArray().isEmpty(), "mock daemon should expose a device")) {
             return 1;
         }
+        std::fprintf(
+            stdout,
+            "EXTERNAL_STARTUP_TIMING launch_to_connect_ms=%lld connection_to_inventory_ms=%lld "
+            "observed_incomplete=%d\n",
+            static_cast<long long>(launchToConnectMs),
+            static_cast<long long>(connectionToInventoryMs),
+            sawIncomplete ? 1 : 0
+        );
+        std::fflush(stdout);
         client->disconnectFromDaemon();
         if (!require(externalDaemon.waitForFinished(3000), "external idle daemon should exit after disconnect")) {
             externalDaemon.kill();
@@ -181,6 +228,14 @@ int main(int argc, char* argv[])
         const QString endpoint = uniqueEndpoint(QStringLiteral("async-owned"));
         auto client = std::make_shared<lumacore::DaemonClient>(endpoint);
         lumacore::DaemonLauncher launcher(client);
+        QList<int> reconnectDelays;
+        QObject::connect(
+            client.get(),
+            &lumacore::DaemonClient::reconnectScheduled,
+            [&reconnectDelays](int, int delayMs) { reconnectDelays.append(delayMs); }
+        );
+        QElapsedTimer startupTimer;
+        startupTimer.start();
         launcher.ensureAvailableAsync(true, daemonPath);
         if (!require(launcher.startedDaemon(), "async launcher should start the bundled daemon")) {
             return 1;
@@ -192,10 +247,41 @@ int main(int argc, char* argv[])
             )) {
             return 1;
         }
-        const lumacore::DaemonCallResult asyncDevices = client->call(QStringLiteral("listDevices"));
-        if (!require(asyncDevices.ok, "async-launched daemon should answer listDevices")) {
+        const qint64 launchToConnectMs = startupTimer.elapsed();
+        QElapsedTimer inventoryTimer;
+        inventoryTimer.start();
+        lumacore::DaemonCallResult asyncDevices;
+        bool sawIncomplete = false;
+        const bool inventoryReady = waitForCompleteInventory(
+            client,
+            &asyncDevices,
+            5000,
+            &sawIncomplete
+        );
+        const qint64 connectionToInventoryMs = inventoryTimer.elapsed();
+        if (!require(inventoryReady, "async-launched daemon should finish device discovery")
+            || !require(asyncDevices.ok, "async-launched daemon should answer listDevices")
+            || !require(
+                !asyncDevices.result.value(QStringLiteral("devices")).toArray().isEmpty(),
+                "async-launched daemon should expose its final device inventory"
+            )
+            || !require(!reconnectDelays.isEmpty(), "async launch should record a reconnect attempt")
+            || !require(
+                reconnectDelays.constFirst() == 0,
+                "async launch should attempt its first daemon connection immediately"
+            )) {
             return 1;
         }
+        std::fprintf(
+            stdout,
+            "STARTUP_TIMING launch_to_connect_ms=%lld connection_to_inventory_ms=%lld "
+            "first_reconnect_delay_ms=%d observed_incomplete=%d\n",
+            static_cast<long long>(launchToConnectMs),
+            static_cast<long long>(connectionToInventoryMs),
+            reconnectDelays.constFirst(),
+            sawIncomplete ? 1 : 0
+        );
+        std::fflush(stdout);
         client->disconnectFromDaemon();
         if (!require(launcher.waitForStartedDaemonExit(3000), "async-launched daemon should exit when its client disconnects")) {
             return 1;
@@ -214,9 +300,11 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        const lumacore::DaemonCallResult devices = client->call(QStringLiteral("listDevices"));
+        lumacore::DaemonCallResult devices;
+        const bool inventoryReady = waitForCompleteInventory(client, &devices);
         const QJsonArray deviceArray = devices.result.value(QStringLiteral("devices")).toArray();
-        if (!require(devices.ok, "launcher-owned daemon should answer listDevices")
+        if (!require(inventoryReady, "launcher-owned daemon should finish device discovery")
+            || !require(devices.ok, "launcher-owned daemon should answer listDevices")
             || !require(!deviceArray.isEmpty(), "launcher-owned auto daemon should expose devices")) {
             return 1;
         }

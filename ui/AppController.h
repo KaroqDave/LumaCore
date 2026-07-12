@@ -8,6 +8,7 @@
 #include <QColor>
 #include <QObject>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 #include <QVariantList>
 
@@ -41,6 +42,8 @@ class AppController final : public QObject
     Q_PROPERTY(bool daemonRecoveryBusy READ daemonRecoveryBusy NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonDryRunKnown READ daemonDryRunKnown NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonDryRunEnabled READ daemonDryRunEnabled NOTIFY daemonInfoChanged)
+    Q_PROPERTY(bool daemonDiscoveryKnown READ daemonDiscoveryKnown NOTIFY daemonInfoChanged)
+    Q_PROPERTY(bool daemonDiscoveryComplete READ daemonDiscoveryComplete NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonScheduleSupported READ daemonScheduleSupported NOTIFY daemonInfoChanged)
     Q_PROPERTY(bool daemonDryRunMismatch READ daemonDryRunMismatch NOTIFY daemonDryRunSyncChanged)
     Q_PROPERTY(bool dryRunEnabled READ dryRunEnabled WRITE setDryRunEnabled NOTIFY dryRunEnabledChanged)
@@ -77,6 +80,8 @@ public:
     [[nodiscard]] bool daemonRecoveryBusy() const;
     [[nodiscard]] bool daemonDryRunKnown() const;
     [[nodiscard]] bool daemonDryRunEnabled() const;
+    [[nodiscard]] bool daemonDiscoveryKnown() const;
+    [[nodiscard]] bool daemonDiscoveryComplete() const;
     [[nodiscard]] bool daemonScheduleSupported() const;
     [[nodiscard]] bool daemonDryRunMismatch() const;
     [[nodiscard]] bool dryRunEnabled() const;
@@ -226,6 +231,7 @@ private:
     [[nodiscard]] static QString normalizeDeviceGroupName(const QString& groupName);
     [[nodiscard]] QStringList storedDeviceGroupIds(const QString& groupName) const;
     bool refreshDaemonDevices(bool recoveredConnection);
+    void scheduleDaemonDiscoveryPoll();
 
     DeviceManager* m_deviceManager {nullptr};
     std::shared_ptr<DaemonClient> m_daemonClient;
@@ -240,6 +246,7 @@ private:
     bool m_profileApplyInProgress {false};
     bool m_daemonDryRunSyncInProgress {false};
     bool m_pendingDaemonDryRunSync {false};
+    QTimer m_daemonDiscoveryPollTimer;
     mutable CachedSetupStatus m_setupStatus;
 };
 

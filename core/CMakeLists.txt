@@ -8,6 +8,8 @@ qt_add_library(lumacore_core STATIC
     ActivityLog.cpp
     ActivityLog.h
     BackendCapabilities.h
+    BackendDiscoveryRunner.cpp
+    BackendDiscoveryRunner.h
     BackendRegistry.cpp
     BackendRegistry.h
     DeviceManager.cpp
