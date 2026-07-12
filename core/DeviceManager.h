@@ -60,6 +60,7 @@ public:
     void stopZoneFrameStreaming(int deviceIndex, int zoneIndex);
     void stopDeviceFrameStreaming(int deviceIndex);
     void stopAllFrameStreaming();
+    [[nodiscard]] bool isZoneFrameStreaming(int deviceIndex, int zoneIndex) const;
     [[nodiscard]] double effectStreamPhase(double speed) const;
     [[nodiscard]] bool saveProfile(const QString& profileName, QString* errorMessage = nullptr);
     [[nodiscard]] bool loadProfile(const QString& profileName, QString* errorMessage = nullptr);

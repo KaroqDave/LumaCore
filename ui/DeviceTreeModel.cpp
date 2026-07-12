@@ -21,6 +21,12 @@ QString effectDisplayName(RgbEffectType type)
         return QStringLiteral("Breathing");
     case RgbEffectType::ColorCycle:
         return QStringLiteral("Cycle");
+    case RgbEffectType::Wave:
+        return QStringLiteral("Wave");
+    case RgbEffectType::Marquee:
+        return QStringLiteral("Marquee");
+    case RgbEffectType::Strobe:
+        return QStringLiteral("Strobe");
     }
 
     return QStringLiteral("Static");
@@ -113,6 +119,7 @@ DeviceTreeModel::DeviceTreeModel(DeviceManager* deviceManager, QObject* parent)
                 ZoneEffectNameRole,
                 ZoneEffectAnimatedRole,
                 ZoneEffectColorHexRole,
+                ZoneStreamingRole,
             });
         }
 
@@ -125,7 +132,7 @@ DeviceTreeModel::DeviceTreeModel(DeviceManager* deviceManager, QObject* parent)
     const auto notifyZoneFrameUpdated = [this](int deviceIndex, int zoneIndex) {
         const QModelIndex changedZone = indexForZone(deviceIndex, zoneIndex);
         if (changedZone.isValid()) {
-            emit dataChanged(changedZone, changedZone, {ZoneColorRole, ZoneColorHexRole});
+            emit dataChanged(changedZone, changedZone, {ZoneColorRole, ZoneColorHexRole, ZoneStreamingRole});
         }
     };
 
@@ -260,6 +267,9 @@ QVariant DeviceTreeModel::data(const QModelIndex& index, int role) const
         return effect.isAnimated();
     case ZoneEffectColorHexRole:
         return effect.color().toHexString();
+    case ZoneStreamingRole:
+        return m_deviceManager != nullptr
+            && m_deviceManager->isZoneFrameStreaming(node->deviceIndex, node->zoneIndex);
     case ZoneCountRole:
         return 0;
     case IsDeviceRole:
@@ -314,6 +324,7 @@ QHash<int, QByteArray> DeviceTreeModel::roleNames() const
         {ZoneEffectNameRole, "zoneEffectName"},
         {ZoneEffectAnimatedRole, "zoneEffectAnimated"},
         {ZoneEffectColorHexRole, "zoneEffectColorHex"},
+        {ZoneStreamingRole, "zoneStreaming"},
         {ZoneCountRole, "zoneCount"},
         {IsDeviceRole, "isDevice"},
         {IsZoneRole, "isZone"},

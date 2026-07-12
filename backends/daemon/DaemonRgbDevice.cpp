@@ -363,7 +363,10 @@ bool DaemonRgbDevice::supportsHostStreamedEffect(int zoneIndex, int effectType) 
 
     if (effectType != static_cast<int>(RgbEffectType::Rainbow)
         && effectType != static_cast<int>(RgbEffectType::Breathing)
-        && effectType != static_cast<int>(RgbEffectType::ColorCycle)) {
+        && effectType != static_cast<int>(RgbEffectType::ColorCycle)
+        && effectType != static_cast<int>(RgbEffectType::Wave)
+        && effectType != static_cast<int>(RgbEffectType::Marquee)
+        && effectType != static_cast<int>(RgbEffectType::Strobe)) {
         return false;
     }
 

@@ -133,5 +133,28 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (!require(
+            device.supportsZoneEffect(1, static_cast<int>(lumacore::RgbEffectType::Wave)),
+            "addressable ASUS zones should support the host-streamed Wave effect"
+        )
+        || !require(
+            device.supportsZoneEffect(1, static_cast<int>(lumacore::RgbEffectType::Marquee)),
+            "addressable ASUS zones should support the host-streamed Marquee effect"
+        )
+        || !require(
+            device.supportsZoneEffect(1, static_cast<int>(lumacore::RgbEffectType::Strobe)),
+            "addressable ASUS zones should support the host-streamed Strobe effect"
+        )
+        || !require(
+            !device.supportsZoneEffect(0, static_cast<int>(lumacore::RgbEffectType::Wave)),
+            "fixed ASUS zones must not offer host-streamed animated effects"
+        )
+        || !require(
+            !device.supportsZoneEffect(0, static_cast<int>(lumacore::RgbEffectType::Strobe)),
+            "fixed ASUS zones must not offer the host-streamed Strobe effect"
+        )) {
+        return 1;
+    }
+
     return 0;
 }

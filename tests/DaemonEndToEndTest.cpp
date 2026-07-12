@@ -444,6 +444,29 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Dry-run Wave effect on the addressable zone: the daemon must accept the
+    // appended host-streamed effect types over the same applyEffect method.
+    const QJsonObject waveEffect = RgbEffect(RgbEffectType::Wave, RgbColor(255, 40, 0), 2.0, 80).toJson();
+    const DaemonCallResult applyWave = client->call(
+        daemonMethodName(DaemonMethod::ApplyEffect),
+        {
+            {QStringLiteral("deviceIndex"), 0},
+            {QStringLiteral("zoneIndex"), 1},
+            {QStringLiteral("effect"), waveEffect},
+            {QStringLiteral("dryRunEnabled"), true},
+        },
+        3000
+    );
+    if (!require(applyWave.ok, "applyEffect Wave call should complete")
+        || !require(
+            applyWave.result.value(QStringLiteral("success")).toBool(false),
+            "dry-run Wave applyEffect should be accepted"
+        )) {
+        daemon.kill();
+        daemon.waitForFinished(2000);
+        return 1;
+    }
+
     // The daemon dry-run synchronization guard should refuse a write whose
     // stated expectation drifts from the daemon's own dry-run state.
     const DaemonCallResult mismatchedApply = client->call(

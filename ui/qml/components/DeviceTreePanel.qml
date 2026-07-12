@@ -309,6 +309,13 @@ Item {
                                                  : panel.selectedDeviceIndex === sourceDeviceIndex && panel.selectedZoneIndex < 0
                 readonly property bool zoneEffectAnimated: model.zoneEffectAnimated === true
                 readonly property int zoneEffectType: typeof model.zoneEffectType === "number" ? model.zoneEffectType : 0
+                // Wave, Marquee, and Strobe render a base-color pattern. While
+                // frames stream their swatches follow the live frame color like
+                // every other animated effect; when nothing streams (idle or
+                // dry-run) they show a static pattern built from the configured
+                // effect color, which a single stale frame color cannot convey.
+                readonly property bool zonePatternedEffect: zoneEffectType >= 4 && zoneEffectType <= 6
+                readonly property bool zoneStreaming: model.zoneStreaming === true
                 readonly property string zoneColorHex: model.zoneColorHex || ""
                 readonly property string zoneEffectColorHex: model.zoneEffectColorHex || zoneColorHex
                 readonly property string zoneEffectName: model.zoneEffectName || ""
@@ -498,10 +505,66 @@ Item {
 
                         Rectangle {
                             anchors.fill: parent
+                            visible: treeDelegate.zoneEffectAnimated && treeDelegate.zoneEffectType === 4
+                            radius: 7
+                            border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : Theme.border
+                            border.width: treeDelegate.selectedNode ? 2 : 1
+
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: "#000000" }
+                                GradientStop { position: 0.5; color: treeDelegate.zoneEffectColorHex }
+                                GradientStop { position: 1.0; color: "#000000" }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: treeDelegate.zoneEffectAnimated && treeDelegate.zoneEffectType === 5
+                            radius: 7
+                            border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : Theme.border
+                            border.width: treeDelegate.selectedNode ? 2 : 1
+
+                            // Hard gradient stops draw the marquee's lit/dark stripes.
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: treeDelegate.zoneEffectColorHex }
+                                GradientStop { position: 0.249; color: treeDelegate.zoneEffectColorHex }
+                                GradientStop { position: 0.25; color: "#000000" }
+                                GradientStop { position: 0.499; color: "#000000" }
+                                GradientStop { position: 0.5; color: treeDelegate.zoneEffectColorHex }
+                                GradientStop { position: 0.749; color: treeDelegate.zoneEffectColorHex }
+                                GradientStop { position: 0.75; color: "#000000" }
+                                GradientStop { position: 1.0; color: "#000000" }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: treeDelegate.zoneEffectAnimated && treeDelegate.zoneEffectType === 6
+                            radius: 7
+                            border.color: treeDelegate.selectedNode ? Theme.accentSoftBorder : Theme.border
+                            border.width: treeDelegate.selectedNode ? 2 : 1
+
+                            // Half lit, half dark reads as the strobe's on/off flash.
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: treeDelegate.zoneEffectColorHex }
+                                GradientStop { position: 0.499; color: treeDelegate.zoneEffectColorHex }
+                                GradientStop { position: 0.5; color: "#000000" }
+                                GradientStop { position: 1.0; color: "#000000" }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
                             // Overlays the rainbow gradient too: while frames
                             // stream, the live color cycles here; the gradient
-                            // stays as the idle backdrop underneath.
+                            // stays as the idle backdrop underneath. Patterned
+                            // effects only take the live overlay while frames
+                            // actually stream, keeping their backdrop otherwise.
                             visible: treeDelegate.zoneEffectAnimated
+                                     && (!treeDelegate.zonePatternedEffect || treeDelegate.zoneStreaming)
                             radius: 7
                             color: treeDelegate.zoneSwatchColor
                             opacity: 0.82
@@ -624,7 +687,9 @@ Item {
                                 radius: 3
                                 color: treeDelegate.zoneEffectType === 1 || treeDelegate.zoneEffectType === 3
                                        ? Theme.accent
-                                       : treeDelegate.zoneSwatchColor
+                                       : treeDelegate.zonePatternedEffect && !treeDelegate.zoneStreaming
+                                         ? treeDelegate.zoneEffectColorHex
+                                         : treeDelegate.zoneSwatchColor
                             }
 
                             Label {

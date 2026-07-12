@@ -50,7 +50,8 @@ public:
         DeviceBadgeLevelRole,
         DiscoverySupportStageRole,
         DiscoverySupportStatusRole,
-        DiscoverySupportFamilyRole
+        DiscoverySupportFamilyRole,
+        ZoneStreamingRole
     };
 
     explicit DeviceTreeModel(DeviceManager* deviceManager, QObject* parent = nullptr);

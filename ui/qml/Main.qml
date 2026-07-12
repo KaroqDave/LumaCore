@@ -575,10 +575,11 @@ ApplicationWindow {
                 root.selectedDeviceId = root.controller.deviceId(deviceIndex)
                 root.selectedZoneName = root.controller.zoneName(deviceIndex, zoneIndex)
                 root.selectedZoneFallbackIndex = zoneIndex
-                // Static and Breathing use a base color. Rainbow and Color Cycle
-                // are generated effects, so following their frame color would fight the picker.
+                // Static, Breathing, Wave, Marquee, and Strobe use a base color.
+                // Rainbow and Color Cycle are generated effects, so following
+                // their frame color would fight the picker.
                 const effectType = root.controller.zoneEffectType(deviceIndex, zoneIndex)
-                if (effectType === 0 || effectType === 2) {
+                if (effectType !== 1 && effectType !== 3) {
                     root.selectedColor = root.controller.zoneEffectColor(deviceIndex, zoneIndex)
                 }
             }

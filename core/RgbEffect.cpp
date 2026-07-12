@@ -24,6 +24,12 @@ QString rgbEffectTypeToString(RgbEffectType type)
         return QStringLiteral("Breathing");
     case RgbEffectType::ColorCycle:
         return QStringLiteral("ColorCycle");
+    case RgbEffectType::Wave:
+        return QStringLiteral("Wave");
+    case RgbEffectType::Marquee:
+        return QStringLiteral("Marquee");
+    case RgbEffectType::Strobe:
+        return QStringLiteral("Strobe");
     }
 
     return QStringLiteral("Static");
@@ -43,6 +49,18 @@ RgbEffectType rgbEffectTypeFromString(const QString& value)
         return RgbEffectType::ColorCycle;
     }
 
+    if (value.compare(QStringLiteral("Wave"), Qt::CaseInsensitive) == 0) {
+        return RgbEffectType::Wave;
+    }
+
+    if (value.compare(QStringLiteral("Marquee"), Qt::CaseInsensitive) == 0) {
+        return RgbEffectType::Marquee;
+    }
+
+    if (value.compare(QStringLiteral("Strobe"), Qt::CaseInsensitive) == 0) {
+        return RgbEffectType::Strobe;
+    }
+
     return RgbEffectType::Static;
 }
 
@@ -53,6 +71,9 @@ QVector<RgbEffectType> allRgbEffectTypes()
         RgbEffectType::Rainbow,
         RgbEffectType::Breathing,
         RgbEffectType::ColorCycle,
+        RgbEffectType::Wave,
+        RgbEffectType::Marquee,
+        RgbEffectType::Strobe,
     };
 }
 

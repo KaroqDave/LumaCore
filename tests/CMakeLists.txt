@@ -41,6 +41,11 @@ lumacore_add_test_executable(lumacore_effects_engine_test effects_engine
 )
 target_link_libraries(lumacore_effects_engine_test PRIVATE lumacore_core Qt6::Core)
 
+lumacore_add_test_executable(lumacore_rgb_effect_test rgb_effect
+    RgbEffectTest.cpp
+)
+target_link_libraries(lumacore_rgb_effect_test PRIVATE lumacore_core Qt6::Core)
+
 lumacore_add_test_executable(lumacore_auto_backend_test auto_backend
     AutoBackendTest.cpp
     ${PROJECT_SOURCE_DIR}/backends/auto/AutoBackend.cpp

@@ -14,7 +14,12 @@ enum class RgbEffectType {
     Static,
     Rainbow,
     Breathing,
-    ColorCycle
+    ColorCycle,
+    // Values append only: stored profiles and the daemon protocol carry these
+    // as stable integers/names (docs/refactor-parity.md).
+    Wave,
+    Marquee,
+    Strobe
 };
 
 [[nodiscard]] QString rgbEffectTypeToString(RgbEffectType type);

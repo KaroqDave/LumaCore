@@ -19,6 +19,8 @@ constexpr double kMaxEffectSpeed = 5.0;
 constexpr double kVendorFastStreamPeriodSeconds = 1.6;
 constexpr double kVendorSlowStreamPeriodSeconds = 16.5;
 constexpr double kBreathingFloor = 0.12;
+constexpr int kMarqueeBlockLeds = 3;
+constexpr double kStrobeFlashesPerPeriod = 8.0;
 
 [[nodiscard]] double fractional(double value)
 {
@@ -81,6 +83,11 @@ void EffectsEngine::stopAll()
 {
     m_activeZones.clear();
     updateTimerState();
+}
+
+bool EffectsEngine::isZoneStreaming(int deviceIndex, int zoneIndex) const
+{
+    return m_activeZones.contains({deviceIndex, zoneIndex});
 }
 
 void EffectsEngine::updateTimerState()
@@ -179,6 +186,54 @@ QVector<RgbColor> EffectsEngine::computeFrame(const RgbEffect& effect, int ledCo
             static_cast<int>(std::lround(base.green() * factor)),
             static_cast<int>(std::lround(base.blue() * factor))
         );
+        colors.fill(scaled, ledCount);
+        break;
+    }
+    case RgbEffectType::Wave: {
+        // One brightness crest of the base color travels the strip per period,
+        // matching the rainbow convention of one pattern traversal per period.
+        const double offset = elapsedSeconds / streamedEffectPeriodSeconds(effect.speed());
+        const RgbColor base = effect.color();
+        for (int index = 0; index < ledCount; ++index) {
+            const double position = static_cast<double>(index) / static_cast<double>(ledCount);
+            const double wave = (std::sin((position - offset) * 2.0 * M_PI) + 1.0) / 2.0;
+            const double factor = wave * brightness;
+            colors.append(RgbColor::fromRgb(
+                static_cast<int>(std::lround(base.red() * factor)),
+                static_cast<int>(std::lround(base.green() * factor)),
+                static_cast<int>(std::lround(base.blue() * factor))
+            ));
+        }
+        break;
+    }
+    case RgbEffectType::Marquee: {
+        // Repeating lit/dark blocks scroll by one full block pair per period.
+        const double offset = elapsedSeconds / streamedEffectPeriodSeconds(effect.speed());
+        const int patternLeds = kMarqueeBlockLeds * 2;
+        const int shift = static_cast<int>(std::floor(fractional(offset) * patternLeds));
+        const RgbColor base = effect.color();
+        const RgbColor lit = RgbColor::fromRgb(
+            static_cast<int>(std::lround(base.red() * brightness)),
+            static_cast<int>(std::lround(base.green() * brightness)),
+            static_cast<int>(std::lround(base.blue() * brightness))
+        );
+        for (int index = 0; index < ledCount; ++index) {
+            const int patternIndex = ((index - shift) % patternLeds + patternLeds) % patternLeds;
+            colors.append(patternIndex < kMarqueeBlockLeds ? lit : RgbColor());
+        }
+        break;
+    }
+    case RgbEffectType::Strobe: {
+        const double offset = elapsedSeconds / streamedEffectPeriodSeconds(effect.speed());
+        const bool lit = fractional(offset * kStrobeFlashesPerPeriod) < 0.5;
+        const RgbColor base = effect.color();
+        const RgbColor scaled = lit
+            ? RgbColor::fromRgb(
+                  static_cast<int>(std::lround(base.red() * brightness)),
+                  static_cast<int>(std::lround(base.green() * brightness)),
+                  static_cast<int>(std::lround(base.blue() * brightness))
+              )
+            : RgbColor();
         colors.fill(scaled, ledCount);
         break;
     }

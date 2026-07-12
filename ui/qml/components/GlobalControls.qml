@@ -48,16 +48,22 @@ Item {
     readonly property bool selectedEffectSupported: targetSupportsEffect(effectType)
     readonly property bool selectedEffectSpeedSupported: targetSupportsEffectSpeed(effectType)
     readonly property bool selectedEffectBrightnessSupported: targetSupportsEffectBrightness(effectType)
-    readonly property bool colorEditable: selectedEffectSupported && (effectType === 0 || effectType === 2)
+    // Rainbow (1) and Cycle (3) generate their own colors; every other effect
+    // renders from the picker's base color.
     readonly property bool usesBaseColor: effectType !== 1 && effectType !== 3
+    readonly property bool colorEditable: selectedEffectSupported && usesBaseColor
     readonly property bool usesSpeed: effectType !== 0
     readonly property real brightnessFactor: brightness / 100.0
     readonly property bool roomyHeader: width >= 760
+    readonly property int effectTypeCount: 7
     readonly property var disabledEffectSegments: [
         !targetSupportsEffect(0),
         !targetSupportsEffect(1),
         !targetSupportsEffect(2),
-        !targetSupportsEffect(3)
+        !targetSupportsEffect(3),
+        !targetSupportsEffect(4),
+        !targetSupportsEffect(5),
+        !targetSupportsEffect(6)
     ]
 
     signal chooseColorRequested()
@@ -127,7 +133,7 @@ Item {
         if (selectedEffectSupported) {
             return
         }
-        for (let index = 0; index < 4; ++index) {
+        for (let index = 0; index < effectTypeCount; ++index) {
             if (targetSupportsEffect(index)) {
                 effectType = index
                 return
@@ -576,7 +582,7 @@ Item {
         EffectSelector {
             Layout.fillWidth: true
             Layout.preferredHeight: 34
-            segments: [qsTr("Static"), qsTr("Rainbow"), qsTr("Breathing"), qsTr("Cycle")]
+            segments: [qsTr("Static"), qsTr("Rainbow"), qsTr("Breathing"), qsTr("Cycle"), qsTr("Wave"), qsTr("Marquee"), qsTr("Strobe")]
             disabledSegments: controls.disabledEffectSegments
             currentIndex: controls.effectType
             animationsEnabled: controls.animationsEnabled
@@ -601,11 +607,13 @@ Item {
 
             // Matches EffectsEngine::computeFrame: breathing scales between a
             // 0.12 floor and full brightness on a sine of the stream phase,
-            // and the color cycle hue is the phase itself.
+            // the color cycle hue is the phase itself, and strobe flashes
+            // 8 times per streamed period.
             property real breath: controls.effectType === 2
                                   ? 0.12 + 0.88 * ((Math.sin(2 * Math.PI * controls.streamPhase) + 1) / 2)
                                   : 1
             property real cycleHue: controls.streamPhase
+            property bool strobeOn: (controls.streamPhase * 8) % 1 < 0.5
             readonly property color staticColor: Qt.rgba(
                 controls.selectedColor.r * controls.brightnessFactor,
                 controls.selectedColor.g * controls.brightnessFactor,
@@ -617,6 +625,7 @@ Item {
 
             color: controls.effectType === 2 ? breathingColor
                  : controls.effectType === 3 ? Qt.hsva(cycleHue, 1, controls.brightnessFactor, 1)
+                 : controls.effectType === 6 ? (strobeOn ? staticColor : "#0B0B10")
                  : controls.effectType === 0 ? staticColor
                  : Theme.sunken
 
@@ -661,6 +670,88 @@ Item {
                 }
             }
 
+            Item {
+                id: globalWaveClip
+
+                anchors.fill: parent
+                anchors.margins: 1
+                visible: controls.effectType === 4
+                opacity: controls.brightnessFactor
+                clip: true
+
+                Row {
+                    id: globalWaveRow
+
+                    height: parent.height
+                    // The engine paints LED brightness on sin(position - phase),
+                    // so the crest travels toward higher positions: scroll the
+                    // doubled dark→color→dark gradient right by one bar width
+                    // per period to match.
+                    x: Math.max(1, globalWaveClip.width) * (controls.streamPhase - 1)
+
+                    Repeater {
+                        model: 2
+
+                        Rectangle {
+                            width: Math.max(1, globalWaveClip.width)
+                            height: globalWaveRow.height
+
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: "#000000" }
+                                GradientStop { position: 0.5; color: controls.selectedColor }
+                                GradientStop { position: 1.0; color: "#000000" }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item {
+                id: globalMarqueeClip
+
+                anchors.fill: parent
+                anchors.margins: 1
+                visible: controls.effectType === 5
+                opacity: controls.brightnessFactor
+                clip: true
+
+                readonly property int blockWidth: 12
+                readonly property int patternWidth: blockWidth * 2
+
+                Row {
+                    id: globalMarqueeRow
+
+                    height: parent.height
+                    // The engine shifts the lit/dark block pattern by one full
+                    // block pair per period, toward higher LED positions.
+                    x: globalMarqueeClip.patternWidth * (controls.streamPhase - 1)
+
+                    Repeater {
+                        model: Math.ceil((globalMarqueeClip.width + globalMarqueeClip.patternWidth)
+                                         / globalMarqueeClip.patternWidth)
+
+                        Row {
+                            required property int index
+
+                            height: globalMarqueeRow.height
+
+                            Rectangle {
+                                width: globalMarqueeClip.blockWidth
+                                height: parent.height
+                                color: controls.selectedColor
+                            }
+
+                            Rectangle {
+                                width: globalMarqueeClip.blockWidth
+                                height: parent.height
+                                color: "#000000"
+                            }
+                        }
+                    }
+                }
+            }
+
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 12
@@ -676,8 +767,12 @@ Item {
                         text: controls.effectType === 1 ? qsTr("Rainbow wave")
                             : controls.effectType === 2 ? qsTr("Breathing")
                             : controls.effectType === 3 ? qsTr("Color cycle")
+                            : controls.effectType === 4 ? qsTr("Wave")
+                            : controls.effectType === 5 ? qsTr("Marquee")
+                            : controls.effectType === 6 ? qsTr("Strobe")
                             : qsTr("Static color")
                         color: controls.effectType === 1 || controls.effectType === 3
+                               || controls.effectType === 4 || controls.effectType === 5
                                ? "#FFFFFF"
                                : controls.contrastOn(globalPreviewBar.staticColor)
                         font.pixelSize: 12

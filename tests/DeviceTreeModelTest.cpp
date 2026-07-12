@@ -100,6 +100,29 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    const QModelIndex rgbZoneIndex = treeModel.index(0, 0, rgbDeviceIndex);
+    if (!require(rgbZoneIndex.isValid(), "rgb device should expose a zone row")
+        || !require(
+            !treeModel.data(rgbZoneIndex, lumacore::DeviceTreeModel::ZoneStreamingRole).toBool(),
+            "zones should not report frame streaming before any effect streams"
+        )) {
+        return 1;
+    }
+    manager.startZoneFrameStreaming(0, 0);
+    if (!require(
+            treeModel.data(rgbZoneIndex, lumacore::DeviceTreeModel::ZoneStreamingRole).toBool(),
+            "zones should report frame streaming while the effects engine streams them"
+        )) {
+        return 1;
+    }
+    manager.stopZoneFrameStreaming(0, 0);
+    if (!require(
+            !treeModel.data(rgbZoneIndex, lumacore::DeviceTreeModel::ZoneStreamingRole).toBool(),
+            "zones should stop reporting frame streaming once streaming stops"
+        )) {
+        return 1;
+    }
+
     {
         lumacore::DeviceManager manyZoneManager;
         manyZoneManager.registerBackend(std::make_unique<lumacore::MockBackend>(QStringLiteral("many-zones")));

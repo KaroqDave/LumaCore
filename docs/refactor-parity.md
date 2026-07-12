@@ -71,6 +71,9 @@ Use this checklist for behavior-preserving modernization passes.
 - Permission failures preserve their reason.
 - Static, animated, local-frame, and all-off paths preserve logs and signals.
 - Effect support enumeration keeps the same order: Static, Rainbow, Breathing, ColorCycle.
+  Wave, Marquee, and Strobe append after ColorCycle; new effect types are additive only and
+  never reorder or renumber the existing entries. Clients that do not know a type treat it
+  as unsupported, and profiles naming an unknown effect fall back to Static.
 - Schedule-time parsing keeps invalid or empty settings normalized to `18:00` and stores
   valid values as `HH:mm`.
 - Schedule firing semantics are parity-frozen in both `ProfileScheduleRunner` (GUI fallback)

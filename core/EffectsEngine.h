@@ -27,6 +27,7 @@ public:
     void stopZone(int deviceIndex, int zoneIndex);
     void stopDevice(int deviceIndex);
     void stopAll();
+    [[nodiscard]] bool isZoneStreaming(int deviceIndex, int zoneIndex) const;
 
     [[nodiscard]] static double streamedEffectPeriodSeconds(double speed);
     [[nodiscard]] static QVector<RgbColor> computeFrame(const RgbEffect& effect, int ledCount, double elapsedSeconds);

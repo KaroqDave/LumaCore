@@ -1142,11 +1142,13 @@ bool testDiagnosticsExport(TestContext& context, lumacore::AppController& contro
             "diagnostics should include setup attention state"
         )
         || !require(
-            diagnosticDevices.first().toMap().value(QStringLiteral("supportedEffects")).toList().size() == 4,
+            diagnosticDevices.first().toMap().value(QStringLiteral("supportedEffects")).toList().size()
+                == lumacore::allRgbEffectTypes().size(),
             "diagnostics should include device-level effect support"
         )
         || !require(
-            diagnosticZones.first().toMap().value(QStringLiteral("supportedEffects")).toList().size() == 4,
+            diagnosticZones.first().toMap().value(QStringLiteral("supportedEffects")).toList().size()
+                == lumacore::allRgbEffectTypes().size(),
             "diagnostics should include zone-level effect support"
         )
         || !require(
@@ -1661,6 +1663,49 @@ bool testDryRunAnimatedDaemonPreview()
             3000
         );
         if (!require(animated, "dry-run animated effects should keep updating the local zone preview")) {
+            return false;
+        }
+
+        // The appended host-streamed effects must take the same dry-run preview
+        // path: a Wave apply keeps the GUI-side frame streaming running and the
+        // zone preview color moving. Regression for the daemon proxy's frame
+        // rendering list omitting the new effect types.
+        if (!require(
+                animController.applyEffect(
+                    0,
+                    0,
+                    static_cast<int>(lumacore::RgbEffectType::Wave),
+                    QColor(QStringLiteral("#ff0000")),
+                    1.0,
+                    100
+                ),
+                "dry-run wave apply should start"
+            )
+            || !require(
+                waitUntil(
+                    [&animController] {
+                        return animController.zoneEffectType(0, 0)
+                            == static_cast<int>(lumacore::RgbEffectType::Wave);
+                    },
+                    3000
+                ),
+                "dry-run wave apply should complete against the in-process daemon"
+            )
+            || !require(
+                animManager.isZoneFrameStreaming(0, 0),
+                "dry-run wave applies should keep the GUI-side frame streaming active"
+            )) {
+            return false;
+        }
+
+        const lumacore::RgbColor waveSample = animManager.deviceAt(0)->zones().at(0).currentColor();
+        const bool waveAnimated = waitUntil(
+            [&animManager, waveSample] {
+                return !(animManager.deviceAt(0)->zones().at(0).currentColor() == waveSample);
+            },
+            3000
+        );
+        if (!require(waveAnimated, "dry-run wave effects should keep updating the local zone preview")) {
             return false;
         }
         animClient->disconnectFromDaemon();

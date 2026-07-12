@@ -595,6 +595,11 @@ void DeviceManager::stopAllFrameStreaming()
     m_effectsEngine->stopAll();
 }
 
+bool DeviceManager::isZoneFrameStreaming(int deviceIndex, int zoneIndex) const
+{
+    return m_effectsEngine->isZoneStreaming(deviceIndex, zoneIndex);
+}
+
 double DeviceManager::effectStreamPhase(double speed) const
 {
     return m_effectsEngine->streamPhase(speed);

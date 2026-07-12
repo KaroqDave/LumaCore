@@ -530,6 +530,12 @@ quint8 nativeModeForEffect(RgbEffectType type)
         return kAuraRainbowMode;
     case RgbEffectType::Static:
         return kAuraStaticMode;
+    // Wave, Marquee, and Strobe are host-streamed only; no native Aura mode
+    // has been capture-validated for them.
+    case RgbEffectType::Wave:
+    case RgbEffectType::Marquee:
+    case RgbEffectType::Strobe:
+        return kAuraStaticMode;
     }
 
     return kAuraStaticMode;

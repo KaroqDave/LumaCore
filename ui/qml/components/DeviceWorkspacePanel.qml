@@ -76,6 +76,12 @@ Item {
             return qsTr("Breathing")
         case 3:
             return qsTr("Cycle")
+        case 4:
+            return qsTr("Wave")
+        case 5:
+            return qsTr("Marquee")
+        case 6:
+            return qsTr("Strobe")
         default:
             return qsTr("Static")
         }
@@ -377,6 +383,24 @@ Item {
                 StatusBadge {
                     visible: panel.effectCapable(3)
                     text: qsTr("Cycle")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectCapable(4)
+                    text: qsTr("Wave")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectCapable(5)
+                    text: qsTr("Marquee")
+                    colorValue: Theme.success
+                }
+
+                StatusBadge {
+                    visible: panel.effectCapable(6)
+                    text: qsTr("Strobe")
                     colorValue: Theme.success
                 }
             }

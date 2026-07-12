@@ -325,7 +325,8 @@ public:
     [[nodiscard]] bool supportsEffect(int effectType) const override
     {
         return effectType == static_cast<int>(lumacore::RgbEffectType::Static)
-            || effectType == static_cast<int>(lumacore::RgbEffectType::Rainbow);
+            || effectType == static_cast<int>(lumacore::RgbEffectType::Rainbow)
+            || effectType == static_cast<int>(lumacore::RgbEffectType::Wave);
     }
 
     [[nodiscard]] bool supportsZoneEffect(int zoneIndex, int effectType) const override
@@ -1706,6 +1707,25 @@ int main(int argc, char* argv[])
         || !require(
             !zoneSupportProxy.supportsZoneEffectBrightness(1, static_cast<int>(RgbEffectType::Rainbow)),
             "daemon snapshots should preserve per-zone brightness limits"
+        )) {
+        return 1;
+    }
+
+    // The appended host-streamed effect types must round-trip through the
+    // snapshot and make the GUI proxy stream frames itself, exactly like the
+    // original animated effects.
+    const RgbEffect waveEffect(RgbEffectType::Wave, RgbColor(255, 0, 0));
+    if (!require(
+            zoneSupportProxy.supportsZoneEffect(1, static_cast<int>(RgbEffectType::Wave)),
+            "daemon snapshots should preserve Wave support on addressable zones"
+        )
+        || !require(
+            zoneSupportProxy.usesLocalFrameRenderingForEffect(1, waveEffect),
+            "daemon proxies should host-stream frames for the Wave effect"
+        )
+        || !require(
+            !zoneSupportProxy.usesLocalFrameRenderingForEffect(0, waveEffect),
+            "daemon proxies should not stream Wave frames to zones that refuse it"
         )) {
         return 1;
     }
