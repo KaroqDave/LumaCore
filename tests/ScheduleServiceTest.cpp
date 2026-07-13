@@ -7,11 +7,15 @@
 #include <QDate>
 #include <QDateTime>
 #include <QDebug>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTime>
 #include <QTimeZone>
+#include <QThread>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -34,6 +38,20 @@ bool logContains(const lumacore::DeviceManager& manager, const QString& fragment
         }
     }
     return false;
+}
+
+bool waitUntil(const std::function<bool()>& condition, int timeoutMs = 3000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        if (condition()) {
+            return true;
+        }
+        QThread::msleep(5);
+    }
+    return condition();
 }
 
 class ScheduleDevice final : public lumacore::RgbDevice
@@ -87,6 +105,28 @@ public:
 
 private:
     bool m_requiresConfirmation {false};
+};
+
+class SlowScheduleBackend final : public lumacore::RgbBackend
+{
+public:
+    [[nodiscard]] lumacore::BackendDescriptor descriptor() const override
+    {
+        return {
+            QStringLiteral("slow-schedule"),
+            QStringLiteral("Slow schedule"),
+            QStringLiteral("Schedule discovery gate fixture."),
+            lumacore::BackendCapability::DiscoveryRead,
+        };
+    }
+
+    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> discoverDevices() const override
+    {
+        QThread::msleep(150);
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
+        devices.push_back(std::make_unique<ScheduleDevice>());
+        return devices;
+    }
 };
 
 lumacore::RgbColor zoneColor(const lumacore::DeviceManager& manager)
@@ -297,6 +337,63 @@ int main(int argc, char* argv[])
         || !require(
             logContains(manager, QStringLiteral("[DRY-RUN]")),
             "dry-run scheduled applies should log their write intent"
+        )) {
+        return 1;
+    }
+
+    // Discovery holds evaluation without consuming the first missed-run skip.
+    lumacore::DeviceManager discoveryManager(
+        nullptr,
+        profilesDirectory.filePath(QStringLiteral("discovery-profiles"))
+    );
+    discoveryManager.setDryRunEnabled(false);
+    std::vector<std::unique_ptr<lumacore::RgbDevice>> discoverySeedDevices;
+    discoverySeedDevices.push_back(std::make_unique<ScheduleDevice>());
+    discoveryManager.replaceDevices(std::move(discoverySeedDevices));
+    if (!require(
+            discoveryManager.setZoneStaticColor(0, 0, scheduledColor),
+            "discovery schedule fixture color should apply"
+        )
+        || !require(
+            discoveryManager.saveProfile(QStringLiteral("Discovery")),
+            "discovery schedule fixture profile should save"
+        )) {
+        return 1;
+    }
+    discoveryManager.registerBackend(std::make_unique<SlowScheduleBackend>());
+    if (!require(
+            discoveryManager.startBackendDiscovery(QStringLiteral("slow-schedule")),
+            "schedule discovery fixture should start asynchronously"
+        )) {
+        return 1;
+    }
+
+    lumacore::ScheduleService discoveryService(&discoveryManager);
+    discoveryService.setClock(clockAt(dayOne, QTime(1, 0)));
+    lumacore::ScheduleService::Config discoveryConfig;
+    discoveryConfig.enabled = true;
+    discoveryConfig.profileName = QStringLiteral("Discovery");
+    discoveryConfig.time = QStringLiteral("00:30");
+    discoveryService.setConfig(discoveryConfig);
+    discoveryService.evaluateNow();
+    if (!require(
+            !logContains(discoveryManager, QStringLiteral("Scheduled profile 'Discovery' fired")),
+            "schedule should not apply while discovery is incomplete"
+        )
+        || !require(
+            waitUntil([&discoveryManager] { return discoveryManager.discoveryComplete(); }),
+            "schedule discovery fixture should complete"
+        )) {
+        return 1;
+    }
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    if (!require(
+            !logContains(discoveryManager, QStringLiteral("Scheduled profile 'Discovery' fired")),
+            "first post-discovery evaluation should still skip a missed boundary"
+        )
+        || !require(
+            zoneColor(discoveryManager) != scheduledColor,
+            "post-discovery missed-run skip should leave the discovered device unchanged"
         )) {
         return 1;
     }

@@ -54,13 +54,17 @@ EffectsEngine::EffectsEngine(DeviceManager* deviceManager, QObject* parent)
 
 void EffectsEngine::startZone(int deviceIndex, int zoneIndex)
 {
-    m_activeZones.insert({deviceIndex, zoneIndex});
+    const QPair<int, int> zoneKey {deviceIndex, zoneIndex};
+    m_lastAcceptedFrames.remove(zoneKey);
+    m_activeZones.insert(zoneKey);
     updateTimerState();
 }
 
 void EffectsEngine::stopZone(int deviceIndex, int zoneIndex)
 {
-    m_activeZones.remove({deviceIndex, zoneIndex});
+    const QPair<int, int> zoneKey {deviceIndex, zoneIndex};
+    m_activeZones.remove(zoneKey);
+    m_lastAcceptedFrames.remove(zoneKey);
     updateTimerState();
 }
 
@@ -70,18 +74,24 @@ void EffectsEngine::stopDevice(int deviceIndex)
     // its current zone count, so a zone that outlived a metadata edit / device
     // replace (an index no longer in zones()) is still stopped.
     QSet<QPair<int, int>> remaining;
+    QHash<QPair<int, int>, QVector<RgbColor>> remainingFrames;
     for (const QPair<int, int>& zoneKey : m_activeZones) {
         if (zoneKey.first != deviceIndex) {
             remaining.insert(zoneKey);
+            if (m_lastAcceptedFrames.contains(zoneKey)) {
+                remainingFrames.insert(zoneKey, m_lastAcceptedFrames.value(zoneKey));
+            }
         }
     }
     m_activeZones = remaining;
+    m_lastAcceptedFrames = remainingFrames;
     updateTimerState();
 }
 
 void EffectsEngine::stopAll()
 {
     m_activeZones.clear();
+    m_lastAcceptedFrames.clear();
     updateTimerState();
 }
 
@@ -130,7 +140,13 @@ void EffectsEngine::tick()
             continue;
         }
 
-        m_deviceManager->paintZoneFrame(zoneKey.first, zoneKey.second, frame);
+        if (m_lastAcceptedFrames.value(zoneKey) == frame) {
+            continue;
+        }
+
+        if (m_deviceManager->paintZoneFrame(zoneKey.first, zoneKey.second, frame)) {
+            m_lastAcceptedFrames.insert(zoneKey, frame);
+        }
     }
 }
 

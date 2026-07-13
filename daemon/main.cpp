@@ -97,7 +97,7 @@ void registerBackends(lumacore::DeviceManager& deviceManager, const QString& moc
 #endif
 }
 
-bool initializeRequestedBackend(
+bool validateRequestedBackend(
     lumacore::DeviceManager& deviceManager,
     const QString& requestedBackendId
 )
@@ -124,8 +124,7 @@ bool initializeRequestedBackend(
         );
     }
 
-    deviceManager.initializeBackends(backendId);
-    return true;
+    return deviceManager.activateBackend(backendId);
 }
 
 int runDaemon(const lumacore::DaemonOptions& options)
@@ -142,7 +141,7 @@ int runDaemon(const lumacore::DaemonOptions& options)
         return 1;
     }
     registerBackends(deviceManager, options.mockScenarioId);
-    if (!initializeRequestedBackend(deviceManager, options.backendId)) {
+    if (!validateRequestedBackend(deviceManager, options.backendId)) {
         return 1;
     }
 
@@ -169,6 +168,8 @@ int runDaemon(const lumacore::DaemonOptions& options)
         QStringLiteral("lumacore-daemon v%1 listening on %2.")
             .arg(lumacore::applicationVersion(), server.socketPath())
     );
+    const bool discoveryStarted = deviceManager.startBackendDiscovery(options.backendId);
+    Q_UNUSED(discoveryStarted)
 
     return QCoreApplication::exec();
 }

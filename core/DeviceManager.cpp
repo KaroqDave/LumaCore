@@ -23,6 +23,7 @@ DeviceManager::DeviceManager(QObject* parent, QString profilesDirectory)
     , m_effectsEngine(std::make_unique<EffectsEngine>(this))
     , m_profileStore(std::move(profilesDirectory))
     , m_dryRunEnabled(platformDefaultDryRunEnabled())
+    , m_discoveryRunner(std::make_unique<BackendDiscoveryRunner>())
 {
     connect(&m_activityLog, &ActivityLog::entryAdded, this, [this](const LogEntry& entry) {
         emit logMessage(entry.formatted());
@@ -41,17 +42,78 @@ bool DeviceManager::activateBackend(const QString& id)
 
 void DeviceManager::initializeBackends(const QString& backendId)
 {
+    if (m_discoveryRunner->isRunning()) {
+        m_activityLog.warning(LogCategory::Backend, QStringLiteral("Device discovery is already in progress."));
+        return;
+    }
+
+    BackendDescriptor descriptor;
+    RgbBackend* backend = prepareBackendDiscovery(backendId, &descriptor);
+    if (backend == nullptr) {
+        return;
+    }
+
+    BackendDiscoveryResult result;
+    result.devices = backend->discoverDevices();
+    result.error = backend->lastDiscoverError();
+    finishBackendDiscovery(descriptor, std::move(result));
+}
+
+bool DeviceManager::startBackendDiscovery(const QString& backendId)
+{
+    if (m_discoveryRunner->isRunning()) {
+        return false;
+    }
+
+    BackendDescriptor descriptor;
+    RgbBackend* backend = prepareBackendDiscovery(backendId, &descriptor);
+    if (backend == nullptr) {
+        return false;
+    }
+
+    const bool started = m_discoveryRunner->start(
+        backend,
+        thread(),
+        [this, descriptor](BackendDiscoveryResult result) {
+            finishBackendDiscovery(descriptor, std::move(result));
+        }
+    );
+    if (!started) {
+        m_activityLog.error(LogCategory::Backend, QStringLiteral("Could not start asynchronous device discovery."));
+        setDiscoveryState(true, false);
+        emit devicesChanged();
+    }
+    return started;
+}
+
+bool DeviceManager::discoveryComplete() const
+{
+    return m_discoveryComplete;
+}
+
+bool DeviceManager::discoveryInProgress() const
+{
+    return m_discoveryInProgress;
+}
+
+RgbBackend* DeviceManager::prepareBackendDiscovery(
+    const QString& backendId,
+    BackendDescriptor* descriptor
+)
+{
     m_effectsEngine->stopAll();
     m_devices.clear();
     m_confirmedWriteDeviceIds.clear();
+    setDiscoveryState(false, true);
 
     const QString requestedBackendId = backendId.trimmed();
     const QString activeBackendId = requestedBackendId.isEmpty() ? m_backendRegistry.activeBackendId() : requestedBackendId;
 
     if (!activeBackendId.isEmpty() && !m_backendRegistry.activateBackend(activeBackendId)) {
         m_activityLog.error(LogCategory::Backend, QStringLiteral("Could not activate backend '%1'.").arg(activeBackendId));
+        setDiscoveryState(true, false);
         emit devicesChanged();
-        return;
+        return nullptr;
     }
 
     if (m_backendRegistry.activeBackend() == nullptr) {
@@ -65,11 +127,15 @@ void DeviceManager::initializeBackends(const QString& backendId)
     RgbBackend* backend = m_backendRegistry.activeBackend();
     if (backend == nullptr) {
         m_activityLog.error(LogCategory::Backend, QStringLiteral("No active backend available."));
+        setDiscoveryState(true, false);
         emit devicesChanged();
-        return;
+        return nullptr;
     }
 
     const BackendDescriptor backendDescriptor = backend->descriptor();
+    if (descriptor != nullptr) {
+        *descriptor = backendDescriptor;
+    }
     m_activityLog.info(
         LogCategory::Backend,
         QStringLiteral("Registered backend '%1' (%2).").arg(backendDescriptor.displayName, backendDescriptor.id)
@@ -78,8 +144,9 @@ void DeviceManager::initializeBackends(const QString& backendId)
     const PermissionResult probeResult = backend->probe();
     if (!probeResult.isGranted()) {
         m_activityLog.warning(LogCategory::Backend, probeResult.reason);
+        setDiscoveryState(true, false);
         emit devicesChanged();
-        return;
+        return nullptr;
     } else {
         m_activityLog.info(
             LogCategory::Backend,
@@ -92,33 +159,52 @@ void DeviceManager::initializeBackends(const QString& backendId)
             LogCategory::Backend,
             QStringLiteral("Backend '%1' does not grant discovery access.").arg(backendDescriptor.displayName)
         );
+        setDiscoveryState(true, false);
         emit devicesChanged();
-        return;
+        return nullptr;
     }
 
     m_activityLog.info(
         LogCategory::Backend,
         QStringLiteral("Discovering devices via '%1'…").arg(backendDescriptor.displayName)
     );
+    return backend;
+}
 
-    for (std::unique_ptr<RgbDevice>& device : backend->discoverDevices()) {
+void DeviceManager::finishBackendDiscovery(
+    const BackendDescriptor& descriptor,
+    BackendDiscoveryResult result
+)
+{
+    for (std::unique_ptr<RgbDevice>& device : result.devices) {
         if (device) {
             if (device->backendId().isEmpty()) {
-                device->setBackendId(backendDescriptor.id);
+                device->setBackendId(descriptor.id);
             }
             registerDevice(std::move(device));
         }
     }
 
     if (deviceCount() == 0) {
-        const QString discoverError = backend->lastDiscoverError();
-        if (!discoverError.isEmpty()) {
-            m_activityLog.warning(LogCategory::Backend, discoverError);
+        if (!result.error.isEmpty()) {
+            m_activityLog.warning(LogCategory::Backend, result.error);
         }
     }
 
+    setDiscoveryState(true, false);
     emit devicesChanged();
     m_activityLog.info(LogCategory::Device, QStringLiteral("Loaded %1 device(s).").arg(deviceCount()));
+}
+
+void DeviceManager::setDiscoveryState(bool complete, bool inProgress)
+{
+    if (m_discoveryComplete == complete && m_discoveryInProgress == inProgress) {
+        return;
+    }
+
+    m_discoveryComplete = complete;
+    m_discoveryInProgress = inProgress;
+    emit discoveryStateChanged();
 }
 
 bool DeviceManager::dryRunEnabled() const

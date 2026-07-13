@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "backends/mock/MockBackend.h"
+#include "backends/mock/MockRgbDevice.h"
 #include "backends/daemon/DaemonBackend.h"
 #include "backends/daemon/DaemonRgbDevice.h"
 #include "core/DeviceManager.h"
@@ -81,6 +82,30 @@ public:
             lumacore::PermissionStatus::Denied,
             QStringLiteral("Test device does not support %1.").arg(lumacore::backendCapabilityToString(capability)),
         };
+    }
+};
+
+class SlowMockBackend final : public lumacore::RgbBackend
+{
+public:
+    [[nodiscard]] lumacore::BackendDescriptor descriptor() const override
+    {
+        return {
+            QStringLiteral("slow-mock"),
+            QStringLiteral("Slow mock"),
+            QStringLiteral("Deterministic controller discovery fixture."),
+            lumacore::BackendCapability::DiscoveryRead
+                | lumacore::BackendCapability::ZoneColorWrite
+                | lumacore::BackendCapability::ZoneEffectWrite,
+        };
+    }
+
+    [[nodiscard]] std::vector<std::unique_ptr<lumacore::RgbDevice>> discoverDevices() const override
+    {
+        QThread::msleep(500);
+        std::vector<std::unique_ptr<lumacore::RgbDevice>> devices;
+        devices.push_back(std::make_unique<lumacore::MockRgbDevice>());
+        return devices;
     }
 };
 
@@ -1834,6 +1859,220 @@ bool testLiveConfirmationBannerRefresh()
     return true;
 }
 
+bool testDaemonDryRunStartupSync(TestContext& context)
+{
+    const auto runCase = [&context](
+                             const QString& suffix,
+                             bool daemonDryRun,
+                             bool guiDryRun,
+                             int expectedMaxPendingOperations
+                         ) {
+        lumacore::DeviceManager serverManager;
+        serverManager.setDryRunEnabled(daemonDryRun);
+        serverManager.registerBackend(std::make_unique<lumacore::MockBackend>());
+        serverManager.initializeBackends(QStringLiteral("mock"));
+
+        lumacore::DaemonServer server(&serverManager);
+        const QString serverName = uniqueDaemonEndpoint(suffix);
+        QString listenError;
+        if (!require(server.listen(serverName, &listenError), "dry-run startup fixture should listen")) {
+            return false;
+        }
+
+        auto client = std::make_shared<lumacore::DaemonClient>(serverName);
+        if (!require(client->connectToDaemon(3000), "dry-run startup client should connect")) {
+            return false;
+        }
+
+        lumacore::DeviceManager manager(
+            nullptr,
+            context.profilePath(QStringLiteral("%1-profiles").arg(suffix))
+        );
+        manager.setDryRunEnabled(guiDryRun);
+        manager.registerBackend(std::make_unique<lumacore::DaemonBackend>(client));
+        if (!require(
+                manager.activateBackend(QStringLiteral("daemon")),
+                "dry-run startup fixture should activate the daemon proxy backend"
+            )) {
+            return false;
+        }
+
+        lumacore::AppController controller(&manager, client);
+        int maxPendingOperations = 0;
+        QObject::connect(
+            &controller,
+            &lumacore::AppController::pendingDaemonOperationsChanged,
+            [&controller, &maxPendingOperations] {
+                maxPendingOperations = qMax(maxPendingOperations, controller.pendingDaemonOperations());
+            }
+        );
+        controller.enableDaemonRecovery();
+
+        const bool synchronized = waitUntil(
+            [&] {
+                return manager.deviceCount() == serverManager.deviceCount()
+                    && controller.pendingDaemonOperations() == 0
+                    && serverManager.dryRunEnabled() == guiDryRun;
+            },
+            3000
+        );
+        const bool valid = require(synchronized, "dry-run startup state should synchronize")
+            && require(client->daemonDryRunKnown(), "device snapshot should establish daemon dry-run state")
+            && require(
+                client->daemonDryRunEnabled() == guiDryRun,
+                "client and GUI dry-run state should agree after startup"
+            )
+            && require(
+                maxPendingOperations == expectedMaxPendingOperations,
+                expectedMaxPendingOperations == 0
+                    ? "matching startup dry-run state should not send setDryRun"
+                    : "mismatched startup dry-run state should send exactly one setDryRun"
+            );
+
+        client->disconnectFromDaemon();
+        server.close();
+        return valid;
+    };
+
+    return runCase(QStringLiteral("dry-run-match"), false, false, 0)
+        && runCase(QStringLiteral("dry-run-mismatch"), false, true, 1);
+}
+
+bool testAsyncDaemonDiscovery(TestContext& context)
+{
+    lumacore::DeviceManager serverManager;
+    serverManager.setDryRunEnabled(true);
+    serverManager.registerBackend(std::make_unique<SlowMockBackend>());
+
+    lumacore::DaemonServer server(&serverManager);
+    const QString serverName = uniqueDaemonEndpoint(QStringLiteral("async-discovery"));
+    QString listenError;
+    if (!require(server.listen(serverName, &listenError), "async discovery fixture should listen")
+        || !require(
+            serverManager.startBackendDiscovery(QStringLiteral("slow-mock")),
+            "async discovery fixture should start discovery"
+        )) {
+        return false;
+    }
+
+    auto client = std::make_shared<lumacore::DaemonClient>(serverName);
+    if (!require(client->connectToDaemon(1000), "async discovery client should connect immediately")) {
+        return false;
+    }
+
+    const QString profilePath = context.profilePath(QStringLiteral("async-discovery-profiles"));
+    if (!require(
+            saveProfileFixture(
+                profilePath,
+                QStringLiteral("Discovery"),
+                QJsonArray {
+                    QJsonObject {
+                        {QStringLiteral("id"), QStringLiteral("mock-asus-tuf-x870-plus-wifi")},
+                        {QStringLiteral("name"), QStringLiteral("Mock ASUS TUF X870-PLUS WIFI")},
+                        {
+                            QStringLiteral("zones"),
+                            QJsonArray {
+                                profileZone(0, QStringLiteral("Header 1"), QStringLiteral("#123456")),
+                            },
+                        },
+                    },
+                }
+            ),
+            "async discovery profile fixture should save"
+        )) {
+        return false;
+    }
+
+    lumacore::DeviceManager manager(nullptr, profilePath);
+    manager.setDryRunEnabled(true);
+    manager.registerBackend(std::make_unique<lumacore::DaemonBackend>(client));
+    if (!require(
+            manager.activateBackend(QStringLiteral("daemon")),
+            "async discovery fixture should activate the daemon proxy"
+        )) {
+        return false;
+    }
+
+    lumacore::AppController controller(&manager, client);
+    int refreshCount = 0;
+    int profileApplyStarts = 0;
+    QObject::connect(
+        &controller,
+        &lumacore::AppController::daemonDevicesRefreshed,
+        [&refreshCount] { ++refreshCount; }
+    );
+    QObject::connect(
+        &controller,
+        &lumacore::AppController::profileApplyInProgressChanged,
+        [&controller, &profileApplyStarts] {
+            if (controller.profileApplyInProgress()) {
+                ++profileApplyStarts;
+            }
+        }
+    );
+
+    if (!require(
+            controller.applyScheduledProfile(QStringLiteral("Discovery")),
+            "scheduled profile should park before discovery completes"
+        )) {
+        return false;
+    }
+    controller.armLaunchProfileApply(QStringLiteral("Discovery"));
+    controller.enableDaemonRecovery();
+    const bool firstRefreshStarted = controller.rescanDaemonDevices();
+    const bool overlappingRefreshStarted = controller.rescanDaemonDevices();
+    if (!require(firstRefreshStarted, "first discovery inventory request should start")
+        || !require(!overlappingRefreshStarted, "discovery inventory polling should be serialized")
+        || !require(
+            waitUntil([&] {
+                return client->daemonDiscoveryKnown()
+                    && !client->daemonDiscoveryComplete()
+                    && controller.setupStatusSummary() == QStringLiteral("Discovering devices");
+            }, 3000),
+            "controller should expose incomplete daemon discovery"
+        )
+        || !require(manager.deviceCount() == 0, "incomplete inventory should keep daemon proxies empty")
+        || !require(profileApplyStarts == 0, "parked profiles should not apply during discovery")) {
+        return false;
+    }
+
+    const auto loadedProfileCount = [&manager] {
+        int count = 0;
+        for (const QString& line : manager.activityLog().formattedLines()) {
+            if (line.contains(QStringLiteral("Loaded profile 'Discovery'."))) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    const bool completed = waitUntil(
+        [&] {
+            return client->daemonDiscoveryComplete()
+                && manager.deviceCount() == 1
+                && loadedProfileCount() == 2
+                && !controller.profileApplyInProgress();
+        },
+        5000
+    );
+    QThread::msleep(300);
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    const bool valid = require(completed, "final inventory should drain launch and scheduled profiles once")
+        && require(refreshCount == 1, "only the complete inventory should publish a refresh")
+        && require(loadedProfileCount() == 2, "each parked profile should drain exactly once")
+        && require(
+            controller.diagnosticsReport()
+                .value(QStringLiteral("daemon"))
+                .toMap()
+                .value(QStringLiteral("discoveryComplete"))
+                .toBool(),
+            "diagnostics should report completed discovery"
+        );
+
+    client->disconnectFromDaemon();
+    server.close();
+    return valid;
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -1857,6 +2096,8 @@ int main(int argc, char* argv[])
             && testPendingDaemonProfileApply()
             && testDryRunAnimatedDaemonPreview()
             && testLiveConfirmationBannerRefresh()
+            && testDaemonDryRunStartupSync(context)
+            && testAsyncDaemonDiscovery(context)
         ? 0
         : 1;
 }

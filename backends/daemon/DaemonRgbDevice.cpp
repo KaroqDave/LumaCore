@@ -188,6 +188,7 @@ quint64 DaemonRgbDevice::applyZoneEffectAsync(
         return 0;
     }
 
+    suspendZoneFrames(zoneIndex);
     const QPointer<DaemonRgbDevice> self(this);
     const bool clientStreamsFrames = usesLocalFrameRenderingForEffect(zoneIndex, effect);
     return m_client->callAsync(
@@ -205,6 +206,7 @@ quint64 DaemonRgbDevice::applyZoneEffectAsync(
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);
             if (self != nullptr) {
+                self->resumeZoneFrames(zoneIndex);
                 self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
                 if (success) {
                     // Dry-run successes update the local proxy state too, so
@@ -228,10 +230,31 @@ bool DaemonRgbDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& col
         return false;
     }
 
+    FrameStreamState& state = m_frameStreamStates[zoneIndex];
+    if (state.suspensionCount > 0) {
+        return false;
+    }
+
     // Mirror the streamed frame into the local zone model so the interface
     // shows the running animation; the daemon performs the hardware write.
-    const bool previewed = setZoneEffectColors(zoneIndex, colors);
-    Q_UNUSED(previewed)
+    if (!setZoneEffectColors(zoneIndex, colors)) {
+        return false;
+    }
+
+    if (state.inFlightRequestId != 0) {
+        state.pendingColors = colors;
+        state.hasPendingFrame = true;
+        return true;
+    }
+
+    return sendZoneFrame(zoneIndex, colors);
+}
+
+bool DaemonRgbDevice::sendZoneFrame(int zoneIndex, const QVector<RgbColor>& colors)
+{
+    if (m_client == nullptr || !m_frameStreamStates.contains(zoneIndex)) {
+        return false;
+    }
 
     const quint64 requestId = m_client->callAsync(
         daemonMethodName(DaemonMethod::PaintZoneFrame),
@@ -241,11 +264,38 @@ bool DaemonRgbDevice::applyZoneFrame(int zoneIndex, const QVector<RgbColor>& col
             {QStringLiteral("colors"), colorsToJson(colors)},
             {QStringLiteral("dryRunEnabled"), false},
         },
-        [](DaemonCallResult) {},
+        [self = QPointer<DaemonRgbDevice>(this), zoneIndex](DaemonCallResult result) {
+            if (self == nullptr) {
+                return;
+            }
+
+            auto stateIt = self->m_frameStreamStates.find(zoneIndex);
+            if (stateIt == self->m_frameStreamStates.end()) {
+                return;
+            }
+            stateIt->inFlightRequestId = 0;
+            if (!daemonCallSucceeded(result)
+                || self->m_client == nullptr
+                || !self->m_client->isConnected()
+                || stateIt->suspensionCount > 0) {
+                stateIt->pendingColors.clear();
+                stateIt->hasPendingFrame = false;
+                return;
+            }
+            if (!stateIt->hasPendingFrame) {
+                return;
+            }
+
+            const QVector<RgbColor> pendingColors = std::move(stateIt->pendingColors);
+            stateIt->pendingColors.clear();
+            stateIt->hasPendingFrame = false;
+            const bool sent = self->sendZoneFrame(zoneIndex, pendingColors);
+            Q_UNUSED(sent)
+        },
         500
     );
-    Q_UNUSED(requestId)
-    return true;
+    m_frameStreamStates[zoneIndex].inFlightRequestId = requestId;
+    return requestId != 0;
 }
 
 bool DaemonRgbDevice::applyAllOff()
@@ -267,6 +317,7 @@ quint64 DaemonRgbDevice::applyAllOffAsync(bool dryRunExpected, OperationHandler 
         return 0;
     }
 
+    suspendAllZoneFrames();
     const QPointer<DaemonRgbDevice> self(this);
     return m_client->callAsync(
         daemonMethodName(DaemonMethod::AllOff),
@@ -278,6 +329,7 @@ quint64 DaemonRgbDevice::applyAllOffAsync(bool dryRunExpected, OperationHandler 
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);
             if (self != nullptr) {
+                self->resumeAllZoneFrames();
                 self->m_lastHardwareWriteStatus = daemonHardwareStatus(result);
                 if (success) {
                     // See applyZoneEffectAsync: dry-run previews locally.
@@ -319,6 +371,7 @@ quint64 DaemonRgbDevice::updateZoneMetadataAsync(
     }
 
     const QString sanitizedName = name.trimmed();
+    suspendZoneFrames(zoneIndex);
     const QPointer<DaemonRgbDevice> self(this);
     return m_client->callAsync(
         daemonMethodName(DaemonMethod::UpdateZone),
@@ -331,11 +384,14 @@ quint64 DaemonRgbDevice::updateZoneMetadataAsync(
         [self, zoneIndex, sanitizedName, ledCount, handler = std::move(handler)](DaemonCallResult result) mutable {
             const bool success = daemonCallSucceeded(result);
             QString error = daemonCallError(result);
-            if (success && self != nullptr) {
-                const bool changedName = self->setZoneName(zoneIndex, sanitizedName);
-                const bool changedLedCount = self->setZoneLedCount(zoneIndex, ledCount);
-                if (!changedName && !changedLedCount) {
-                    emit self->zoneChanged(zoneIndex);
+            if (self != nullptr) {
+                self->resumeZoneFrames(zoneIndex);
+                if (success) {
+                    const bool changedName = self->setZoneName(zoneIndex, sanitizedName);
+                    const bool changedLedCount = self->setZoneLedCount(zoneIndex, ledCount);
+                    if (!changedName && !changedLedCount) {
+                        emit self->zoneChanged(zoneIndex);
+                    }
                 }
             }
             if (handler) {
@@ -343,6 +399,36 @@ quint64 DaemonRgbDevice::updateZoneMetadataAsync(
             }
         }
     );
+}
+
+void DaemonRgbDevice::suspendZoneFrames(int zoneIndex)
+{
+    FrameStreamState& state = m_frameStreamStates[zoneIndex];
+    ++state.suspensionCount;
+    state.pendingColors.clear();
+    state.hasPendingFrame = false;
+}
+
+void DaemonRgbDevice::resumeZoneFrames(int zoneIndex)
+{
+    auto stateIt = m_frameStreamStates.find(zoneIndex);
+    if (stateIt != m_frameStreamStates.end() && stateIt->suspensionCount > 0) {
+        --stateIt->suspensionCount;
+    }
+}
+
+void DaemonRgbDevice::suspendAllZoneFrames()
+{
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        suspendZoneFrames(zoneIndex);
+    }
+}
+
+void DaemonRgbDevice::resumeAllZoneFrames()
+{
+    for (int zoneIndex = 0; zoneIndex < zones().size(); ++zoneIndex) {
+        resumeZoneFrames(zoneIndex);
+    }
 }
 
 bool DaemonRgbDevice::usesLocalFrameRendering() const

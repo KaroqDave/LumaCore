@@ -58,6 +58,7 @@ DaemonClient::DaemonClient(QString socketPath, QObject* parent)
     });
     connect(&m_socket, &QLocalSocket::disconnected, this, [this] {
         clearDaemonDryRunState();
+        clearDaemonDiscoveryState();
         emit connectionStateChanged();
         if (!m_pendingCalls.isEmpty()) {
             failPendingCalls(
@@ -73,10 +74,12 @@ DaemonClient::DaemonClient(QString socketPath, QObject* parent)
         }
         if (m_socket.state() == QLocalSocket::UnconnectedState) {
             scheduleReconnect();
-        } else if (m_socket.state() == QLocalSocket::ConnectingState && !m_pendingCalls.isEmpty()) {
-            failPendingCalls(
-                m_lastError.isEmpty() ? QStringLiteral("Could not connect to LumaCore daemon.") : m_lastError
-            );
+        } else if (m_socket.state() == QLocalSocket::ConnectingState) {
+            if (!m_pendingCalls.isEmpty()) {
+                failPendingCalls(
+                    m_lastError.isEmpty() ? QStringLiteral("Could not connect to LumaCore daemon.") : m_lastError
+                );
+            }
             m_socket.abort();
             scheduleReconnect();
         }
@@ -140,6 +143,16 @@ bool DaemonClient::daemonDryRunEnabled() const
     return m_daemonDryRunEnabled;
 }
 
+bool DaemonClient::daemonDiscoveryKnown() const
+{
+    return m_daemonDiscoveryKnown;
+}
+
+bool DaemonClient::daemonDiscoveryComplete() const
+{
+    return m_daemonDiscoveryComplete;
+}
+
 bool DaemonClient::protocolCompatible() const
 {
     // A value of 0 means the handshake has not reported a protocol version yet, so do not
@@ -188,6 +201,7 @@ void DaemonClient::disconnectFromDaemon()
     }
     m_buffer.clear();
     clearDaemonDryRunState();
+    clearDaemonDiscoveryState();
     if (m_socket.state() == QLocalSocket::UnconnectedState) {
         emit connectionStateChanged();
         return;
@@ -214,7 +228,7 @@ void DaemonClient::setAutomaticReconnectEnabled(bool enabled)
 
     m_manualDisconnect = false;
     if (!isConnected()) {
-        scheduleReconnect();
+        reconnectNow();
     }
 }
 
@@ -226,8 +240,9 @@ void DaemonClient::reconnectNow()
         return;
     }
 
-    ++m_reconnectAttempt;
-    emit reconnectScheduled(m_reconnectAttempt, 0);
+    // An immediate attempt does not consume a backoff slot. If it fails, the
+    // first scheduled retry must still use the initial 250 ms delay.
+    emit reconnectScheduled(qMax(1, m_reconnectAttempt), 0);
     m_reconnectTimer.start(0);
 }
 
@@ -382,6 +397,28 @@ void DaemonClient::clearDaemonDryRunState()
     emit daemonInfoChanged();
 }
 
+void DaemonClient::setDaemonDiscoveryComplete(bool complete)
+{
+    if (m_daemonDiscoveryKnown && m_daemonDiscoveryComplete == complete) {
+        return;
+    }
+
+    m_daemonDiscoveryKnown = true;
+    m_daemonDiscoveryComplete = complete;
+    emit daemonInfoChanged();
+}
+
+void DaemonClient::clearDaemonDiscoveryState()
+{
+    if (!m_daemonDiscoveryKnown && m_daemonDiscoveryComplete) {
+        return;
+    }
+
+    m_daemonDiscoveryKnown = false;
+    m_daemonDiscoveryComplete = true;
+    emit daemonInfoChanged();
+}
+
 bool DaemonClient::daemonScheduleSupported() const
 {
     return m_daemonScheduleSupported;
@@ -401,6 +438,9 @@ void DaemonClient::updateDaemonInfo(const DaemonCallResult& result)
 {
     if (result.ok && result.result.contains(QStringLiteral("daemonVersion"))) {
         setDaemonVersion(result.result.value(QStringLiteral("daemonVersion")).toString());
+        setDaemonDiscoveryComplete(
+            result.result.value(QStringLiteral("discoveryComplete")).toBool(true)
+        );
     }
     if (result.ok && result.result.contains(QStringLiteral("protocolVersion"))) {
         setDaemonProtocolVersion(result.result.value(QStringLiteral("protocolVersion")).toInt());

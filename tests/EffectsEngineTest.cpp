@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "core/EffectsEngine.h"
+#include "core/DeviceManager.h"
+#include "core/RgbDevice.h"
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QElapsedTimer>
+#include <QThread>
 #include <QtGlobal>
+
+#include <functional>
+#include <memory>
 
 namespace {
 
@@ -20,6 +27,77 @@ bool fuzzyEqual(double actual, double expected)
 {
     return qAbs(actual - expected) < 0.05;
 }
+
+bool waitUntil(const std::function<bool()>& condition, int timeoutMs = 1000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (!condition() && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+    return condition();
+}
+
+class CountingFrameDevice final : public lumacore::RgbDevice
+{
+public:
+    CountingFrameDevice()
+        : RgbDevice(
+              QStringLiteral("counting-frame-device"),
+              QStringLiteral("Counting Frame Device"),
+              QStringLiteral("LumaCore"),
+              lumacore::RgbDeviceType::Controller
+          )
+    {
+        mutableZones().append(lumacore::RgbZone(
+            QStringLiteral("Zone"),
+            lumacore::RgbZoneType::AddressableHeader,
+            3
+        ));
+    }
+
+    [[nodiscard]] bool setZoneStaticColor(int zoneIndex, const lumacore::RgbColor& color) override
+    {
+        if (zoneIndex < 0 || zoneIndex >= mutableZones().size()) {
+            return false;
+        }
+        mutableZones()[zoneIndex].setColor(color);
+        return true;
+    }
+
+    [[nodiscard]] bool applyZoneFrame(
+        int zoneIndex,
+        const QVector<lumacore::RgbColor>& colors
+    ) override
+    {
+        ++frameAttempts;
+        if (!acceptFrames) {
+            return false;
+        }
+        return RgbDevice::applyZoneFrame(zoneIndex, colors);
+    }
+
+    [[nodiscard]] lumacore::BackendCapabilities capabilities() const override
+    {
+        return lumacore::BackendCapability::DiscoveryRead
+            | lumacore::BackendCapability::ZoneColorWrite
+            | lumacore::BackendCapability::ZoneEffectWrite;
+    }
+
+    [[nodiscard]] lumacore::PermissionResult checkRuntimePermission(
+        lumacore::BackendCapability capability
+    ) const override
+    {
+        if (capabilities().testFlag(capability)) {
+            return {lumacore::PermissionStatus::Granted, {}};
+        }
+        return {lumacore::PermissionStatus::Denied, QStringLiteral("Unsupported test capability.")};
+    }
+
+    int frameAttempts {0};
+    bool acceptFrames {true};
+};
 
 } // namespace
 
@@ -167,6 +245,84 @@ int main(int argc, char* argv[])
         )) {
         return 1;
     }
+
+    DeviceManager manager;
+    manager.setDryRunEnabled(false);
+    auto countingDevice = std::make_unique<CountingFrameDevice>();
+    CountingFrameDevice* device = countingDevice.get();
+    device->setZoneEffect(0, RgbEffect(RgbEffectType::Strobe, RgbColor(255, 255, 255), 0.1, 100));
+    std::vector<std::unique_ptr<RgbDevice>> devices;
+    devices.push_back(std::move(countingDevice));
+    manager.replaceDevices(std::move(devices));
+
+    manager.startZoneFrameStreaming(0, 0);
+    if (!require(waitUntil([device] { return device->frameAttempts >= 1; }), "streaming should submit an initial frame")) {
+        return 1;
+    }
+    QElapsedTimer stableFrameTimer;
+    stableFrameTimer.start();
+    while (stableFrameTimer.elapsed() < 100) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+    if (!require(device->frameAttempts == 1, "unchanged streamed frames should be deduplicated")) {
+        return 1;
+    }
+
+    manager.stopZoneFrameStreaming(0, 0);
+    manager.startZoneFrameStreaming(0, 0);
+    if (!require(
+            waitUntil([device] { return device->frameAttempts >= 2; }),
+            "restarting a zone should invalidate its cached frame"
+        )) {
+        return 1;
+    }
+
+    manager.stopDeviceFrameStreaming(0);
+    manager.startZoneFrameStreaming(0, 0);
+    if (!require(
+            waitUntil([device] { return device->frameAttempts >= 3; }),
+            "stopping a device should invalidate its cached frames"
+        )) {
+        return 1;
+    }
+
+    manager.stopAllFrameStreaming();
+    manager.startZoneFrameStreaming(0, 0);
+    if (!require(
+            waitUntil([device] { return device->frameAttempts >= 4; }),
+            "stopping all streams should invalidate cached frames"
+        )) {
+        return 1;
+    }
+
+    manager.stopZoneFrameStreaming(0, 0);
+    device->setZoneEffect(0, RgbEffect(RgbEffectType::ColorCycle, RgbColor(255, 255, 255), 5.0, 100));
+    const int attemptsBeforeChangingFrames = device->frameAttempts;
+    manager.startZoneFrameStreaming(0, 0);
+    if (!require(
+            waitUntil([device, attemptsBeforeChangingFrames] {
+                return device->frameAttempts >= attemptsBeforeChangingFrames + 2;
+            }),
+            "changed streamed frames should still be submitted"
+        )) {
+        return 1;
+    }
+
+    manager.stopZoneFrameStreaming(0, 0);
+    device->setZoneEffect(0, RgbEffect(RgbEffectType::Strobe, RgbColor(255, 255, 255), 0.1, 100));
+    device->acceptFrames = false;
+    const int attemptsBeforeRejection = device->frameAttempts;
+    manager.startZoneFrameStreaming(0, 0);
+    if (!require(
+            waitUntil([device, attemptsBeforeRejection] {
+                return device->frameAttempts >= attemptsBeforeRejection + 2;
+            }),
+            "rejected frames should not be cached"
+        )) {
+        return 1;
+    }
+    manager.stopAllFrameStreaming();
 
     return 0;
 }
