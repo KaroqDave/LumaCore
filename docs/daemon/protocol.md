@@ -28,7 +28,7 @@ Responses include either `ok: true` with `result`, or `ok: false` with `error`.
 ## Methods
 
 - `hello` / `status` returns daemon version, protocol version, socket path, active backend descriptor, device count, dry-run state, the additive `discoveryComplete` readiness flag, and the additive `scheduleSupported` flag that advertises the daemon-side schedule methods. The daemon answers this handshake regardless of the request's protocol version so the client can detect a version mismatch and surface it instead of failing opaquely; all other methods still require a matching `version`.
-- `listDevices` returns the status payload plus device and zone data. While discovery is in progress it succeeds with `discoveryComplete: false`, `deviceCount: 0`, and an empty `devices` array.
+- `listDevices` returns the status payload plus device and zone data. Clients that set the additive `acceptIncompleteDiscovery: true` parameter receive `discoveryComplete: false`, `deviceCount: 0`, and an empty `devices` array while discovery is in progress, then poll for the final inventory. Calls that omit the parameter are held until discovery completes, preserving the one-shot inventory behavior expected by older protocol-v1 GUIs.
 - `previewEffect` returns backend-specific dry-run preview text for one zone/effect.
 - `applyEffect` applies a static color or effect through `DeviceManager`, `WriteGate`, and the active backend.
 - `updateZone` updates zone metadata such as name and LED count without hardware-write confirmation.

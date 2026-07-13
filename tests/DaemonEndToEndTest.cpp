@@ -65,7 +65,11 @@ bool waitForCompleteInventory(
     timer.start();
     while (timer.elapsed() < timeoutMs) {
         const lumacore::DaemonCallResult response =
-            client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices), {}, 3000);
+            client->call(
+                lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices),
+                {{QStringLiteral("acceptIncompleteDiscovery"), true}},
+                3000
+            );
         if (response.ok
             && response.result.value(QStringLiteral("discoveryComplete")).toBool(true)) {
             if (result != nullptr) {

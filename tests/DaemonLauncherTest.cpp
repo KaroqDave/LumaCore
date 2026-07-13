@@ -69,7 +69,10 @@ bool waitForCompleteInventory(
     QElapsedTimer timer;
     timer.start();
     while (timer.elapsed() < timeoutMs) {
-        const lumacore::DaemonCallResult response = client->call(QStringLiteral("listDevices"));
+        const lumacore::DaemonCallResult response = client->call(
+            QStringLiteral("listDevices"),
+            {{QStringLiteral("acceptIncompleteDiscovery"), true}}
+        );
         if (sawIncomplete != nullptr
             && response.ok
             && !response.result.value(QStringLiteral("discoveryComplete")).toBool(true)) {

@@ -5,6 +5,7 @@
 #include "core/DeviceManager.h"
 
 #include <QJsonObject>
+#include <QList>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
@@ -41,6 +42,12 @@ private:
     void handleNewConnection();
     void handleReadyRead(QLocalSocket* socket);
     void handleDisconnected(QLocalSocket* socket);
+    [[nodiscard]] bool writeResponse(
+        QLocalSocket* socket,
+        quint64 requestId,
+        const QJsonObject& response
+    );
+    void sendDeferredDeviceLists();
 
     [[nodiscard]] QJsonObject handleRequest(const QJsonObject& request);
     [[nodiscard]] QJsonObject statusPayload() const;
@@ -64,6 +71,7 @@ private:
     QLocalServer m_server;
     QString m_socketPath;
     QHash<QLocalSocket*, QByteArray> m_buffers;
+    QHash<QLocalSocket*, QList<quint64>> m_deferredDeviceListRequestIds;
     QLocalSocket* m_activeClient {nullptr};
     std::unique_ptr<QLockFile> m_endpointLock;
     bool m_exitWhenIdle {false};

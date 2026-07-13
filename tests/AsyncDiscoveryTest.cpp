@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <functional>
 #include <memory>
+#include <utility>
 
 namespace {
 
@@ -110,11 +111,36 @@ int main(int argc, char* argv[])
         client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::Hello), {}, 1000);
     const lumacore::DaemonCallResult status =
         client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::Status), {}, 1000);
+    lumacore::DaemonCallResult legacyInventory;
+    bool legacyInventoryFinished = false;
+    const quint64 legacyInventoryRequestId = client->callAsync(
+        lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices),
+        {},
+        [&](lumacore::DaemonCallResult result) {
+            legacyInventory = std::move(result);
+            legacyInventoryFinished = true;
+        },
+        3000
+    );
+    QElapsedTimer legacyWait;
+    legacyWait.start();
+    while (legacyWait.elapsed() < 75) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
     const lumacore::DaemonCallResult incomplete =
-        client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices), {}, 1000);
+        client->call(
+            lumacore::daemonMethodName(lumacore::DaemonMethod::ListDevices),
+            {{QStringLiteral("acceptIncompleteDiscovery"), true}},
+            1000
+        );
     const lumacore::DaemonCallResult rejectedUpdate =
         client->call(lumacore::daemonMethodName(lumacore::DaemonMethod::UpdateZone), {}, 1000);
     if (!require(
+            legacyInventoryRequestId != 0 && !legacyInventoryFinished,
+            "legacy listDevices should wait for the final inventory"
+        )
+        || !require(
             hello.ok && !hello.result.value(QStringLiteral("discoveryComplete")).toBool(true),
             "hello should expose incomplete discovery"
         )
@@ -140,10 +166,18 @@ int main(int argc, char* argv[])
     }
 
     if (!require(
-            waitUntil([&deviceManager] { return deviceManager.discoveryComplete(); }),
+            waitUntil([&deviceManager, &legacyInventoryFinished] {
+                return deviceManager.discoveryComplete() && legacyInventoryFinished;
+            }),
             "asynchronous discovery should complete"
         )
         || !require(deviceManager.deviceCount() == 1, "completed discovery should install one device")
+        || !require(
+            legacyInventory.ok
+                && legacyInventory.result.value(QStringLiteral("discoveryComplete")).toBool(false)
+                && legacyInventory.result.value(QStringLiteral("devices")).toArray().size() == 1,
+            "legacy listDevices should receive the completed inventory"
+        )
         || !require(
             deviceManager.deviceAt(0)->thread() == deviceManager.thread(),
             "worker-created device should move to the manager thread"

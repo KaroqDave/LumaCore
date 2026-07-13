@@ -274,7 +274,7 @@ bool DaemonRgbDevice::sendZoneFrame(int zoneIndex, const QVector<RgbColor>& colo
                 return;
             }
             stateIt->inFlightRequestId = 0;
-            if (!result.ok
+            if (!daemonCallSucceeded(result)
                 || self->m_client == nullptr
                 || !self->m_client->isConnected()
                 || stateIt->suspensionCount > 0) {

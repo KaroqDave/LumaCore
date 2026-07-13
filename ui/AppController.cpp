@@ -2954,7 +2954,7 @@ bool AppController::refreshDaemonDevices(bool recoveredConnection)
     const QPointer<AppController> self(this);
     const quint64 requestId = m_daemonClient->callAsync(
         daemonMethodName(DaemonMethod::ListDevices),
-        {},
+        {{QStringLiteral("acceptIncompleteDiscovery"), true}},
         [self, daemonBackend, recoveredConnection](DaemonCallResult response) {
             if (self == nullptr) {
                 return;

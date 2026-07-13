@@ -15,6 +15,8 @@
 #include <QLockFile>
 #include <QtGlobal>
 
+#include <utility>
+
 namespace {
 
 QString endpointLockPath(const QString& socketPath)
@@ -100,6 +102,13 @@ DaemonServer::DaemonServer(DeviceManager* deviceManager, QObject* parent)
     , m_deviceManager(deviceManager)
 {
     connect(&m_server, &QLocalServer::newConnection, this, &DaemonServer::handleNewConnection);
+    if (m_deviceManager != nullptr) {
+        connect(m_deviceManager, &DeviceManager::discoveryStateChanged, this, [this] {
+            if (m_deviceManager->discoveryComplete()) {
+                sendDeferredDeviceLists();
+            }
+        });
+    }
 }
 
 DaemonServer::~DaemonServer()
@@ -176,6 +185,7 @@ void DaemonServer::close()
         }
     }
     m_buffers.clear();
+    m_deferredDeviceListRequestIds.clear();
     if (m_server.isListening()) {
         m_server.close();
     }
@@ -226,6 +236,7 @@ void DaemonServer::handleNewConnection()
 
         if (previousClient != nullptr) {
             m_buffers.remove(previousClient);
+            m_deferredDeviceListRequestIds.remove(previousClient);
             previousClient->disconnectFromServer();
             previousClient->deleteLater();
         }
@@ -274,6 +285,21 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
         const bool validRequest = parseDaemonFrameObject(frame.payload, &request, &parseError);
         const quint64 requestId = request.value(QStringLiteral("id")).toString().toULongLong();
 
+        const bool deferDeviceList = validRequest
+            && request.value(QStringLiteral("version")).toInt() == kDaemonProtocolVersion
+            && daemonMethodFromName(request.value(QStringLiteral("method")).toString())
+                == DaemonMethod::ListDevices
+            && m_deviceManager != nullptr
+            && !m_deviceManager->discoveryComplete()
+            && !request.value(QStringLiteral("params"))
+                    .toObject()
+                    .value(QStringLiteral("acceptIncompleteDiscovery"))
+                    .toBool(false);
+        if (deferDeviceList) {
+            m_deferredDeviceListRequestIds[socket].append(requestId);
+            continue;
+        }
+
         QJsonObject response;
         if (!validRequest) {
             response = makeDaemonError(requestId, QStringLiteral("Invalid JSON request: %1").arg(parseError));
@@ -281,26 +307,61 @@ void DaemonServer::handleReadyRead(QLocalSocket* socket)
             response = handleRequest(request);
         }
 
-        QByteArray encodedResponse = encodeDaemonMessage(response);
-        if (encodedResponse.size() > kDaemonMaxFrameBytes) {
-            encodedResponse =
-                encodeDaemonMessage(makeDaemonError(requestId, QStringLiteral("Daemon response exceeds the maximum message size.")));
-        }
-        // flush() returning false is not an error: on Windows the overlapped
-        // pipe writer often accepts the whole payload inside write(), leaving
-        // nothing pending, and flush() reports false exactly in that case.
-        // Only a short write is fatal for the connection.
-        if (socket->write(encodedResponse) != encodedResponse.size()) {
-            socket->disconnectFromServer();
+        if (!writeResponse(socket, requestId, response)) {
             return;
         }
-        socket->flush();
+    }
+}
+
+bool DaemonServer::writeResponse(
+    QLocalSocket* socket,
+    quint64 requestId,
+    const QJsonObject& response
+)
+{
+    if (socket == nullptr || !m_buffers.contains(socket)) {
+        return false;
+    }
+
+    QByteArray encodedResponse = encodeDaemonMessage(response);
+    if (encodedResponse.size() > kDaemonMaxFrameBytes) {
+        encodedResponse = encodeDaemonMessage(makeDaemonError(
+            requestId,
+            QStringLiteral("Daemon response exceeds the maximum message size.")
+        ));
+    }
+    // flush() returning false is not an error: on Windows the overlapped
+    // pipe writer often accepts the whole payload inside write(), leaving
+    // nothing pending, and flush() reports false exactly in that case.
+    // Only a short write is fatal for the connection.
+    if (socket->write(encodedResponse) != encodedResponse.size()) {
+        socket->disconnectFromServer();
+        return false;
+    }
+    socket->flush();
+    return true;
+}
+
+void DaemonServer::sendDeferredDeviceLists()
+{
+    const auto deferredRequests = std::exchange(
+        m_deferredDeviceListRequestIds,
+        QHash<QLocalSocket*, QList<quint64>> {}
+    );
+    for (auto socketIt = deferredRequests.constBegin(); socketIt != deferredRequests.constEnd(); ++socketIt) {
+        QLocalSocket* socket = socketIt.key();
+        for (const quint64 requestId : socketIt.value()) {
+            if (!writeResponse(socket, requestId, makeDaemonResult(requestId, listDevicesPayload()))) {
+                break;
+            }
+        }
     }
 }
 
 void DaemonServer::handleDisconnected(QLocalSocket* socket)
 {
     m_buffers.remove(socket);
+    m_deferredDeviceListRequestIds.remove(socket);
     if (socket == m_activeClient) {
         m_activeClient = nullptr;
     }

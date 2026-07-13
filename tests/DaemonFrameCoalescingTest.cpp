@@ -96,6 +96,25 @@ public:
         m_socket->flush();
     }
 
+    void respondRejected(int index)
+    {
+        if (m_socket == nullptr || m_socket->state() != QLocalSocket::ConnectedState) {
+            return;
+        }
+        const quint64 requestId = m_requests.at(index)
+                                      .value(QStringLiteral("id"))
+                                      .toString()
+                                      .toULongLong();
+        m_socket->write(lumacore::encodeDaemonMessage(lumacore::makeDaemonResult(
+            requestId,
+            {
+                {QStringLiteral("success"), false},
+                {QStringLiteral("error"), QStringLiteral("Frame rejected.")},
+            }
+        )));
+        m_socket->flush();
+    }
+
     void disconnectClient()
     {
         if (m_socket != nullptr) {
@@ -338,6 +357,33 @@ bool testFailureDropsQueuedFrame(const QString& suffix, bool disconnect)
     return require(server.requestCount() == 1, "failed in-flight requests should drop queued frames");
 }
 
+bool testApplicationFailureDropsQueuedFrame()
+{
+    DelayedServer server(endpoint(QStringLiteral("rejected")));
+    if (!require(server.listen(), "application-failure server should listen")) {
+        return false;
+    }
+    auto client = std::make_shared<lumacore::DaemonClient>(endpoint(QStringLiteral("rejected")));
+    lumacore::DaemonRgbDevice device(deviceSnapshot(), client);
+    if (!require(device.applyZoneFrame(0, frame(70)), "application-failure frame should be accepted")
+        || !require(waitUntil([&] { return server.requestCount() == 1; }), "application-failure frame should be sent")
+        || !require(device.applyZoneFrame(0, frame(71)), "application-failure frame should queue")) {
+        return false;
+    }
+
+    server.respondRejected(0);
+    QElapsedTimer responseWait;
+    responseWait.start();
+    while (responseWait.elapsed() < 75) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+    return require(
+        server.requestCount() == 1,
+        "application-level frame rejection should drop the queued frame"
+    );
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -347,6 +393,7 @@ int main(int argc, char* argv[])
 
     return testLatestFrameWins()
             && testControlOperationOrdering()
+            && testApplicationFailureDropsQueuedFrame()
             && testFailureDropsQueuedFrame(QStringLiteral("disconnect"), true)
             && testFailureDropsQueuedFrame(QStringLiteral("timeout"), false)
         ? 0
