@@ -335,8 +335,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Handshake: the daemon should report a matching protocol version, the mock
-    // backend identity, and exactly one simulated device.
+    // Handshake: the daemon should report a matching protocol version and the
+    // mock backend identity even while asynchronous discovery is still running.
     const DaemonCallResult status = client->call(daemonMethodName(DaemonMethod::Status), {}, 3000);
     if (!require(status.ok, "status handshake should succeed")
         || !require(
@@ -346,10 +346,6 @@ int main(int argc, char* argv[])
         || !require(
             client->protocolCompatible() && client->daemonProtocolVersion() == kDaemonProtocolVersion,
             "client should record a compatible daemon protocol version"
-        )
-        || !require(
-            status.result.value(QStringLiteral("deviceCount")).toInt() == 1,
-            "mock daemon should expose exactly one simulated device"
         )
         || !require(
             status.result.value(QStringLiteral("backend")).toObject().value(QStringLiteral("id")).toString()
